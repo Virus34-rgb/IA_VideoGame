@@ -1,2 +1,3 @@
 episode,epsilon_turn_p1,epsilon_turn_p2,epsilon_sel_p1,epsilon_sel_p2,p1_winrate,p2_winrate,drawrate,p1_damage_avg,p2_damage_avg,avg_turns,p1_reward_avg,p2_reward_avg,timestamp
 0,0.49999,0.49999,0.49999,0.49999,100.0,0.0,0.0,72.0,75.0,11.0,144.0,-200.0,1787483371.2457628
+0,0.49999,0.49999,0.49999,0.49999,0.0,100.0,0.0,56.0,68.0,5.0,-171.44444444444446,183.44444444444446,1787512157.8625197
