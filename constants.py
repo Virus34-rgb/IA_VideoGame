@@ -25,6 +25,8 @@ REWARD_WEIGHTS = {
     "deaths": 10,
     "win": 1,       # WIN_REWARD ya se aplica dentro del bonus, este peso multiplica ese bonus
     "blocks": 1,
+    "heal":2,
+    "shaping_weight":10,
 }
 TURN_PENALTY = 2
 WIN_REWARD = 100

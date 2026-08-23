@@ -18,10 +18,10 @@ class LossRecord:
 @dataclass
 class SnapshotRecord:
     episode: int
-    epsilon_turn_p1: float
-    epsilon_turn_p2: float
-    epsilon_sel_p1: float
-    epsilon_sel_p2: float
+    epsilon_turn_p1: float | None
+    epsilon_turn_p2: float | None
+    epsilon_sel_p1: float | None
+    epsilon_sel_p2: float | None
     p1_winrate: float
     p2_winrate: float
     drawrate: float
@@ -95,10 +95,10 @@ class MetricsLogger:
         partidas = max(stats.partidas, 1)
         record = SnapshotRecord(
             episode=episode,
-            epsilon_turn_p1=player1.epsilon_turn,
-            epsilon_turn_p2=player2.epsilon_turn,
-            epsilon_sel_p1=player1.epsilon_sel,
-            epsilon_sel_p2=player2.epsilon_sel,
+            epsilon_turn_p1=getattr(player1, "epsilon_turn", None),
+            epsilon_turn_p2=getattr(player2, "epsilon_turn", None),
+            epsilon_sel_p1=getattr(player1, "epsilon_sel", None),
+            epsilon_sel_p2=getattr(player2, "epsilon_sel", None),
             p1_winrate=stats.p1_victories / partidas * 100,
             p2_winrate=stats.p2_victories / partidas * 100,
             drawrate=stats.empates / partidas * 100,
