@@ -4,7 +4,7 @@ from AI.Environment.gameState import GameState
 from AI.Environment.stats import Stats
 from AI.Environment.warrior import Warrior
 from AI.Environment.warriorFactory import get_warriors_classes
-from constants import REWARD_WEIGHTS, TURN_PENALTY, WIN_REWARD, MAX_TURNS, MAX_DEATHS_PER_TEAM
+from constants import DISCOUNT_FACTOR, REWARD_WEIGHTS, TURN_PENALTY, WIN_REWARD, MAX_TURNS, MAX_DEATHS_PER_TEAM
 
 class Environment:
     def __init__ (
@@ -60,30 +60,46 @@ class Environment:
         damage_p1 = damage_p2 = 0
         damage_avoided_p1 = damage_avoided_p2 = 0
         blocks_p1 = blocks_p2 = 0
+        heal_p1 = heal_p2 = 0
+        p1_health = 0
+        p2_health = 0
+        for warr in self.p1_disposition:
+            p1_health += warr.health/ warr.warrior_data.max_health
+        for warr in self.p2_disposition:
+            p2_health += warr.health/ warr.warrior_data.max_health
         for player, warr in order:
             if warr is None or warr.health <= 0:
                 continue
             if player == 1:
-                dmg, avoided, blocks, moved = self._resolve_action(
+                dmg, avoided, blocks, moved,heal = self._resolve_action(
                     warr, self.p1_disposition, self.p2_disposition,
                     actionsp1, actionsp2, self.stats.p1_attacks
                 )
+                heal_p1 += heal
                 damage_p1 += dmg
                 damage_avoided_p2 += avoided
                 blocks_p2 += blocks
                 self.stats.p1_movements += moved
             else:
-                dmg, avoided, blocks, moved = self._resolve_action(
+                dmg, avoided, blocks, moved,heal = self._resolve_action(
                     warr, self.p2_disposition, self.p1_disposition,
                     actionsp2, actionsp1, self.stats.p2_attacks
                 )
+                heal_p2 += heal
                 damage_p2 += dmg
                 damage_avoided_p1 += avoided
                 blocks_p1 += blocks
                 self.stats.p2_movements += moved
-
+        p1_post_health = 0
+        p2_post_health = 0 
+        for warr in self.p2_disposition:
+            p1_post_health += warr.health/ warr.warrior_data.max_health
+        for warr in self.p2_disposition:
+            p2_post_health += warr.health/ warr.warrior_data.max_health
+        shapping1 = p1_health - p2_health
+        shapping2 = p1_post_health - p2_post_health
         rewardP1, rewardP2 = self.calculate_rewards(
-            damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2
+            damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,heal_p1,heal_p2,shapping1,shapping2
         )
         self.stats.p1_damage += damage_p1
         self.stats.p2_damage += damage_p2
@@ -91,6 +107,8 @@ class Environment:
         self.stats.p2_succes_blocks += blocks_p2
         self.stats.p1_tot_damage_evaded += damage_avoided_p1
         self.stats.p2_tot_damage_evaded += damage_avoided_p2
+        self.stats.p1_tot_heal += heal_p1
+        self.stats.p2_tot_heal += heal_p2
         self.stats.total_reward_p1 += rewardP1
         self.stats.total_reward_p2 += rewardP2
         return self.get_state(), rewardP1, rewardP2, self.ended
@@ -105,23 +123,29 @@ class Environment:
             if pos != 2:
                 moved = 1
                 own_disposition[pos], own_disposition[pos + 1] = own_disposition[pos + 1], own_disposition[pos]
-            return 0, 0, 0, moved
+            return 0, 0, 0, moved,0
         if action == "movNeg":
             moved = 0
             if pos != 0:
                 moved = 1
                 own_disposition[pos], own_disposition[pos - 1] = own_disposition[pos - 1], own_disposition[pos]
-            return 0, 0, 0, moved
+            return 0, 0, 0, moved,0
         warr.reset_cooldowns()
         warr.use_ability(action - 1)
         if warr.warrior_data.id == 2 and action == 2:
+            vida_ant = warr.health
             warr.modify_health(0, warr.warrior_data.abilities[action - 1].damage)
-            return 0, 0, 0, 0
+            vida_desp = warr.health
+            return 0, 0, 0, 0,vida_desp-vida_ant
         if warr.warrior_data.id == 5 and action == 2:
+            tot_health = 0
             for warrior in own_disposition:
                 if warrior is not None:
+                    vida_ant = warrior.health
                     warrior.modify_health(0, warr.warrior_data.abilities[action - 1].damage)
-            return 0, 0, 0, 0
+                    vida_desp = warrior.health
+                    tot_health += vida_desp - vida_ant  
+            return 0, 0, 0, 0, tot_health
         damage = 0
         damage_avoided = 0
         blocks = 0
@@ -221,7 +245,8 @@ class Environment:
         return weighted - TURN_PENALTY
 
 
-    def calculate_rewards(self, damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2):
+    def calculate_rewards(self, damage_p1, damage_p2, damage_avoided_p1
+                          , damage_avoided_p2,healed_p1,healed_p2,shapping1,shapping2):
         newDeaths_p1, newDeaths_p2 = self.check_dep()
         self.p1_deaths += newDeaths_p1
         self.p2_deaths += newDeaths_p2
@@ -229,7 +254,9 @@ class Environment:
         win_p1 = WIN_REWARD if self.winner == "P1" else (-WIN_REWARD if self.winner == "P2" else 0)
         win_p2 = -win_p1
         rewardP1 = self._reward(damage=damage_p1 - damage_p2,deaths=newDeaths_p1 - newDeaths_p2,
-                                win=win_p1,blocks=damage_avoided_p1,)
+                                win=win_p1,blocks=damage_avoided_p1,heal=healed_p1,
+                                shaping_weight=DISCOUNT_FACTOR * shapping2 - shapping1)
         rewardP2 = self._reward(damage=damage_p2 - damage_p1,deaths=newDeaths_p2 - newDeaths_p1,
-                                win=win_p2,blocks=damage_avoided_p2,)
+                                win=win_p2,blocks=damage_avoided_p2,heal=healed_p2,
+                                shaping_weight=-(DISCOUNT_FACTOR * shapping2 - shapping1))
         return rewardP1, rewardP2

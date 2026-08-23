@@ -1,6 +1,6 @@
 {
   "run_name": "v3",
-  "timestamp": 1787499399.3606305,
+  "timestamp": 1787505762.1844726,
   "constants": {
     "ABILITIES": [
       1,
@@ -25,7 +25,8 @@
       "damage": 1,
       "deaths": 10,
       "win": 1,
-      "blocks": 1
+      "blocks": 1,
+      "shaping_weight": 10
     },
     "SELECTION_LEARNING_RATE": 0.0001,
     "SELECTION_REPLAY_DATA": 100000,
@@ -38,14 +39,9 @@
   "extra": {
     "steps": [
       {
-        "name": "Entrenamiento self-play",
+        "name": "Fine-tuning contra humano (IA1)",
         "action": "train",
-        "episodes": 50000
-      },
-      {
-        "name": "Evaluación final",
-        "action": "evaluate",
-        "episodes": 10000
+        "episodes": 20
       }
     ]
   }

@@ -21,6 +21,8 @@ class Stats:
         self.p2_succes_blocks = 0
         self.p1_tot_damage_evaded = 0
         self.p2_tot_damage_evaded = 0
+        self.p1_tot_heal = 0
+        self.p2_tot_heal = 0
         self.p1_warrior_use = [0] * WARRIOR_QUANTITY
         self.p2_warrior_use = [0] * WARRIOR_QUANTITY
         self.total_turns = 0

@@ -28,15 +28,17 @@ class PlayerNoAI:
             distribucion += " "
         print(f"Tu distribucion:   {distribucion}\n")
         w_disponibles = []
-        if(cs.opp_initial_warrior is not None):
-            print(f"Enemigos seleccionado (el primero): {cs.pl_warriors[cs.opp_initial_warrior]} en posicion {cs.opp_initialPosition}\n")
-        for w in cs.pl_warriors:
+        print(f"{cs.opp_initial_warrior}")
+        if cs.opp_initial_warrior != 0:
+            print(f"Enemigos seleccionado (el primero): {cs.pl_warriors[cs.opp_initial_warrior].name} en posicion {cs.opp_initialPosition}\n")
+        for w in cs.pl_warriors.values():
             if(not w in cs.pl_disposition):
                 w_disponibles.append(w)
         print(f"Personajes elegibles:   \n")
         for w in w_disponibles:
-            print(f"{w.warrior_data.id}.{w.warrior_data.name} \n")
-        ids_disponibles = [w.warrior_data.id for w in w_disponibles]
+            print(f"{w.id}.{w.name} \n")
+        ids_disponibles = [w.id for w in w_disponibles]
+        elegido = int(input("Elige uno de los personajes elegibles (número antes del nombre)\n"))
         while elegido not in ids_disponibles:
             elegido = int(input("Elige uno de los personajes elegibles (número antes del nombre)\n"))
         print(f"Posiciones disponibles:")
@@ -47,9 +49,9 @@ class PlayerNoAI:
             pos = int(input("\n Elige una de las posiciones disponibles\n"))
         warrior = next(
                 w for w in w_disponibles
-                if w.warrior_data.id == elegido
+                if w.id == elegido
             )
-        return warrior,pos,None
+        return warrior.id,pos,None
         
     
     def turn(self, observation):
@@ -57,7 +59,8 @@ class PlayerNoAI:
         print(f"Turno actual : {observation.turn}\n")
         print(f"Estado del rival:\n")
         for pos,enemy in enumerate(observation.opp_disposition):
-            print(f"{enemigos[enemy]} : Vida : {observation.opp_life[pos] * 100}%")
+            if(enemy!= None):
+                print(f"{enemigos[enemy]} : Vida : {observation.opp_life[pos] * 100}%")
         actions = [None,None,None]
         for pos,w in enumerate(observation.pl_warriors) :
             if(w != None):

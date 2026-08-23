@@ -1,4 +1,4 @@
-from constants import WARRIOR_QUANTITY
+from constants import MAX_TURNS, WARRIOR_QUANTITY
 
 
 class Observation:
@@ -36,15 +36,13 @@ class Observation:
                 self.id_to_one_hot(warrior_id, WARRIOR_QUANTITY)
             )
         # Turno
-        observation.append(min(self.turn / 21, 1.0))
+        observation.append(min(self.turn / MAX_TURNS, 1.0))
         return observation
     @staticmethod
     def id_to_one_hot(warrior_id, warrior_quantity):
         result = [0] * warrior_quantity
-        
-        if warrior_id != None:
+        if warrior_id:  # None o 0 → nada activado
             result[warrior_id - 1] = 1
-
         return result
     @staticmethod
     def normalize_abilities(warrior):
