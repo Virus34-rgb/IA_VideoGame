@@ -94,7 +94,7 @@ class Environment:
                 self.stats.p2_movements += moved
         p1_post_health = 0
         p2_post_health = 0 
-        for warr in self.p2_disposition:
+        for warr in self.p1_disposition:
             if(warr != None):
                 p1_post_health += warr.health/ warr.warrior_data.max_health
         for warr in self.p2_disposition:
