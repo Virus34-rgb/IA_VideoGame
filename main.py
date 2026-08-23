@@ -140,8 +140,8 @@ class Main:
 # ==================================================================
 # CONFIGURACIÓN 
 # ==================================================================
-VERSION = 4
-TRAIN_EPISODES = 50000
+VERSION = 5
+TRAIN_EPISODES = 100000
 EVAL_EPISODES = 10000
 
 # Steps de entrenamiento/evaluación IA vs IA que siempre se ejecutan
