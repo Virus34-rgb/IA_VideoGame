@@ -64,9 +64,11 @@ class Environment:
         p1_health = 0
         p2_health = 0
         for warr in self.p1_disposition:
-            p1_health += warr.health/ warr.warrior_data.max_health
+            if(warr != None):
+                p1_health += warr.health/ warr.warrior_data.max_health
         for warr in self.p2_disposition:
-            p2_health += warr.health/ warr.warrior_data.max_health
+            if(warr != None):
+                p2_health += warr.health/ warr.warrior_data.max_health
         for player, warr in order:
             if warr is None or warr.health <= 0:
                 continue
@@ -93,11 +95,13 @@ class Environment:
         p1_post_health = 0
         p2_post_health = 0 
         for warr in self.p2_disposition:
-            p1_post_health += warr.health/ warr.warrior_data.max_health
+            if(warr != None):
+                p1_post_health += warr.health/ warr.warrior_data.max_health
         for warr in self.p2_disposition:
-            p2_post_health += warr.health/ warr.warrior_data.max_health
-        shapping1 = p1_health - p2_health
-        shapping2 = p1_post_health - p2_post_health
+            if(warr != None):
+                p2_post_health += warr.health/ warr.warrior_data.max_health
+        shapping1 = p1_health/3 - p2_health/3
+        shapping2 = p1_post_health/3 - p2_post_health/3
         rewardP1, rewardP2 = self.calculate_rewards(
             damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,heal_p1,heal_p2,shapping1,shapping2
         )
@@ -173,7 +177,7 @@ class Environment:
             enemy.modify_health(hit_damage, 0)
             damage += hit_damage
 
-        return damage, damage_avoided, blocks, 0
+        return damage, damage_avoided, blocks, 0,0
 
     def get_state(self) :
         return GameState(self.p1_disposition,
