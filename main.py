@@ -157,6 +157,11 @@ HUMAN_EPISODES = 20
 # ciega a corregir errores; 0.0 la volvería completamente determinista.
 HUMAN_EPSILON = 0.1
 
+# Jugar contra la IA entrenada (después del entrenamiento/evaluación)
+PLAY_AGAINST_AI = False  # Cambiar a True para jugar algunas partidas contra la IA
+PLAY_EPISODES = 20       # Número de partidas a jugar
+PLAY_EPSILON = 0.0       # Exploración de la IA durante la partida (0.0 = determinista)
+
 def build_steps(config: RunConfig):
     steps = []
 
