@@ -1,0 +1,128 @@
+=================================================================
+                    ESTADÍSTICAS IA
+=================================================================
+
+RESULTADOS
+-----------------------------------------------------------------
+Partidas:                  10000
+Victorias P1:              2981 (29.81%)
+Victorias P2:              7019 (70.19%)
+Empates:                   0 (0.00%)
+Win ratio P1 (sin empates):29.81%
+Win ratio P2 (sin empates):70.19%
+Terminadas por muerte:     10000 (100.00%)
+Terminadas por límite:     0 (0.00%)
+Turnos totales:            53687
+Turnos medios por partida: 5.37
+
+RECOMPENSA ACUMULADA
+-----------------------------------------------------------------
+Reward total P1:           -710494.00
+Reward total P2:           786472.00
+Reward media P1:           -71.05/partida
+Reward media P2:           78.65/partida
+
+SELECCIÓN DE GUERREROS
+-----------------------------------------------------------------
+Selecciones totales P1:    30000
+Selecciones totales P2:    30000
+
+P1:
+  Guerrero 1:          2753 (  9.18%) -> 0.28/partida
+  Guerrero 2:          4030 ( 13.43%) -> 0.40/partida
+  Guerrero 3:          7868 ( 26.23%) -> 0.79/partida
+  Guerrero 4:          5361 ( 17.87%) -> 0.54/partida
+  Guerrero 5:          9988 ( 33.29%) -> 1.00/partida
+
+P2:
+  Guerrero 1:          7959 ( 26.53%) -> 0.80/partida
+  Guerrero 2:          3352 ( 11.17%) -> 0.34/partida
+  Guerrero 3:          4626 ( 15.42%) -> 0.46/partida
+  Guerrero 4:          4087 ( 13.62%) -> 0.41/partida
+  Guerrero 5:          9976 ( 33.25%) -> 1.00/partida
+
+DAÑO
+-----------------------------------------------------------------
+Daño total P1:             578637.0
+Daño total P2:             559225.0
+Daño medio P1:             57.86
+Daño medio P2:             55.92
+
+BAJAS (PROPIAS)
+-----------------------------------------------------------------
+Bajas totales P1:          24427
+Bajas totales P2:          17599
+Bajas medias P1:           2.44
+Bajas medias P2:           1.76
+
+ATAQUES (habilidad seleccionada)
+-----------------------------------------------------------------
+Ataques totales P1:        116542
+Ataques totales P2:        100981
+
+P1 - USO DE HABILIDADES POR GUERRERO:
+  Guerrero 1:
+    Smite            103 (  0.09%) -> 0.01/partida
+    Guard Up        1337 (  1.15%) -> 0.13/partida
+    Slice           13207 ( 11.33%) -> 1.32/partida
+    Throw           3037 (  2.61%) -> 0.30/partida
+  Guerrero 2:
+    Arrow           6385 (  5.48%) -> 0.64/partida
+    Heal              76 (  0.07%) -> 0.01/partida
+    Arrow2          3667 (  3.15%) -> 0.37/partida
+    Rain            9448 (  8.11%) -> 0.94/partida
+  Guerrero 3:
+    BackAttack      4551 (  3.91%) -> 0.46/partida
+    Hide            7052 (  6.05%) -> 0.71/partida
+    PoisonGas       11611 (  9.96%) -> 1.16/partida
+    Knife            267 (  0.23%) -> 0.03/partida
+  Guerrero 4:
+    Magic Missile   2584 (  2.22%) -> 0.26/partida
+    Zap             2979 (  2.56%) -> 0.30/partida
+    FireBall        7566 (  6.49%) -> 0.76/partida
+    StaffAttack       57 (  0.05%) -> 0.01/partida
+  Guerrero 5:
+    Charge          17182 ( 14.74%) -> 1.72/partida
+    HealAll          305 (  0.26%) -> 0.03/partida
+    Defend          7683 (  6.59%) -> 0.77/partida
+    Light           17445 ( 14.97%) -> 1.74/partida
+
+P2 - USO DE HABILIDADES POR GUERRERO:
+  Guerrero 1:
+    Smite            438 (  0.43%) -> 0.04/partida
+    Guard Up        13114 ( 12.99%) -> 1.31/partida
+    Slice           21158 ( 20.95%) -> 2.12/partida
+    Throw           7617 (  7.54%) -> 0.76/partida
+  Guerrero 2:
+    Arrow           3701 (  3.67%) -> 0.37/partida
+    Heal             101 (  0.10%) -> 0.01/partida
+    Arrow2           574 (  0.57%) -> 0.06/partida
+    Rain            6013 (  5.95%) -> 0.60/partida
+  Guerrero 3:
+    BackAttack       364 (  0.36%) -> 0.04/partida
+    Hide            6848 (  6.78%) -> 0.68/partida
+    PoisonGas       6241 (  6.18%) -> 0.62/partida
+    Knife           2951 (  2.92%) -> 0.30/partida
+  Guerrero 4:
+    Magic Missile    109 (  0.11%) -> 0.01/partida
+    Zap             2197 (  2.18%) -> 0.22/partida
+    FireBall        3511 (  3.48%) -> 0.35/partida
+    StaffAttack      430 (  0.43%) -> 0.04/partida
+  Guerrero 5:
+    Charge          9672 (  9.58%) -> 0.97/partida
+    HealAll          184 (  0.18%) -> 0.02/partida
+    Defend           959 (  0.95%) -> 0.10/partida
+    Light           14799 ( 14.66%) -> 1.48/partida
+
+MOVIMIENTOS
+-----------------------------------------------------------------
+Movimientos P1:            904
+Movimientos P2:            607
+
+BLOQUEOS Y DAÑO EVITADO
+-----------------------------------------------------------------
+Bloqueos exitosos P1:      23751 -> 2.38/partida
+Bloqueos exitosos P2:      41950 -> 4.20/partida
+Daño evitado P1:           68235.0 -> 6.82/partida
+Daño evitado P2:           184502.0 -> 18.45/partida
+=================================================================
