@@ -1,17 +1,21 @@
 import os
+import random
 import time
 
 from AI.Agent.choose_state import Choose_state
 from AI.Agent.observation import Observation
+from AI.Agent.playerAI import PlayerAI
+from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, POOL_PORCENTAGE
 
 
 class Trainer:
-    def __init__(self, player1, player2, environment, train_episodes, eval_episodes,
+    def __init__(self, player1, player2, environment,opponent_pool, train_episodes, eval_episodes,
                  pathp1_1, pathp1_2, pathp2_1, pathp2_2, path_stats, path_stats2,
                  logger=None, snapshot_every=1000, progress_every=50):
         self.player1 = player1
         self.player2 = player2
         self.environment = environment
+        self.opponent_pool = opponent_pool
         self.train_episodes = train_episodes
         self.eval_episodes = eval_episodes
         self.pathp1_1 = pathp1_1
@@ -83,11 +87,25 @@ class Trainer:
     def _run(self, episodes, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon):
         backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
-
+        p2_training_player = self.player2
+        opponent_from_pool = False
         for episode in range(episodes):
-            self._run_episode(episode, learn_p1, learn_p2)
+            if(episode != 0 and episode % EPISODES_SAVE_MODEL  == 0):
+                self.opponent_pool.save_version(p2_training_player) #Del backup porque p2 podria ser la copia de la que se esta entrenando
+            if(episode != 0 and episode % (EPISODES_RANGE_POOL) == 0):
+                opponent_from_pool = False
+                self.player2 = p2_training_player
+                if(random.random() <= POOL_PORCENTAGE):
+                    cantidad,_,_ = self.opponent_pool.list_models()
+                    if(cantidad > 0):
+                        opponent_from_pool = True
+                        p2_training_player = self.player2
+                        path_sel, path_turn = self.opponent_pool.get_random()
+                        self.player2 = PlayerAI()
+                        self.player2.load_model(path_sel,path_turn)
+            self._run_episode(episode, learn_p1, learn_p2,opponent_from_pool)
             if self.logger and (learn_p1 or learn_p2) and self.snapshot_every and episode % self.snapshot_every == 0:
-                self.logger.log_snapshot(episode, self.player1, self.player2, self.environment.stats)
+                self.logger.log_snapshot(episode, self.player1, p2_training_player, self.environment.stats)
             self._print_progress(episode, episodes, start_time)
 
         if episodes > 0:
@@ -114,7 +132,7 @@ class Trainer:
             if f"{name}_sel" in backup:
                 player.epsilon_sel = backup[f"{name}_sel"]
 
-    def _run_episode(self, episode, learn_p1, learn_p2):
+    def _run_episode(self, episode, learn_p1, learn_p2,opponent_from_pool):
         state = self.environment.reset()
         cstates1, actions1, cstates2, actions2 = self._select_teams(state)
         observation1, observation2 = self.getObservation(state)
@@ -128,7 +146,7 @@ class Trainer:
 
             if learn_p1:
                 self.player1.remember_turn(observation1, action_p1, reward1, next_obs1, ended)
-            if learn_p2:
+            if learn_p2 and not opponent_from_pool:
                 self.player2.remember_turn(observation2, action_p2, reward2, next_obs2, ended)
 
             observation1, observation2 = next_obs1, next_obs2
@@ -142,7 +160,7 @@ class Trainer:
             self._remember_and_replay_selection(cstates1, actions1, reward1_acum, self.player1, "p1", episode)
             self.player1.update_epsilon()
 
-        if learn_p2:
+        if learn_p2 and not opponent_from_pool:
             loss2_turn = self.player2.replay_turn()
             if self.logger:
                 self.logger.log_loss(episode, self.player2.replayed_turn, "p2", "turn", loss2_turn)
