@@ -158,14 +158,18 @@ class Trainer:
             if self.logger:
                 self.logger.log_loss(episode, self.player1.replayed_turn, "p1", "turn", loss1_turn)
             self._remember_and_replay_selection(cstates1, actions1, reward1_acum, self.player1, "p1", episode)
-            self.player1.update_epsilon()
+            if(self.train_episodes != 0):
+                self.player1.update_beta()
+                self.player1.update_epsilon()
 
         if learn_p2 and not opponent_from_pool:
             loss2_turn = self.player2.replay_turn()
             if self.logger:
                 self.logger.log_loss(episode, self.player2.replayed_turn, "p2", "turn", loss2_turn)
             self._remember_and_replay_selection(cstates2, actions2, reward2_acum, self.player2, "p2", episode)
-            self.player2.update_epsilon()
+            if(self.train_episodes != 0):
+                self.player2.update_beta()
+                self.player2.update_epsilon()
 
         # guarda el total de reward de la partida completa, aprenda o no
         self.environment.stats.total_reward_p1 += reward1_acum

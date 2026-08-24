@@ -59,15 +59,18 @@ class Stats:
             "p2_damage_evaded_avg": self.p2_tot_damage_evaded / partidas,
             "p1_reward_avg": self.total_reward_p1 / partidas,
             "p2_reward_avg": self.total_reward_p2 / partidas,
+            "p1_tot_heal_avg":self.p1_tot_heal / partidas,
+            "p2_tot_heal_avg":self.p2_tot_heal / partidas
         }
 
     def _warrior_selection_lines(self, warrior_use):
         total = sum(warrior_use)
         lines = []
+        enemigos = {1:"Knight",2:"Archer",3:"Rogue",4:"Wizard",5:"Cleric"}
         for i, uses in enumerate(warrior_use):
             pct = uses / total * 100 if total > 0 else 0
             avg = uses / max(self.partidas, 1)
-            lines.append(f"  Guerrero {i + 1}:          {uses:4d} ({pct:6.2f}%) -> {avg:.2f}/partida")
+            lines.append(f"{enemigos[i+1]}:          {uses:4d} ({pct:6.2f}%) -> {avg:.2f}/partida")
         return lines
 
     def _ability_usage_lines(self, attacks, warriors_classes):
@@ -127,6 +130,13 @@ class Stats:
             f"Daño total P2:             {self.p2_damage}",
             f"Daño medio P1:             {s['p1_damage_avg']:.2f}",
             f"Daño medio P2:             {s['p2_damage_avg']:.2f}",
+        ]))
+        
+        sections.append(self._section("Healing", [
+            f"Daño total P1:             {self.p1_tot_heal}",
+            f"Daño total P2:             {self.p2_tot_heal}",
+            f"Daño medio P1:             {s['p1_tot_heal_avg']:.2f}",
+            f"Daño medio P2:             {s['p2_tot_heal_avg']:.2f}",
         ]))
 
         sections.append(self._section("BAJAS (PROPIAS)", [
