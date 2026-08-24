@@ -1,5 +1,6 @@
 import random
 
+from numpy import mean
 import torch
 from torch import nn
 from AI.Agent.turnNetwork import TurnNetwork
@@ -37,7 +38,8 @@ class PlayerAI:
         if len(self.replay_memory_sel) < BATCH_SIZE:
             return None
         self.replayed_selection += 1
-        batch = self.replay_memory_sel.sample(BATCH_SIZE)
+        batch,indices,weights = self.replay_memory_sel.sample(BATCH_SIZE)
+        weights = torch.tensor(weights,dtype=torch.float32)
         states = [
             x.state.encode_choose_state()
             for x in batch
@@ -54,6 +56,7 @@ class PlayerAI:
         dones = torch.tensor(dones, dtype=torch.bool)
         qvalues = self.selection_network(states)
         q_selected = qvalues.gather(1,actions_b.unsqueeze(1)).squeeze(1)
+        td_errors = []
         with torch.no_grad():
             next_actions = self.selection_network(next_states).argmax(
                 dim=1
@@ -65,12 +68,12 @@ class PlayerAI:
                 * next_qvalues
                 * (~dones)
             )
-        loss = self.loss_function(
-            q_selected,
-            target
-        )
+            for q_select,tar in zip (q_selected,target):
+                td_errors.append(abs(q_select-tar))
+        loss = self.loss_function(q_selected,target,weights)
         self._optimize_step(loss, self.optimizer, self.selection_network, 
                             self.target_selection_network, "replayed_selection")
+        self.replay_memory_sel.update_priorities(indices, td_errors)
         return loss.item()
     
     def replay_turn(self):
@@ -78,7 +81,8 @@ class PlayerAI:
                 return None
             self.replayed_turn += 1
             #Recoges las experencias que usaremos como base
-            batch = self.replay_memory_turn.sample(BATCH_SIZE)
+            batch,indices,weights = self.replay_memory_turn.sample(BATCH_SIZE)
+            weights = torch.tensor(weights,dtype=torch.float32)
             #Divides los elementos de cada experiencia
             states = [x.state.normalize() for x in batch]
             warrior_mask = torch.tensor([
@@ -105,14 +109,20 @@ class PlayerAI:
             q_selected = q_selected * warrior_mask.float()
             q_selected = q_selected.sum(dim=1)
             target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
+            td_errors = []
+            with torch.no_grad():
+                for q_select,tar in zip(q_selected,target):
+                    td_errors.append(abs(q_select-tar))
             #Caculamos la perdida por haber tomado la decisión que tomamos
-            loss = self.loss_function(q_selected,target)
+            loss = self.loss_function(q_selected,target,weights)
             self._optimize_step(loss, self.optimizer2, self.turn_network, self.target_turn_network, "replayed_turn")
+            self.replay_memory_turn.update_priorities(indices, td_errors)
             return loss.item()
         
-    def loss_function(self,input,target):
-        loss = nn.SmoothL1Loss()
+    def loss_function(self,input,target,weigths):
+        loss = nn.SmoothL1Loss(reduction="none") 
         output = loss(input,target)
+        output = (output*weigths).mean()
         return output 
      
     def selection(
@@ -227,29 +237,44 @@ class PlayerAI:
     def _network_specs(self):
         return [
             (self.selection_network, self.target_selection_network,
-            self.optimizer, "epsilon_sel", "replayed_selection"),
+            self.optimizer, self.replay_memory_sel,
+            "epsilon_sel", "replayed_selection"),
+
             (self.turn_network, self.target_turn_network,
-            self.optimizer2, "epsilon_turn", "replayed_turn"),
+            self.optimizer2, self.replay_memory_turn,
+            "epsilon_turn", "replayed_turn"),
         ]
         
     def save_model(self, path1, path2):
-        for path, (net, target_net, opt, eps_attr, replayed_attr) in zip((path1, path2), self._network_specs()):
+        for path, (net, target_net, opt, replay_memory,
+                eps_attr, replayed_attr) in zip(
+                    (path1, path2), self._network_specs()):
+
             torch.save({
                 "dqn": net.state_dict(),
                 "targetdqn": target_net.state_dict(),
                 "optimizer": opt.state_dict(),
                 "epsilon": getattr(self, eps_attr),
-                "replayed_selection": getattr(self, replayed_attr),
+                "replayed": getattr(self, replayed_attr),
+                "replay_memory": replay_memory.state_dict(),
             }, path)
 
     def load_model(self, path1, path2):
-        for path, (net, target_net, opt, eps_attr, replayed_attr) in zip((path1, path2), self._network_specs()):
+        for path, (net, target_net, opt, replay_memory,
+                eps_attr, replayed_attr) in zip(
+                    (path1, path2), self._network_specs()):
+
             checkpoint = torch.load(path)
+
             net.load_state_dict(checkpoint["dqn"])
             target_net.load_state_dict(checkpoint["targetdqn"])
             opt.load_state_dict(checkpoint["optimizer"])
+
             setattr(self, eps_attr, checkpoint["epsilon"])
-            setattr(self, replayed_attr, checkpoint["replayed_selection"])
+            setattr(self, replayed_attr, checkpoint["replayed"])
+
+            replay_memory.load_state_dict(
+                checkpoint["replay_memory"])
     
     def update_epsilon(self):
         self.epsilon_sel = max(
@@ -260,6 +285,10 @@ class PlayerAI:
             EPSILON_TURN_MIN,
             self.epsilon_turn * EPSILON_TURN_DECAY
         )
+        
+    def update_beta(self):
+        self.replay_memory_sel.update_beta(self.replayed_selection)
+        self.replay_memory_turn.update_beta(self.replayed_turn)
         
     @staticmethod
     def _encode_next_states(batch, encode_fn, in_features):

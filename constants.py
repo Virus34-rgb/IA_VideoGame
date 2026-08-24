@@ -25,7 +25,7 @@ REWARD_WEIGHTS = {
     "deaths": 10,
     "win": 1,       # WIN_REWARD ya se aplica dentro del bonus, este peso multiplica ese bonus
     "blocks": 1,
-    "heal":2,
+    "heal":1,
     "shaping_weight":10,
 }
 TURN_PENALTY = 2
@@ -38,3 +38,10 @@ MAX_MODELS = 50
 EPISODES_RANGE_POOL = 500  #1% de TRAINING EPISODES
 EPISODES_SAVE_MODEL = 2500 #5% de TRAINING EPISODES
 POOL_PORCENTAGE = 0.3
+
+#CONSTANTES PER
+ALPHA = 1 #A mayor nummero mas prioridad se le da a a la prioridad
+BETA_START = 0.4
+BETA_END = 1.0
+BETA_DECAY_RATE = 0.9999
+PER_EPSILON = 0.1
