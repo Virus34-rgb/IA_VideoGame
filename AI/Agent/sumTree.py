@@ -57,9 +57,18 @@ class SumTree:
         self._propagate(tree_index, change)
 
     def get(self, value):
-        tree_index = self._retrieve(0, value)
+        # Nunca pidas más de lo que realmente hay acumulado, ni con margen 0
+        value = min(value, self.total() - 1e-6) if self.total() > 0 else 0
 
+        tree_index = self._retrieve(0, value)
         data_index = tree_index - self.capacity + 1
+
+        # Salvaguarda: si por precisión de float caemos en una hoja aún
+        # no escrita (prioridad 0), retrocedemos a la última hoja válida.
+        if self.tree[tree_index] == 0 and self.size > 0:
+            last_valid_data_index = self.size - 1
+            tree_index = last_valid_data_index + self.capacity - 1
+            data_index = last_valid_data_index
 
         return (
             tree_index,
