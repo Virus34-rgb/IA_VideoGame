@@ -264,7 +264,7 @@ class PlayerAI:
                 eps_attr, replayed_attr) in zip(
                     (path1, path2), self._network_specs()):
 
-            checkpoint = torch.load(path)
+            checkpoint = torch.load(path,weights_only=False)
 
             net.load_state_dict(checkpoint["dqn"])
             target_net.load_state_dict(checkpoint["targetdqn"])
