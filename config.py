@@ -45,3 +45,7 @@ class RunConfig:
     @property
     def path_p2_turn(self):
         return os.path.join(self.p2_path, "Act.pth")
+    
+    @property
+    def path_opp_pool(self):
+        return os.path.join(self.base_path,"opponent_pool")

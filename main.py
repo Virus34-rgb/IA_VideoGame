@@ -2,6 +2,7 @@
 import os
 import time
 
+from AI.Agent.opponent_pool import OpponentPool
 from AI.Agent.playerAI import PlayerAI
 from AI.Agent.playerNoIA import PlayerNoAI
 from AI.Environment.environment import Environment
@@ -19,6 +20,7 @@ class Main:
         self.player1 = None
         self.environment = None
         self.logger = None
+        self.opponent_pool = OpponentPool(self.config.path_opp_pool)
 
     def setup(self):
         os.makedirs(self.config.p1_path, exist_ok=True)
@@ -60,9 +62,9 @@ class Main:
             sel_path, turn_path = step.load_opponent_checkpoint
             if os.path.exists(sel_path) and os.path.exists(turn_path):
                 opponent.load_model(sel_path, turn_path)
-
+        
         trainer = Trainer(
-            active_player1, opponent, self.environment,
+            active_player1, opponent, self.environment,self.opponent_pool,
             train_episodes=step.episodes if step.action == "train" else 0,
             eval_episodes=step.episodes if step.action == "evaluate" else 0,
             pathp1_1=self.config.path_p1_sel, pathp1_2=self.config.path_p1_turn,
@@ -140,8 +142,8 @@ class Main:
 # ==================================================================
 # CONFIGURACIÓN 
 # ==================================================================
-VERSION = 5
-TRAIN_EPISODES = 100000
+VERSION = 1
+TRAIN_EPISODES = 500000
 EVAL_EPISODES = 10000
 
 # Steps de entrenamiento/evaluación IA vs IA que siempre se ejecutan
@@ -198,6 +200,18 @@ def build_steps(config: RunConfig):
             learn_p1=True,
             learn_p2=False,
             epsilon_turn=HUMAN_EPSILON,
+        ))
+
+    if PLAY_AGAINST_AI:
+        steps.append(TrainingStep(
+            name="Jugar contra IA",
+            action="evaluate",
+            episodes=PLAY_EPISODES,
+            opponent_factory=PlayerNoAI,
+            player1_checkpoint=(config.path_p1_sel, config.path_p1_turn),
+            learn_p1=False,
+            learn_p2=False,
+            epsilon_turn=PLAY_EPSILON,
         ))
 
     return steps
