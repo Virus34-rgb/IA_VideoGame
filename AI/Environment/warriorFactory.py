@@ -42,7 +42,7 @@ def get_warriors_classes():
         max_health= 15,
         speed = 12,
         ability1 = AbilityData("Magic Missile",1,4,[0,1,2],True) ,
-        ability2 = AbilityData("Zap",2,6,[1,2],False), #Se cubre de daño 1 turno
+        ability2 = AbilityData("Zap",2,6,[1,2],False), 
         ability3 = AbilityData("FireBall",3,6,[0,1,2],False),
         ability4 = AbilityData("StaffAttack",4,4,[0],True)
     )

@@ -293,9 +293,11 @@ class PlayerAI:
     @staticmethod
     def _encode_next_states(batch, encode_fn, in_features):
         return [encode_fn(x.next_state) if x.next_state is not None else [0] * in_features for x in batch]
+    
     @staticmethod
     def _valid_indices(masked_logits):
         return torch.where(masked_logits != float("-inf"))[0]
+    
     def _optimize_step(self, loss, optimizer, network, target_network, replayed_counter_attr):
         optimizer.zero_grad()
         loss.backward()
