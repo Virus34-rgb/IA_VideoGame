@@ -4,7 +4,7 @@ import torch
 
 from AI.Agent.choose_stateV import Choose_stateV
 from AI.Agent.observationV import ObservationV
-from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, MAX_TURNS, POOL_PORCENTAGE, WARRIOR_QUANTITY
+from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, MAX_TURNS, POOL_PORCENTAGE, TURN_REPLAYS, WARRIOR_QUANTITY
 
 
 class TrainerV:
@@ -112,7 +112,8 @@ class TrainerV:
             reward2_acum += reward2
 
         if learn_p1:
-            loss1_turn = self.player1.replay_turn()
+            for _ in range(TURN_REPLAYS):
+                loss1_turn = self.player1.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, self.player1.replayed_turn, "p1", "turn", loss1_turn)
             self._remember_and_replay_selection_batch(cstates1, actions1, reward1_acum, self.player1, "p1", batch_idx)
@@ -121,7 +122,8 @@ class TrainerV:
                 self.player1.update_epsilon()
 
         if learn_p2:
-            loss2_turn = p2_training_player.replay_turn()
+            for _ in range(TURN_REPLAYS):
+                loss2_turn = p2_training_player.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, p2_training_player.replayed_turn, "p2", "turn", loss2_turn)
             self._remember_and_replay_selection_batch(cstates2, actions2, reward2_acum, p2_training_player, "p2",
