@@ -132,7 +132,6 @@ class VectorizedEnvironment:
             # el que evita/bloquea es p1, y viceversa — mismo patrón para ambos.
             damage_avoided_p1 += torch.where(player != 0, avoided, torch.zeros_like(avoided))
             damage_avoided_p2 += torch.where(player != 0, torch.zeros_like(avoided), avoided)
-            # NUEVO: acumulación de blocks, faltaba por completo
             blocks_p1 += torch.where(player != 0, blocks, torch.zeros_like(blocks))
             blocks_p2 += torch.where(player != 0, torch.zeros_like(blocks), blocks)
             heal_p1 += torch.where(player == 0, heal, torch.zeros_like(heal))
@@ -146,9 +145,6 @@ class VectorizedEnvironment:
         p1_new_deaths = (p1_alive_inicio & ~self.p1_alive).sum(dim=1).to(self.p1_deaths.dtype)
         p2_new_deaths = (p2_alive_inicio & ~self.p2_alive).sum(dim=1).to(self.p2_deaths.dtype)
 
-        # CORREGIDO: ya_terminadas_antes debe calcularse ANTES de usarse en
-        # accumulate_turn — en tu versión se llamaba a accumulate_turn con
-        # una variable todavía no definida (NameError garantizado).
         ya_terminadas_antes = self.ended.clone()
 
         self.stats.accumulate_turn(damage_p1, damage_p2, blocks_p1, blocks_p2,
