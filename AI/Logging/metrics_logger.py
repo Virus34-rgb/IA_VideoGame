@@ -5,12 +5,13 @@ import time
 from dataclasses import dataclass, field, asdict
 import csv as csv_module
 
+
 @dataclass
 class LossRecord:
     episode: int
     replayed_count: int
-    player: str          # "p1" o "p2"
-    network: str          # "selection" o "turn"
+    player: str
+    network: str
     loss: float
     timestamp: float = field(default_factory=time.time)
 
@@ -34,53 +35,28 @@ class SnapshotRecord:
 
 
 class MetricsLogger:
-    """
-    Centraliza el logging de una corrida de entrenamiento/evaluación:
-    - loss por replay (CSV, para graficar convergencia)
-    - snapshots periódicos de progreso (CSV, para graficar la curva de aprendizaje)
-    - volcado de configuración/hiperparámetros usados (JSON, para reproducir/comparar corridas)
-    """
-
     def __init__(self, output_dir, run_name):
         self.output_dir = output_dir
         self.run_name = run_name
         os.makedirs(output_dir, exist_ok=True)
-
         self.loss_path = os.path.join(output_dir, f"{run_name}_loss.csv")
         self.snapshot_path = os.path.join(output_dir, f"{run_name}_progress.csv")
         self.config_path = os.path.join(output_dir, f"{run_name}_config.json")
-
         self._loss_header_written = os.path.exists(self.loss_path)
         self._snapshot_header_written = os.path.exists(self.snapshot_path)
 
-    # ------------------------------------------------------------
-    # Configuración / hiperparámetros
-    # ------------------------------------------------------------
     def dump_config(self, config_module, extra=None):
-        """
-        Guarda todas las constantes en mayúsculas de un módulo (p.ej. constants.py)
-        como JSON, junto con metadata de cuándo se lanzó la corrida.
-        `extra` permite añadir datos adicionales (p.ej. nombre del step, episodios).
-        """
         values = {
             name: getattr(config_module, name)
             for name in dir(config_module)
             if name.isupper() and not name.startswith("_")
         }
-        payload = {
-            "run_name": self.run_name,
-            "timestamp": time.time(),
-            "constants": values,
-        }
+        payload = {"run_name": self.run_name, "timestamp": time.time(), "constants": values}
         if extra:
             payload["extra"] = extra
-
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
 
-    # ------------------------------------------------------------
-    # Loss
-    # ------------------------------------------------------------
     def log_loss(self, episode, replayed_count, player, network, loss_value):
         if loss_value is None:
             return
@@ -88,9 +64,6 @@ class MetricsLogger:
         self._append_csv(self.loss_path, record, self._loss_header_written)
         self._loss_header_written = True
 
-    # ------------------------------------------------------------
-    # Snapshots periódicos de progreso
-    # ------------------------------------------------------------
     def log_snapshot(self, episode, player1, player2, stats):
         partidas = max(stats.partidas, 1)
         record = SnapshotRecord(
@@ -111,9 +84,6 @@ class MetricsLogger:
         self._append_csv(self.snapshot_path, record, self._snapshot_header_written)
         self._snapshot_header_written = True
 
-    # ------------------------------------------------------------
-    # Utilidad interna
-    # ------------------------------------------------------------
     @staticmethod
     def _append_csv(path, record, header_written):
         row = asdict(record)
@@ -125,9 +95,7 @@ class MetricsLogger:
             writer.writerow(row)
 
     def plot_progress(self, show=True):
-        """Genera gráficas a partir de los CSV de progreso y loss, y las guarda como PNG."""
         import matplotlib.pyplot as plt
-
         fig_paths = []
 
         if os.path.exists(self.snapshot_path):
@@ -186,10 +154,55 @@ class MetricsLogger:
 
         if show and fig_paths:
             plt.show()
-
         return fig_paths
 
     @staticmethod
     def _read_csv(path):
         with open(path, newline="", encoding="utf-8") as f:
             return list(csv_module.DictReader(f))
+
+    # ------------------------------------------------------------
+    # NUEVO: comparación de varios runs — funcionalidad acordada como
+    # prioridad inmediatamente posterior a la vectorización.
+    # ------------------------------------------------------------
+    @staticmethod
+    def compare_runs(output_dir, run_names, labels=None, show=True):
+        """
+        Superpone las curvas de progreso de varios runs (cada uno
+        identificado por su run_name, con su propio *_progress.csv en
+        output_dir) en una única figura, y la guarda como PNG.
+        """
+        import matplotlib.pyplot as plt
+        labels = labels or run_names
+
+        fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+        fig.suptitle("Comparación de runs")
+
+        any_data = False
+        for run_name, label in zip(run_names, labels):
+            path = os.path.join(output_dir, f"{run_name}_progress.csv")
+            if not os.path.exists(path):
+                continue
+            rows = MetricsLogger._read_csv(path)
+            if not rows:
+                continue
+            any_data = True
+            episodes = [int(r["episode"]) for r in rows]
+            axes[0, 0].plot(episodes, [float(r["p1_winrate"]) for r in rows], label=label)
+            axes[0, 1].plot(episodes, [float(r["p1_damage_avg"]) for r in rows], label=label)
+            axes[1, 0].plot(episodes, [float(r["p1_reward_avg"]) for r in rows], label=label)
+            axes[1, 1].plot(episodes, [float(r["avg_turns"]) for r in rows], label=label)
+
+        axes[0, 0].set_title("Winrate P1 (%)")
+        axes[0, 1].set_title("Daño medio P1")
+        axes[1, 0].set_title("Reward medio P1")
+        axes[1, 1].set_title("Turnos medios por partida")
+        for ax in axes.flat:
+            ax.legend()
+
+        plt.tight_layout()
+        path = os.path.join(output_dir, "comparison_progress.png")
+        fig.savefig(path)
+        if show and any_data:
+            plt.show()
+        return path

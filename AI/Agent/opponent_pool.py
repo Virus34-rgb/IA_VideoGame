@@ -26,7 +26,7 @@ class OpponentPool:
                 "targetdqn": target_net.state_dict(),
                 "optimizer": opt.state_dict(),
                 "epsilon": getattr(player, eps_attr),
-                "replayed_selection": getattr(player, replayed_attr),
+                "replayed": getattr(player, replayed_attr),
                 "replay_memory": replay_memory.state_dict(),
             }, path)
             
