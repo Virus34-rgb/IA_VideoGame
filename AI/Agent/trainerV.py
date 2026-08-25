@@ -4,7 +4,7 @@ import torch
 
 from AI.Agent.choose_stateV import Choose_stateV
 from AI.Agent.observationV import ObservationV
-from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, MAX_TURNS, POOL_PORCENTAGE, TURN_REPLAYS, WARRIOR_QUANTITY
+from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, MAX_TURNS, POOL_PORCENTAGE, SELECTION_REPLAYS_PER_BATCH, TURN_REPLAYS_PER_BATCH, WARRIOR_QUANTITY
 
 
 class TrainerV:
@@ -44,6 +44,7 @@ class TrainerV:
                    learn_p1=False, learn_p2=False, stats_path=self.path_stats2, restore_epsilon=True)
 
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon):
+        snapshot_every = max(1, batches // 50) 
         backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
         # CAMBIO: p2_training_player sustituye a self.player2 como "el
@@ -68,8 +69,8 @@ class TrainerV:
 
             self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player)
 
-            if self.logger and (learn_p1 or learn_p2) and self.snapshot_every and batch_idx % self.snapshot_every == 0:
-                self.logger.log_snapshot(batch_idx, self.player1, p2_training_player, self.environment.stats)
+            if self.logger and (learn_p1 or learn_p2) and snapshot_every and batch_idx % snapshot_every == 0:
+                    self.logger.log_snapshot(batch_idx, self.player1, p2_training_player, self.environment.stats)
             self._print_progress(batch_idx, batches, start_time)
 
         if batches > 0:
@@ -112,17 +113,17 @@ class TrainerV:
             reward2_acum += reward2
 
         if learn_p1:
-            for _ in range(TURN_REPLAYS):
+            for _ in range(TURN_REPLAYS_PER_BATCH):
                 loss1_turn = self.player1.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, self.player1.replayed_turn, "p1", "turn", loss1_turn)
             self._remember_and_replay_selection_batch(cstates1, actions1, reward1_acum, self.player1, "p1", batch_idx)
             if self.train_batches != 0:
                 self.player1.update_beta()
-                self.player1.update_epsilon()
+                self.player1.update_epsilon(n_games=self.N)
 
         if learn_p2:
-            for _ in range(TURN_REPLAYS):
+            for _ in range(TURN_REPLAYS_PER_BATCH):
                 loss2_turn = p2_training_player.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, p2_training_player.replayed_turn, "p2", "turn", loss2_turn)
@@ -130,10 +131,10 @@ class TrainerV:
                                                         batch_idx, skip_mask=self._opponent_from_pool_mask)
             if self.train_batches != 0:
                 p2_training_player.update_beta()
-                p2_training_player.update_epsilon()
+                p2_training_player.update_epsilon(n_games=self.N)
 
-        self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
-        self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
+                self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
+                self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
 
     def _turn_mixed_opponent(self, obs2_tensor, from_pool, grouped_opponents, p2_training_player):
         actions = p2_training_player.turn(obs2_tensor, self.environment.p2_disposition,
@@ -152,33 +153,23 @@ class TrainerV:
                 continue
             player.remember_turn(obs_list[i], action[i], reward[i].item(), next_obs_list[i], ended[i].item())
 
-    def _remember_and_replay_selection_batch(self,cstates_list,actions,reward_acum,
-                                            player,player_name,batch_idx,skip_mask=None):
+    def _remember_and_replay_selection_batch(self, cstates_list, actions, reward_acum,
+                                          player, player_name, batch_idx, skip_mask=None):
         c1, c2, c3 = cstates_list
         a1, a2, a3 = actions
         for i in range(self.N):
             if skip_mask is not None and skip_mask[i]:
                 continue
-
-            transitions = [
-                (c1[i], a1[i].item(), c2[i], False),
-                (c2[i], a2[i].item(), c3[i], False),
-                (c3[i], a3[i].item(), None, True)
-            ]
-
+            transitions = [(c1[i], a1[i].item(), c2[i], False),
+                        (c2[i], a2[i].item(), c3[i], False),
+                        (c3[i], a3[i].item(), None, True)]
             for c, a, next_c, done in transitions:
-                player.remember_selection(
-                    c,
-                    a,
-                    reward_acum[i].item(),
-                    next_c,
-                    done
-                )
-        replay_steps = min(self.N, 32)
-        for _ in range(replay_steps):
+                player.remember_selection(c, a, reward_acum[i].item(), next_c, done)
+
+        for _ in range(SELECTION_REPLAYS_PER_BATCH):
             loss = player.replay_selection()
             if self.logger:
-                self.logger.log_loss(batch_idx,player.replayed_selection,player_name,"selection",loss)
+                self.logger.log_loss(batch_idx, player.replayed_selection, player_name, "selection", loss)
 
     def _select_teams(self, state, p2_training_player):
         cstate1_list, cstate2_list = self.createChooseState(
