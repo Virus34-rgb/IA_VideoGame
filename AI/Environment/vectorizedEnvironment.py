@@ -72,9 +72,12 @@ class VectorizedEnvironment:
         self.p2_healths[self.indices, pos2] = health2
         self.p1_alive[self.indices, pos1] = True
         self.p2_alive[self.indices, pos2] = True
+        self.stats.accumulate_warrior_use(warrior1, warrior2)
 
     def turn(self, actionsp1, actionsp2):
         self.turn_number += 1
+        ya_terminadas_antes = self.ended.clone()
+
         order, actor_alive_inicio = self.get_turn_order()
         p1_alive_inicio = actor_alive_inicio[:, :3]
         p2_alive_inicio = actor_alive_inicio[:, 3:]
@@ -83,7 +86,6 @@ class VectorizedEnvironment:
         damage_p2 = torch.zeros(self.N)
         damage_avoided_p1 = torch.zeros(self.N)
         damage_avoided_p2 = torch.zeros(self.N)
-        # NUEVO: faltaban por completo — Stats necesita estos dos tensores
         blocks_p1 = torch.zeros(self.N)
         blocks_p2 = torch.zeros(self.N)
         heal_p1 = torch.zeros(self.N)
@@ -96,7 +98,8 @@ class VectorizedEnvironment:
             actor_idx = order[:, position]
             player = actor_idx // 3
             pos = actor_idx % 3
-            player_mask = (player == 0).unsqueeze(1)
+            es_p1 = (player == 0)                  
+            player_mask = es_p1.unsqueeze(1)
             player_mask_3 = player_mask.unsqueeze(-1)
 
             own_disposition = torch.where(player_mask, self.p1_disposition, self.p2_disposition)
@@ -112,10 +115,10 @@ class VectorizedEnvironment:
             tipo_actor = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
 
             (dmg, avoided, blocks, moved, heal, own_new_disp, enemy_new_disp, own_new_health,
-             enemy_new_health, own_cd_new, own_alive_new, enemy_alive_new
-             ) = self._resolve_action(pos, tipo_actor, own_disposition, enemy_disposition, own_health,
-                                       enemy_health, own_cooldowns, own_alive, enemy_alive,
-                                       accion_actor, enemy_actions)
+            enemy_new_health, own_cd_new, own_alive_new, enemy_alive_new
+            ) = self._resolve_action(pos, tipo_actor, own_disposition, enemy_disposition, own_health,
+                                    enemy_health, own_cooldowns, own_alive, enemy_alive,
+                                    accion_actor, enemy_actions)
 
             self.p1_disposition = torch.where(player_mask, own_new_disp, enemy_new_disp)
             self.p2_disposition = torch.where(player_mask, enemy_new_disp, own_new_disp)
@@ -126,16 +129,17 @@ class VectorizedEnvironment:
             self.p1_cooldowns = torch.where(player_mask_3, own_cd_new, self.p1_cooldowns)
             self.p2_cooldowns = torch.where(~player_mask_3, own_cd_new, self.p2_cooldowns)
 
-            damage_p1 += torch.where(player == 0, dmg, torch.zeros_like(dmg))
-            damage_p2 += torch.where(player == 0, torch.zeros_like(dmg), dmg)
-            # damage_avoided/blocks pertenecen al DEFENSOR: cuando player==1 (p2 ataca),
-            # el que evita/bloquea es p1, y viceversa — mismo patrón para ambos.
-            damage_avoided_p1 += torch.where(player != 0, avoided, torch.zeros_like(avoided))
-            damage_avoided_p2 += torch.where(player != 0, torch.zeros_like(avoided), avoided)
-            blocks_p1 += torch.where(player != 0, blocks, torch.zeros_like(blocks))
-            blocks_p2 += torch.where(player != 0, torch.zeros_like(blocks), blocks)
-            heal_p1 += torch.where(player == 0, heal, torch.zeros_like(heal))
-            heal_p2 += torch.where(player != 0, torch.zeros_like(heal), heal)
+            damage_p1 += torch.where(es_p1, dmg, torch.zeros_like(dmg))
+            damage_p2 += torch.where(es_p1, torch.zeros_like(dmg), dmg)
+            damage_avoided_p1 += torch.where(~es_p1, avoided, torch.zeros_like(avoided))
+            damage_avoided_p2 += torch.where(~es_p1, torch.zeros_like(avoided), avoided)
+            blocks_p1 += torch.where(~es_p1, blocks, torch.zeros_like(blocks))
+            blocks_p2 += torch.where(~es_p1, torch.zeros_like(blocks), blocks)
+            heal_p1 += torch.where(es_p1, heal, torch.zeros_like(heal))
+            heal_p2 += torch.where(~es_p1, heal, torch.zeros_like(heal))
+
+            self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)
+            self.stats.accumulate_attacks(tipo_actor, accion_actor, es_p1, ~ya_terminadas_antes)
 
         p1_post_health = (self.p1_healths / self.max_health_por_tipo[self.p1_disposition]).sum(dim=1)
         p2_post_health = (self.p2_healths / self.max_health_por_tipo[self.p2_disposition]).sum(dim=1)
@@ -144,8 +148,6 @@ class VectorizedEnvironment:
 
         p1_new_deaths = (p1_alive_inicio & ~self.p1_alive).sum(dim=1).to(self.p1_deaths.dtype)
         p2_new_deaths = (p2_alive_inicio & ~self.p2_alive).sum(dim=1).to(self.p2_deaths.dtype)
-
-        ya_terminadas_antes = self.ended.clone()
 
         self.stats.accumulate_turn(damage_p1, damage_p2, blocks_p1, blocks_p2,
                                     damage_avoided_p1, damage_avoided_p2, heal_p1, heal_p2,
@@ -160,7 +162,7 @@ class VectorizedEnvironment:
         rewardP2 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP2), rewardP2)
 
         return self.get_state(), rewardP1, rewardP2, self.ended
-
+    
     def _resolve_action(self,pos,actors,own_disposition,enemy_disposition,own_health,enemy_health,
                         own_cooldowns,own_alive, enemy_alive,actions_actor, enemy_actions):
 

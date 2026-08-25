@@ -286,15 +286,11 @@ class PlayerAIV:
             replay_memory.load_state_dict(
                 checkpoint["replay_memory"])
     
-    def update_epsilon(self):
-        self.epsilon_sel = max(
-            EPSILON_SEL_MIN,
-            self.epsilon_sel * EPSILON_SEL_DECAY
-        )
-        self.epsilon_turn = max(
-            EPSILON_TURN_MIN,
-            self.epsilon_turn * EPSILON_TURN_DECAY
-        )
+    def update_epsilon(self, n_games=1):
+        decay_sel = EPSILON_SEL_DECAY ** n_games
+        decay_turn = EPSILON_TURN_DECAY ** n_games
+        self.epsilon_sel = max(EPSILON_SEL_MIN, self.epsilon_sel * decay_sel)
+        self.epsilon_turn = max(EPSILON_TURN_MIN, self.epsilon_turn * decay_turn)
         
     def update_beta(self):
         self.replay_memory_sel.update_beta(self.replayed_selection)
