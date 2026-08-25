@@ -1,0 +1,86 @@
+import random
+from pathlib import Path
+import re
+import torch
+
+from constants import MAX_MODELS
+
+
+class OpponentPoolV:
+    def __init__(self, path):
+        self.path = Path(path)
+        self.path.mkdir(parents=True, exist_ok=True)
+
+    def save_version(self, player):
+        cantidad, first_index, last_index = self.list_models()
+        if cantidad >= MAX_MODELS:
+            self.delete_first(first_index)
+        path1 = self.path / f"snapshotsSELECTION_{last_index + 1}.pth"
+        path2 = self.path / f"snapshotsTURN_{last_index + 1}.pth"
+        for path, (net, target_net, opt, replay_memory, eps_attr, replayed_attr) in zip(
+                (path1, path2), player._network_specs()):
+            torch.save({
+                "dqn": net.state_dict(),
+                "targetdqn": target_net.state_dict(),
+                "optimizer": opt.state_dict(),
+                "epsilon": getattr(player, eps_attr),
+                "replayed": getattr(player, replayed_attr),
+                "replay_memory": replay_memory.state_dict(),
+            }, path)
+
+    def get_random(self):
+        _, first_index, last_index = self.list_models()
+        index = random.randint(first_index, last_index)
+        return self.path / f"snapshotsSELECTION_{index}.pth", self.path / f"snapshotsTURN_{index}.pth"
+
+    def list_models(self):
+        indexes = []
+        for path in self.path.glob("snapshotsSELECTION_*.pth"):
+            match = re.search(r'_(\d+)\.pth$', path.name)
+            if match:
+                indexes.append(int(match.group(1)))
+        if not indexes:
+            return 0, 0, 0
+        return len(indexes), min(indexes), max(indexes)
+
+    def delete_first(self, first):
+        (self.path / f"snapshotsSELECTION_{first}.pth").unlink()
+        (self.path / f"snapshotsTURN_{first}.pth").unlink()
+
+    def sample_assignment(self, N, pool_porcentage):
+        """
+        Decide, PARTIDA A PARTIDA, si juega contra el pool o contra el
+        oponente "en entrenamiento" (p2_training_player), y si es contra
+        el pool, con qué checkpoint concreto.
+
+        Devuelve:
+        - from_pool: (N,) bool, True donde esa partida usa un checkpoint del pool
+        - checkpoint_idx: (N,) long, índice de checkpoint (-1 donde from_pool es False)
+        """
+        cantidad, first_index, last_index = self.list_models()
+        from_pool = torch.rand(N) < pool_porcentage
+        if cantidad == 0:
+            from_pool[:] = False
+
+        checkpoint_idx = torch.full((N,), -1, dtype=torch.long)
+        if cantidad > 0:
+            n_from_pool = from_pool.sum().item()
+            if n_from_pool > 0:
+                elegidos = torch.randint(first_index, last_index + 1, (n_from_pool,))
+                checkpoint_idx[from_pool] = elegidos
+        return from_pool, checkpoint_idx
+
+    def build_grouped_opponents(self, checkpoint_idx, player_class, N, environment):
+        grupos = {}
+        unicos = checkpoint_idx.unique()
+        for cp_id in unicos.tolist():
+            if cp_id == -1:
+                continue
+            idx_partidas = (checkpoint_idx == cp_id).nonzero(as_tuple=True)[0]
+            jugador = player_class(N, environment)  # se construye a tamaño N completo,
+                                                       # pero solo se usará en las filas idx_partidas
+            path1 = self.path / f"snapshotsSELECTION_{cp_id}.pth"
+            path2 = self.path / f"snapshotsTURN_{cp_id}.pth"
+            jugador.load_model(path1, path2)
+            grupos[cp_id] = (jugador, idx_partidas)
+        return grupos
