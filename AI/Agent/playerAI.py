@@ -8,7 +8,7 @@ from AI.Agent.observation import Observation
 from AI.Agent.selectionNetwork import SelectionNetwork
 from AI.Agent.replayMemoryAN import ReplayMemoryAN
 from AI.Agent.replayMemoryPM import ReplayMemoryPM
-from constants import ABILITIES, BATCH_SIZE, COPY_DQN, DISCOUNT_FACTOR, EPSILON_SEL_DECAY, EPSILON_SEL_MIN, EPSILON_SELECTION, EPSILON_TURN, EPSILON_TURN_DECAY, EPSILON_TURN_MIN, SELECTION_LEARNING_RATE, SELECTION_REPLAY_DATA, TURN_LEARNING_RATE, TURN_REPLAY_DATA, WARRIOR_QUANTITY
+from constants import ABILITIES, BATCH_SIZE, COPY_DQN, DISCOUNT_FACTOR_SEL, DISCOUNT_FACTOR_TURN, EPSILON_SEL_DECAY, EPSILON_SEL_MIN, EPSILON_SELECTION, EPSILON_TURN, EPSILON_TURN_DECAY, EPSILON_TURN_MIN, SELECTION_LEARNING_RATE, SELECTION_REPLAY_DATA, TURN_LEARNING_RATE, TURN_REPLAY_DATA, WARRIOR_QUANTITY
 
 class PlayerAI:
     def __init__(self):
@@ -64,7 +64,7 @@ class PlayerAI:
             next_qvalues = self.target_selection_network(next_states).gather(1,next_actions.unsqueeze(1)).squeeze(1)
             target = (
                 rewards
-                + DISCOUNT_FACTOR
+                + DISCOUNT_FACTOR_SEL
                 * next_qvalues
                 * (~dones)
             )
@@ -331,4 +331,4 @@ class PlayerAI:
                 dtype=torch.bool
             )
             next_qvalues = (next_qvalues * next_warrior_mask.float()).sum(dim=1)
-            return rewards + DISCOUNT_FACTOR * next_qvalues * (~dones)
+            return rewards + DISCOUNT_FACTOR_TURN * next_qvalues * (~dones)
