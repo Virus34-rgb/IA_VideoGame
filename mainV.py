@@ -253,7 +253,7 @@ PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
 # NUEVO: activa el modo comparación en vez de un único run
-RUN_COMPARISON = False
+RUN_COMPARISON = True
 
 def build_steps(config: RunConfig):
     steps = []
@@ -316,7 +316,7 @@ if __name__ == "__main__":
             RunSpec(run_name="baseline", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES),
             RunSpec(run_name="gamma_alto", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
                     constants_overrides={"DISCOUNT_FACTOR": 0.99}),
-            RunSpec(run_name="lr_bajo", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+            RunSpec(run_name="replays_40", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
                     constants_overrides={"TURN_REPLAYS_PER_BATCH": 40}),
         ]
         run_comparison(config, run_specs)
