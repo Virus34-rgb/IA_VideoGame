@@ -4,7 +4,7 @@ import torch
 
 from AI.Agent.choose_stateV import Choose_stateV
 from AI.Agent.observationV import ObservationV
-from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, MAX_TURNS, POOL_PORCENTAGE, SELECTION_REPLAYS_PER_BATCH, TURN_REPLAYS_PER_BATCH, WARRIOR_QUANTITY
+from constants import MAX_TURNS, POOL_PORCENTAGE, POOL_RANGE_FRACTION, SAVE_MODEL_FRACTION, SELECTION_REPLAYS_PER_BATCH, TURN_REPLAYS_PER_BATCH, WARRIOR_QUANTITY
 
 
 class TrainerV:
@@ -44,6 +44,8 @@ class TrainerV:
                    learn_p1=False, learn_p2=False, stats_path=self.path_stats2, restore_epsilon=True)
 
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon):
+        save_every = max(1, int(batches * SAVE_MODEL_FRACTION))
+        pool_every = max(1, int(batches * POOL_RANGE_FRACTION))
         snapshot_every = max(1, batches // 50) 
         backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
@@ -55,10 +57,10 @@ class TrainerV:
         self._grouped_opponents = {}
 
         for batch_idx in range(batches):
-            if batch_idx != 0 and batch_idx % EPISODES_SAVE_MODEL == 0:
+            if batch_idx != 0 and batch_idx % save_every == 0:
                 self.opponent_pool.save_version(p2_training_player)
 
-            if batch_idx != 0 and batch_idx % EPISODES_RANGE_POOL == 0:
+            if batch_idx != 0 and batch_idx % pool_every == 0:
                 # CORREGIDO: reemplaza la recreación de un único self.player2
                 # por una asignación por-partida usando OpponentPoolV.
                 from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(self.N, POOL_PORCENTAGE)
