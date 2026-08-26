@@ -134,8 +134,8 @@ class TrainerV:
                 p2_training_player.update_beta()
                 p2_training_player.update_epsilon(n_games=self.N)
 
-                self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
-                self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
+        self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
+        self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
 
     def _turn_mixed_opponent(self, obs2_tensor, from_pool, grouped_opponents, p2_training_player):
         actions = p2_training_player.turn(obs2_tensor, self.environment.p2_disposition,
