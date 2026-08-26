@@ -53,7 +53,7 @@ class MainV:
         for step in self.steps:
             self._run_step(step)
         self._print_summary()
-        self.logger.plot_progress(show=True)
+        self.logger.plot_progress(show=False)
 
     def _run_step(self, step: TrainingStep):
         print(f"\n{'=' * 65}\nSTEP: {step.name} ({step.action}, {step.episodes} lotes de {self.N})\n{'-' * 65}")
@@ -229,10 +229,10 @@ def run_comparison(config: RunConfig, run_specs: list):
 # ==================================================================
 # CONFIGURACIÓN
 # ==================================================================
-VERSION = 3
+VERSION = 4
 N_BATCH = 512
-TRAIN_EPISODES = math.ceil(100000 / N_BATCH)
-EVAL_EPISODES = math.ceil(10000 / N_BATCH)
+TRAIN_EPISODES = math.ceil(10000 / N_BATCH)
+EVAL_EPISODES = math.ceil(1000 / N_BATCH)
 
 RUN_SELF_PLAY = True
 RUN_EVALUATION = True

@@ -11,14 +11,25 @@ class OpponentPoolV:
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
         self._player_cache = {}  # {checkpoint_id: PlayerAIV cargado}
+        self._indices = self._scan_disk_once()
+        
+    def _scan_disk_once(self):
+        indexes = []
+        for path in self.path.glob("snapshotsSELECTION_*.pth"):
+            match = re.search(r'_(\d+)\.pth$', path.name)
+            if match:
+                indexes.append(int(match.group(1)))
+        return sorted(indexes)
 
     def save_version(self, player):
         cantidad, first_index, last_index = self.list_models()
         if cantidad >= MAX_MODELS:
             self.delete_first(first_index)
+        new_index = last_index + 1
         path1 = self.path / f"snapshotsSELECTION_{last_index + 1}.pth"
         path2 = self.path / f"snapshotsTURN_{last_index + 1}.pth"
         player.save_model_inference_only(path1, path2)
+        self._indices.append(new_index)
 
     def get_random(self):
         _, first_index, last_index = self.list_models()
@@ -26,19 +37,15 @@ class OpponentPoolV:
         return self.path / f"snapshotsSELECTION_{index}.pth", self.path / f"snapshotsTURN_{index}.pth"
 
     def list_models(self):
-        indexes = []
-        for path in self.path.glob("snapshotsSELECTION_*.pth"):
-            match = re.search(r'_(\d+)\.pth$', path.name)
-            if match:
-                indexes.append(int(match.group(1)))
-        if not indexes:
+        if not self._indices:
             return 0, 0, 0
-        return len(indexes), min(indexes), max(indexes)
+        return len(self._indices), self._indice
 
     def delete_first(self, first):
         (self.path / f"snapshotsSELECTION_{first}.pth").unlink()
         (self.path / f"snapshotsTURN_{first}.pth").unlink()
         self._player_cache.pop(first, None)
+        self._indices.remove(first)
 
     def sample_assignment(self, N, pool_porcentage):
         cantidad, first_index, last_index = self.list_models()
