@@ -236,7 +236,7 @@ def run_comparison(config: RunConfig, run_specs: list):
 # ==================================================================
 # CONFIGURACIÓN
 # ==================================================================
-VERSION = 1
+VERSION = 2
 N_BATCH = 512
 TRAIN_EPISODES = math.ceil(100000 / N_BATCH)
 EVAL_EPISODES = math.ceil(10000 / N_BATCH)
@@ -253,7 +253,7 @@ PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
 # NUEVO: activa el modo comparación en vez de un único run
-RUN_COMPARISON = True
+RUN_COMPARISON = False
 
 def build_steps(config: RunConfig):
     steps = []
