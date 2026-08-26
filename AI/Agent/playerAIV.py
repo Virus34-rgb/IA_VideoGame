@@ -285,6 +285,23 @@ class PlayerAIV:
 
             replay_memory.load_state_dict(
                 checkpoint["replay_memory"])
+            
+    def load_model_inference_only(self, path1, path2):
+        for path, (net, target_net, opt, replay_memory, eps_attr, replayed_attr) in zip(
+                (path1, path2), self._network_specs()):
+            checkpoint = torch.load(path, weights_only=False)
+            net.load_state_dict(checkpoint["dqn"])
+            # target_net no se usa para decidir accion (solo turn_network/selection_network
+            # se usan en inferencia), pero si mask_turn u otro sitio lo necesitara, cárgalo también.
+            setattr(self, eps_attr, checkpoint["epsilon"])
+            
+    def save_model_inference_only(self, path1, path2):
+        for path, (net, target_net, opt, replay_memory, eps_attr, replayed_attr) in zip(
+                (path1, path2), self._network_specs()):
+            torch.save({
+                "dqn": net.state_dict(),
+                "epsilon": getattr(self, eps_attr),
+            }, path)
     
     def update_epsilon(self, n_games=1):
         decay_sel = EPSILON_SEL_DECAY ** n_games

@@ -10,6 +10,7 @@ class OpponentPoolV:
     def __init__(self, path):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
+        self._player_cache = {}  # {checkpoint_id: PlayerAIV cargado}
 
     def save_version(self, player):
         cantidad, first_index, last_index = self.list_models()
@@ -46,17 +47,9 @@ class OpponentPoolV:
     def delete_first(self, first):
         (self.path / f"snapshotsSELECTION_{first}.pth").unlink()
         (self.path / f"snapshotsTURN_{first}.pth").unlink()
+        self._player_cache.pop(first, None)
 
     def sample_assignment(self, N, pool_porcentage):
-        """
-        Decide, PARTIDA A PARTIDA, si juega contra el pool o contra el
-        oponente "en entrenamiento" (p2_training_player), y si es contra
-        el pool, con qué checkpoint concreto.
-
-        Devuelve:
-        - from_pool: (N,) bool, True donde esa partida usa un checkpoint del pool
-        - checkpoint_idx: (N,) long, índice de checkpoint (-1 donde from_pool es False)
-        """
         cantidad, first_index, last_index = self.list_models()
         from_pool = torch.rand(N) < pool_porcentage
         if cantidad == 0:
@@ -81,6 +74,22 @@ class OpponentPoolV:
                                                        # pero solo se usará en las filas idx_partidas
             path1 = self.path / f"snapshotsSELECTION_{cp_id}.pth"
             path2 = self.path / f"snapshotsTURN_{cp_id}.pth"
-            jugador.load_model(path1, path2)
+            jugador.load_model_inference_only(path1, path2)
             grupos[cp_id] = (jugador, idx_partidas)
+        return grupos
+    
+    def build_grouped_opponents(self, checkpoint_idx, player_class, N, environment):
+        grupos = {}
+        unicos = checkpoint_idx.unique()
+        for cp_id in unicos.tolist():
+            if cp_id == -1:
+                continue
+            idx_partidas = (checkpoint_idx == cp_id).nonzero(as_tuple=True)[0]
+            if cp_id not in self._player_cache:
+                jugador = player_class(N, environment)
+                path1 = self.path / f"snapshotsSELECTION_{cp_id}.pth"
+                path2 = self.path / f"snapshotsTURN_{cp_id}.pth"
+                jugador.load_model_inference_only(path1, path2)
+                self._player_cache[cp_id] = jugador
+            grupos[cp_id] = (self._player_cache[cp_id], idx_partidas)
         return grupos
