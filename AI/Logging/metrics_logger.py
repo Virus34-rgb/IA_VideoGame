@@ -166,43 +166,104 @@ class MetricsLogger:
     # prioridad inmediatamente posterior a la vectorización.
     # ------------------------------------------------------------
     @staticmethod
-    def compare_runs(output_dir, run_names, labels=None, show=True):
+    def compare_runs(runs, labels=None, show=True, output_dir=None):
         """
-        Superpone las curvas de progreso de varios runs (cada uno
-        identificado por su run_name, con su propio *_progress.csv en
-        output_dir) en una única figura, y la guarda como PNG.
+        Compara varios runs aunque cada uno esté almacenado en un
+        directorio diferente.
+
+        runs:
+            Lista de tuplas (output_dir, run_name)
+
+        labels:
+            Nombres que aparecerán en las gráficas.
         """
         import matplotlib.pyplot as plt
-        labels = labels or run_names
+
+        if not runs:
+            return None
+
+        if labels is None:
+            labels = [run_name for _, run_name in runs]
+
+        if len(labels) != len(runs):
+            raise ValueError("Debe haber una label por cada run.")
+
+        # Si no se especifica dónde guardar la comparación,
+        # usamos el directorio padre común.
+        if output_dir is None:
+            output_dir = os.path.dirname(runs[0][0])
+
+        os.makedirs(output_dir, exist_ok=True)
 
         fig, axes = plt.subplots(2, 2, figsize=(14, 9))
         fig.suptitle("Comparación de runs")
 
         any_data = False
-        for run_name, label in zip(run_names, labels):
-            path = os.path.join(output_dir, f"{run_name}_progress.csv")
+
+        for (run_dir, run_name), label in zip(runs, labels):
+
+            path = os.path.join(
+                run_dir,
+                f"{run_name}_progress.csv"
+            )
+
             if not os.path.exists(path):
+                print(f"[AVISO] No existe: {path}")
                 continue
+
             rows = MetricsLogger._read_csv(path)
+
             if not rows:
+                print(f"[AVISO] CSV vacío: {path}")
                 continue
+
             any_data = True
-            episodes = [int(r["episode"]) for r in rows]
-            axes[0, 0].plot(episodes, [float(r["p1_winrate"]) for r in rows], label=label)
-            axes[0, 1].plot(episodes, [float(r["p1_damage_avg"]) for r in rows], label=label)
-            axes[1, 0].plot(episodes, [float(r["p1_reward_avg"]) for r in rows], label=label)
-            axes[1, 1].plot(episodes, [float(r["avg_turns"]) for r in rows], label=label)
+
+            episodes = [
+                int(r["episode"])
+                for r in rows
+            ]
+
+            axes[0, 0].plot(
+                episodes,
+                [float(r["p1_winrate"]) for r in rows],
+                label=label
+            )
+
+            axes[0, 1].plot(
+                episodes,
+                [float(r["p1_damage_avg"]) for r in rows],
+                label=label
+            )
+
+            axes[1, 0].plot(
+                episodes,
+                [float(r["p1_reward_avg"]) for r in rows],
+                label=label
+            )
+
+            axes[1, 1].plot(
+                episodes,
+                [float(r["avg_turns"]) for r in rows],
+                label=label
+            )
 
         axes[0, 0].set_title("Winrate P1 (%)")
         axes[0, 1].set_title("Daño medio P1")
         axes[1, 0].set_title("Reward medio P1")
         axes[1, 1].set_title("Turnos medios por partida")
+
         for ax in axes.flat:
+            ax.set_xlabel("Lote")
             ax.legend()
+            ax.grid(True, alpha=0.2)
 
         plt.tight_layout()
-        path = os.path.join(output_dir, "comparison_progress.png")
+        path = os.path.join(output_dir,"comparison_progress.png")
+
         fig.savefig(path)
+
         if show and any_data:
             plt.show()
+
         return path
