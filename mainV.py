@@ -53,7 +53,7 @@ class MainV:
         for step in self.steps:
             self._run_step(step)
         self._print_summary()
-        self.logger.plot_progress(show=True)
+        self.logger.plot_progress(show=False)
 
     def _run_step(self, step: TrainingStep):
         print(f"\n{'=' * 65}\nSTEP: {step.name} ({step.action}, {step.episodes} lotes de {self.N})\n{'-' * 65}")
@@ -180,12 +180,7 @@ class RunSpec:
 
 
 def run_single(config: RunConfig, run_spec: RunSpec):
-    """
-    Ejecuta un run completo con la configuración de run_spec. Los overrides
-    de constants se aplican ANTES de construir Environment/Player (varias
-    tablas estáticas dependen de esos valores en tiempo de construcción) y
-    se restauran al finalizar para no contaminar el siguiente run.
-    """
+
     originales = {}
     for key, value in run_spec.constants_overrides.items():
         originales[key] = getattr(constants, key)
@@ -208,22 +203,34 @@ def run_single(config: RunConfig, run_spec: RunSpec):
 
 def run_comparison(config: RunConfig, run_specs: list):
     """
-    Ejecuta varios RunSpec consecutivamente y compara sus resultados al
-    final con MetricsLogger.compare_runs.
+    Ejecuta todos los runs y al terminar genera una comparación
+    conjunta aunque cada run tenga su propio directorio.
     """
-    output_dirs = []
-    run_names = []
-    for spec in run_specs:
-        print(f"\n{'#'*65}\n RUN: {spec.run_name}\n{'#'*65}")
-        base_path, versioned_name = run_single(config, spec)
-        output_dirs.append(base_path)
-        run_names.append(versioned_name)
 
-    if len(set(output_dirs)) == 1:
-        MetricsLogger.compare_runs(output_dirs[0], run_names, labels=[s.run_name for s in run_specs])
-    else:
-        print("Los runs generaron directorios distintos — comparación manual necesaria.")
-        print(dict(zip(run_names, output_dirs)))
+    runs = []
+
+    for spec in run_specs:
+        print(f"\n{'#' * 65}\n"f" RUN: {spec.run_name}\n"f"{'#' * 65}")
+
+        base_path, versioned_name = run_single(config, spec)
+
+        runs.append((base_path, versioned_name))
+
+    print(
+        f"\n{'=' * 65}\n"
+        f" COMPARACIÓN FINAL\n"
+        f"{'=' * 65}"
+    )
+
+    comparison_path = MetricsLogger.compare_runs(
+        runs=runs,
+        labels=[spec.run_name for spec in run_specs],
+        output_dir=config.base_path,
+        show=True
+    )
+
+    print(f"\nComparación guardada en:")
+    print(comparison_path)
 
 
 # ==================================================================
@@ -246,8 +253,7 @@ PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
 # NUEVO: activa el modo comparación en vez de un único run
-RUN_COMPARISON = True
-
+RUN_COMPARISON = False
 
 def build_steps(config: RunConfig):
     steps = []
@@ -311,7 +317,7 @@ if __name__ == "__main__":
             RunSpec(run_name="gamma_alto", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
                     constants_overrides={"DISCOUNT_FACTOR": 0.99}),
             RunSpec(run_name="lr_bajo", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
-                    constants_overrides={"TURN_REPLAYS": 8}),
+                    constants_overrides={"TURN_REPLAYS_PER_BATCH": 40}),
         ]
         run_comparison(config, run_specs)
     else:
