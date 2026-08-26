@@ -49,9 +49,6 @@ class TrainerV:
         snapshot_every = max(1, batches // 50) 
         backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
-        # CAMBIO: p2_training_player sustituye a self.player2 como "el
-        # oponente que se está entrenando" — self.player2 ya no se
-        # reasigna/recrea, solo se consulta para snapshots y guardado.
         p2_training_player = self.player2
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._grouped_opponents = {}
@@ -61,8 +58,6 @@ class TrainerV:
                 self.opponent_pool.save_version(p2_training_player)
 
             if batch_idx != 0 and batch_idx % pool_every == 0:
-                # CORREGIDO: reemplaza la recreación de un único self.player2
-                # por una asignación por-partida usando OpponentPoolV.
                 from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(self.N, POOL_PORCENTAGE)
                 self._opponent_from_pool_mask = from_pool
                 self._grouped_opponents = self.opponent_pool.build_grouped_opponents(
@@ -85,32 +80,36 @@ class TrainerV:
         state = self.environment.reset()
         cstates1, actions1, cstates2, actions2 = self._select_teams(state, p2_training_player)
 
-        obs1_tensor, obs2_tensor, obs1_list, obs2_list = self._build_observations()
+        obs1_tensor, obs2_tensor = self._build_observations()
         reward1_acum = torch.zeros(self.N)
         reward2_acum = torch.zeros(self.N)
 
         while not self.environment.ended.all():
+                # crudos ANTES del turno (estado actual)
+            p1_alive_now = self.environment.p1_alive
+            p2_alive_now = self.environment.p2_alive
             action_p1 = self.player1.turn(obs1_tensor, self.environment.p1_disposition,
                                            self.environment.p1_cooldowns, self.environment.p1_alive,
                                            self.environment.p2_disposition)
-            # CORREGIDO: usa el mezclador de oponentes (pool + training player)
-            # en vez de llamar directo a self.player2.
             action_p2 = self._turn_mixed_opponent(obs2_tensor, self._opponent_from_pool_mask,
                                                     self._grouped_opponents, p2_training_player)
 
             state, reward1, reward2, ended = self.environment.turn(action_p1, action_p2)
-            next_obs1_tensor, next_obs2_tensor, next_obs1_list, next_obs2_list = self._build_observations()
+            next_obs1_tensor, next_obs2_tensor = self._build_observations()
+            p1_types_next, p1_alive_next, p1_cd_next = self.environment.p1_disposition, self.environment.p1_alive, self.environment.p1_cooldowns
+            p2_types_next, p2_alive_next, p2_cd_next = self.environment.p2_disposition, self.environment.p2_alive, self.environment.p2_cooldowns
 
             if learn_p1:
-                self._remember_turn_batch(self.player1, obs1_list, action_p1, reward1, next_obs1_list, ended)
-            # CORREGIDO: filtro por máscara per-partida en vez de booleano único —
-            # solo se guarda/aprende de las partidas donde p2 NO vino del pool.
+                self._remember_turn_batch(self.player1, obs1_tensor, action_p1, reward1, next_obs1_tensor, ended,
+                                   alive=p1_alive_now, next_types=p1_types_next, next_alive=p1_alive_next,
+                                   next_cooldowns=p1_cd_next, next_opp_types=p2_types_next)
             if learn_p2:
-                self._remember_turn_batch(p2_training_player, obs2_list, action_p2, reward2, next_obs2_list, ended,
-                                           skip_mask=self._opponent_from_pool_mask)
+                self._remember_turn_batch(p2_training_player, obs2_tensor, action_p2, reward2, next_obs2_tensor, ended,
+                                        alive=p2_alive_now, next_types=p2_types_next, next_alive=p2_alive_next,
+                                        next_cooldowns=p2_cd_next, next_opp_types=p1_types_next,
+                                        skip_mask=self._opponent_from_pool_mask)
 
             obs1_tensor, obs2_tensor = next_obs1_tensor, next_obs2_tensor
-            obs1_list, obs2_list = next_obs1_list, next_obs2_list
             reward1_acum += reward1
             reward2_acum += reward2
 
@@ -135,8 +134,8 @@ class TrainerV:
                 p2_training_player.update_beta()
                 p2_training_player.update_epsilon(n_games=self.N)
 
-                self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
-                self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
+        self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
+        self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
 
     def _turn_mixed_opponent(self, obs2_tensor, from_pool, grouped_opponents, p2_training_player):
         actions = p2_training_player.turn(obs2_tensor, self.environment.p2_disposition,
@@ -149,93 +148,125 @@ class TrainerV:
             actions[idx_partidas] = acciones_pool[idx_partidas]
         return actions
 
-    def _remember_turn_batch(self, player, obs_list, action, reward, next_obs_list, ended, skip_mask=None):
-        for i in range(self.N):
-            if skip_mask is not None and skip_mask[i]:
-                continue
-            player.remember_turn(obs_list[i], action[i], reward[i].item(), next_obs_list[i], ended[i].item())
+    def _remember_turn_batch(self,player,states,actions,rewards,next_states,
+                             ended,alive,next_types,next_alive,next_cooldowns,next_opp_types,skip_mask=None):
+        if skip_mask is not None:
+            valid = ~skip_mask
+            states = states[valid]
+            actions = actions[valid]
+            rewards = rewards[valid]
+            next_states = next_states[valid]
+            ended = ended[valid]
+            alive = alive[valid]
+            next_types = next_types[valid]
+            next_alive = next_alive[valid]
+            next_cooldowns = next_cooldowns[valid]
+            next_opp_types = next_opp_types[valid]
 
-    def _remember_and_replay_selection_batch(self, cstates_list, actions, reward_acum,
-                                          player, player_name, batch_idx, skip_mask=None):
-        c1, c2, c3 = cstates_list
+        if states.shape[0] == 0:
+            return
+
+        player.remember_turn_batch(states,actions,rewards,next_states,ended,alive,
+                                   next_types,next_alive,next_cooldowns,next_opp_types)
+
+    def _remember_and_replay_selection_batch(self,cstates,actions,reward_acum,
+                                             player,player_name,batch_idx,skip_mask=None):
+        c1, c2, c3 = cstates
         a1, a2, a3 = actions
-        for i in range(self.N):
-            if skip_mask is not None and skip_mask[i]:
-                continue
-            transitions = [(c1[i], a1[i].item(), c2[i], False),
-                        (c2[i], a2[i].item(), c3[i], False),
-                        (c3[i], a3[i].item(), None, True)]
-            for c, a, next_c, done in transitions:
-                player.remember_selection(c, a, reward_acum[i].item(), next_c, done)
+        if skip_mask is not None:
+            valid = ~skip_mask
+            c1 = c1[valid]
+            c2 = c2[valid]
+            c3 = c3[valid]
+            a1 = a1[valid]
+            a2 = a2[valid]
+            a3 = a3[valid]
+            reward_acum = reward_acum[valid]
+
+        if c1.shape[0] > 0:
+            rewards = reward_acum
+            player.remember_selection_batch(c1,a1,rewards,c2,torch.zeros(c1.shape[0], dtype=torch.bool))
+            player.remember_selection_batch(c2,a2,rewards,c3,torch.zeros(c2.shape[0], dtype=torch.bool))
+            player.remember_selection_batch(c3,a3,rewards,None,torch.ones(c3.shape[0], dtype=torch.bool))
 
         for _ in range(SELECTION_REPLAYS_PER_BATCH):
             loss = player.replay_selection()
             if self.logger:
-                self.logger.log_loss(batch_idx, player.replayed_selection, player_name, "selection", loss)
-
+                self.logger.log_loss(batch_idx,player.replayed_selection,player_name,"selection",loss)
+                
     def _select_teams(self, state, p2_training_player):
-        cstate1_list, cstate2_list = self.createChooseState(
-            state, torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long),
-            torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long)
+        cstate1_1, cstate2_1 = self.createChooseState(
+            state,
+            torch.zeros(self.N, dtype=torch.long),
+            torch.zeros(self.N, dtype=torch.long),
+            torch.zeros(self.N, dtype=torch.long),
+            torch.zeros(self.N, dtype=torch.long)
         )
-        cstate1_t = self._encode_choose_batch(self.environment.p1_disposition,
-                                               torch.zeros(self.N, dtype=torch.long),
-                                               torch.zeros(self.N, dtype=torch.long))
-        cstate2_t = self._encode_choose_batch(self.environment.p2_disposition,
-                                               torch.zeros(self.N, dtype=torch.long),
-                                               torch.zeros(self.N, dtype=torch.long))
-        warr1_1, pos1_1, action1_1 = self.player1.selection(cstate1_t, self.environment.p1_disposition,
-                                                              torch.zeros(self.N, dtype=torch.long))
-        # CAMBIO: selección de p2 sigue haciéndola p2_training_player, no
-        # self.player2 — igual que en turn(), la selección de equipo del
-        # oponente del pool no se mezcla (por simplicidad; el pool solo
-        # decide acciones de turno, no equipo — dime si quieres que también
-        # se mezcle la selección).
-        warr2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_t, self.environment.p2_disposition,
-                                                                    torch.zeros(self.N, dtype=torch.long))
+        cstate1_1_t = self._encode_choose_batch(self.environment.p1_disposition,torch.zeros(self.N, dtype=torch.long),
+                                                torch.zeros(self.N, dtype=torch.long))
+
+        cstate2_1_t = self._encode_choose_batch(self.environment.p2_disposition,torch.zeros(self.N, dtype=torch.long),
+                                                torch.zeros(self.N, dtype=torch.long))
+        
+        warr1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1_t,self.environment.p1_disposition,
+                                                            torch.zeros(self.N, dtype=torch.long))
+        warr2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1_t,self.environment.p2_disposition,
+                                                                  torch.zeros(self.N, dtype=torch.long))
+        
         health1 = self.environment.max_health_por_tipo[warr1_1]
         health2 = self.environment.max_health_por_tipo[warr2_1]
-        state = self.environment.team_selection(warr1_1, pos1_1, warr2_1, pos2_1, selected=0,
-                                                  health1=health1, health2=health2)
+        
+        state = self.environment.team_selection(warr1_1, pos1_1, warr2_1, pos2_1,selected=0, health1=health1
+                                                ,health2=health2)
 
-        cstate1_2_list, cstate2_2_list = self.createChooseState(state, warr2_1, pos2_1 + 1, warr1_1, pos1_1 + 1)
-        cstate1_2_t = self._encode_choose_batch(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
-        cstate2_2_t = self._encode_choose_batch(self.environment.p2_disposition, warr1_1, pos1_1 + 1)
-        warr1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2_t, self.environment.p1_disposition, warr2_1)
-        warr2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2_t, self.environment.p2_disposition, warr1_1)
+        cstate1_2, cstate2_2 = self.createChooseState(state,warr2_1,pos2_1 + 1,warr1_1,pos1_1 + 1)
+        
+        cstate1_2_t = self._encode_choose_batch(self.environment.p1_disposition,warr2_1,pos2_1 + 1)
+        cstate2_2_t = self._encode_choose_batch(self.environment.p2_disposition,warr1_1,pos1_1 + 1)
+
+        warr1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2_t,self.environment.p1_disposition,warr2_1)
+        warr2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2_t,self.environment.p2_disposition,warr1_1)
+
         health1 = self.environment.max_health_por_tipo[warr1_2]
         health2 = self.environment.max_health_por_tipo[warr2_2]
-        state = self.environment.team_selection(warr1_2, pos1_2, warr2_2, pos2_2, selected=1,
-                                                  health1=health1, health2=health2)
 
-        cstate1_3_list, cstate2_3_list = self.createChooseState(state, warr2_1, pos2_1 + 1, warr1_1, pos1_1 + 1)
-        cstate1_3_t = self._encode_choose_batch(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
-        cstate2_3_t = self._encode_choose_batch(self.environment.p2_disposition, warr1_1, pos1_1 + 1)
-        warr1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3_t, self.environment.p1_disposition, warr2_1)
-        warr2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3_t, self.environment.p2_disposition, warr1_1)
+        state = self.environment.team_selection( warr1_2, pos1_2,warr2_2, pos2_2,selected=1,health1=health1,health2=health2)
+
+        cstate1_3, cstate2_3 = self.createChooseState(state,warr2_1,pos2_1 + 1,warr1_1,pos1_1 + 1)
+        cstate1_3_t = self._encode_choose_batch(self.environment.p1_disposition,warr2_1,pos2_1 + 1)
+        cstate2_3_t = self._encode_choose_batch(self.environment.p2_disposition,warr1_1,pos1_1 + 1)
+        
+        warr1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3_t,self.environment.p1_disposition,warr2_1)
+
+        warr2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3_t,self.environment.p2_disposition,warr1_1)
+
         health1 = self.environment.max_health_por_tipo[warr1_3]
         health2 = self.environment.max_health_por_tipo[warr2_3]
-        self.environment.team_selection(warr1_3, pos1_3, warr2_3, pos2_3, selected=2,
-                                          health1=health1, health2=health2)
 
-        cstates1 = (cstate1_list, cstate1_2_list, cstate1_3_list)
+        self.environment.team_selection(warr1_3, pos1_3,warr2_3, pos2_3,selected=2,health1=health1,health2=health2)
+
+        cstates1 = (cstate1_1, cstate1_2, cstate1_3)
         actions1 = (action1_1, action1_2, action1_3)
-        cstates2 = (cstate2_list, cstate2_2_list, cstate2_3_list)
+
+        cstates2 = (cstate2_1, cstate2_2, cstate2_3)
         actions2 = (action2_1, action2_2, action2_3)
+
         return cstates1, actions1, cstates2, actions2
 
     def createChooseState(self, state, p1_first_warrior, p1_first_pos, p2_first_warrior, p2_first_pos):
-        catalogo = self._catalog_ids.tolist()
-        cstates1, cstates2 = [], []
-        for i in range(self.N):
-            cstates1.append(Choose_stateV(
-                self.environment.p1_disposition[i].tolist(), catalogo,
-                p2_first_warrior[i].item(), p2_first_pos[i].item()
-            ))
-            cstates2.append(Choose_stateV(
-                self.environment.p2_disposition[i].tolist(), catalogo,
-                p1_first_warrior[i].item(), p1_first_pos[i].item()
-            ))
+        catalogo_batch = self._catalog_ids.unsqueeze(0).expand(self.N, -1)
+        cstates1 = Choose_stateV.encode_choose_state_batch(
+            self.environment.p1_disposition,
+            catalogo_batch,
+            p2_first_warrior,
+            p2_first_pos
+        )
+        cstates2 = Choose_stateV.encode_choose_state_batch(
+            self.environment.p2_disposition,
+            catalogo_batch,
+            p1_first_warrior,
+            p1_first_pos
+        )
         return cstates1, cstates2
 
     def _encode_choose_batch(self, pl_disposition, opp_initial_warrior, opp_initial_position):
@@ -263,30 +294,7 @@ class TrainerV:
             self.environment.p2_disposition, self.environment.p2_alive, speed_p2, health_norm_p2,
             self.environment.p2_cooldowns, life_p1, self.environment.p1_disposition, turn_norm
         )
-
-        obs1_list, obs2_list = [], []
-        for i in range(self.N):
-            obs1_list.append(ObservationV(
-                pl_types=self.environment.p1_disposition[i].tolist(),
-                pl_alive=self.environment.p1_alive[i].tolist(),
-                pl_speed_norm=speed_p1[i].tolist(),
-                pl_health_norm=health_norm_p1[i].tolist(),
-                pl_cooldowns=self.environment.p1_cooldowns[i].tolist(),
-                opp_life=life_p2[i].tolist(),
-                opp_disposition=self.environment.p2_disposition[i].tolist(),
-                turn=self.environment.turn_number[i].item(),
-            ))
-            obs2_list.append(ObservationV(
-                pl_types=self.environment.p2_disposition[i].tolist(),
-                pl_alive=self.environment.p2_alive[i].tolist(),
-                pl_speed_norm=speed_p2[i].tolist(),
-                pl_health_norm=health_norm_p2[i].tolist(),
-                pl_cooldowns=self.environment.p2_cooldowns[i].tolist(),
-                opp_life=life_p1[i].tolist(),
-                opp_disposition=self.environment.p1_disposition[i].tolist(),
-                turn=self.environment.turn_number[i].item(),
-            ))
-        return obs1_tensor, obs2_tensor, obs1_list, obs2_list
+        return obs1_tensor, obs2_tensor
 
     def _load_if_exists(self):
         if hasattr(self.player1, "load_model") and os.path.exists(self.pathp1_1) and os.path.exists(self.pathp1_2):
