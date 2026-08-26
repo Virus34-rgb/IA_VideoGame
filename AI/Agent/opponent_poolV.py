@@ -18,16 +18,7 @@ class OpponentPoolV:
             self.delete_first(first_index)
         path1 = self.path / f"snapshotsSELECTION_{last_index + 1}.pth"
         path2 = self.path / f"snapshotsTURN_{last_index + 1}.pth"
-        for path, (net, target_net, opt, replay_memory, eps_attr, replayed_attr) in zip(
-                (path1, path2), player._network_specs()):
-            torch.save({
-                "dqn": net.state_dict(),
-                "targetdqn": target_net.state_dict(),
-                "optimizer": opt.state_dict(),
-                "epsilon": getattr(player, eps_attr),
-                "replayed": getattr(player, replayed_attr),
-                "replay_memory": replay_memory.state_dict(),
-            }, path)
+        player.save_model_inference_only(path1, path2)
 
     def get_random(self):
         _, first_index, last_index = self.list_models()
