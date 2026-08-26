@@ -1,5 +1,7 @@
 import pstats
 
+#python .\proffileAnalysis 
+#python -m cProfile -o profile_replay_optimizedv3.prof mainV.py
 print("========== CUMULATIVE ==========")
 pstats.Stats("profile_replay_optimizedv3.prof").sort_stats("cumulative").print_stats(40)
 

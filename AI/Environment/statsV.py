@@ -237,10 +237,10 @@ class StatsV:
         ]))
 
         sections.append(self._section("Healing", [
-            f"Daño total P1:             {self.p1_tot_heal}",
-            f"Daño total P2:             {self.p2_tot_heal}",
-            f"Daño medio P1:             {s['p1_tot_heal_avg']:.2f}",
-            f"Daño medio P2:             {s['p2_tot_heal_avg']:.2f}",
+            f"Heal total P1:             {self.p1_tot_heal}",
+            f"Heal total P2:             {self.p2_tot_heal}",
+            f"Heal medio P1:             {s['p1_tot_heal_avg']:.2f}",
+            f"Heal medio P2:             {s['p2_tot_heal_avg']:.2f}",
         ]))
 
         sections.append(self._section("BAJAS (PROPIAS)", [
