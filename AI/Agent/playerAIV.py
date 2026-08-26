@@ -22,104 +22,80 @@ class PlayerAIV:
         self.target_selection_network = SelectionNetwork()
         self.target_selection_network.load_state_dict(self.selection_network.state_dict())
         self.optimizer = torch.optim.Adam(self.selection_network.parameters(), lr=SELECTION_LEARNING_RATE)
-        self.replay_memory_sel = ReplayMemoryPM(SELECTION_REPLAY_DATA)
+        self.replay_memory_sel = ReplayMemoryPM(SELECTION_REPLAY_DATA,46)
         self.turn_network = TurnNetwork()
         self.target_turn_network = TurnNetwork()
         self.target_turn_network.load_state_dict(self.turn_network.state_dict())
         self.optimizer2 = torch.optim.Adam(self.turn_network.parameters(), lr=TURN_LEARNING_RATE)
-        self.replay_memory_turn = ReplayMemoryAN(TURN_REPLAY_DATA)
+        self.replay_memory_turn = ReplayMemoryAN(TURN_REPLAY_DATA,58)
         self.replayed_selection = 0
         self.replayed_turn = 0
         
-    def remember_selection(self,c_state,action,reward,next_c_state,done):
-        self.replay_memory_sel.push(c_state,action,reward,next_c_state,done)
+    def remember_selection_batch(self,c_state,action,reward,next_c_state,done):
+        self.replay_memory_sel.push_batch(c_state,action,reward,next_c_state,done)
         
-    def remember_turn(self,observation,action,reward,next_observation,done):
-        self.replay_memory_turn.push(observation,action,reward,next_observation,done)
-        
+    def remember_turn_batch(self, observation, action, reward, next_observation, done,
+                            alive, next_types, next_alive, next_cooldowns, next_opp_types):
+        self.replay_memory_turn.push_batch(observation, action, reward, next_observation, done,
+                                            alive, next_types, next_alive, next_cooldowns, next_opp_types)
+            
     def replay_selection(self):
-        if len(self.replay_memory_sel) < BATCH_SIZE:
-            return None
+        if len(self.replay_memory_sel) < BATCH_SIZE: return None
         self.replayed_selection += 1
-        batch,indices,weights = self.replay_memory_sel.sample(BATCH_SIZE)
-        weights = torch.tensor(weights,dtype=torch.float32)
-        states = [
-            x.state.encode_choose_state()
-            for x in batch
-        ]
-        actions_b = [x.action for x in batch]
-        rewards = [x.reward for x in batch]
-        next_states = self._encode_next_states(batch,lambda s: s.encode_choose_state(),
-                                 self.selection_network.network[0].in_features)
-        dones = [x.done for x in batch]
-        states = torch.tensor(states, dtype=torch.float32)
-        actions_b = torch.tensor(actions_b, dtype=torch.long)
-        rewards = torch.tensor(rewards, dtype=torch.float32)
-        next_states = torch.tensor(next_states, dtype=torch.float32)
-        dones = torch.tensor(dones, dtype=torch.bool)
+        batch, indices, weights = self.replay_memory_sel.sample(BATCH_SIZE)
+        weights = torch.tensor(weights, dtype=torch.float32)
+
+        states = batch.states
+        actions = batch.actions
+        rewards = batch.rewards
+        next_states = batch.next_states
+        dones = batch.dones
+
         qvalues = self.selection_network(states)
-        q_selected = qvalues.gather(1,actions_b.unsqueeze(1)).squeeze(1)
-        td_errors = []
+        q_selected = qvalues.gather(1, actions.unsqueeze(1)).squeeze(1)
+
         with torch.no_grad():
-            next_actions = self.selection_network(next_states).argmax(
-                dim=1
-            )
-            next_qvalues = self.target_selection_network(next_states).gather(1,next_actions.unsqueeze(1)).squeeze(1)
-            target = (
-                rewards
-                + DISCOUNT_FACTOR
-                * next_qvalues
-                * (~dones)
-            )
-            for q_select,tar in zip (q_selected,target):
-                td_errors.append(abs(q_select-tar))
-        loss = self.loss_function(q_selected,target,weights)
-        self._optimize_step(loss, self.optimizer, self.selection_network, 
-                            self.target_selection_network, "replayed_selection")
-        self.replay_memory_sel.update_priorities(indices, td_errors)
+            next_actions = self.selection_network(next_states).argmax(dim=1)
+            next_qvalues = self.target_selection_network(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+            target = (rewards + DISCOUNT_FACTOR * next_qvalues * (~dones))
+            td_errors = torch.abs(q_selected - target)
+
+        loss = self.loss_function(q_selected, target, weights)
+        self._optimize_step(loss, self.optimizer, self.selection_network, self.target_selection_network, "replayed_selection")
+        self.replay_memory_sel.update_priorities(indices, td_errors.detach().cpu().numpy())
         return loss.item()
-    
+        
     def replay_turn(self):
-            if len(self.replay_memory_turn) < BATCH_SIZE:
-                return None
-            self.replayed_turn += 1
-            #Recoges las experencias que usaremos como base
-            batch,indices,weights = self.replay_memory_turn.sample(BATCH_SIZE)
-            weights = torch.tensor(weights,dtype=torch.float32)
-            #Divides los elementos de cada experiencia
-            states = [x.state.normalize() for x in batch]
-            warrior_mask = warrior_mask = torch.tensor([x.state.pl_alive for x in batch], dtype=torch.bool)
-            actions_b = [x.action for x in batch]
-            next_states = self._encode_next_states(batch,lambda s: s.normalize(),
-                                                   self.turn_network.network[0].in_features)
-            rewards = [x.reward for x in batch]
-            dones = [x.done for x in batch]
-            #Lo conviertes a tensor
-            states = torch.tensor(states,dtype=torch.float32)
-            abilites_opt = ABILITIES
-            actions_b = [[self._environment_action_to_network(action)for action in x.action]for x in batch]
-            rewards = torch.tensor(rewards,dtype = torch.float32)
-            next_states = torch.tensor(next_states,dtype=torch.float32)
-            dones = torch.tensor(dones,dtype=torch.bool)
-            #Recogemos los qvalues de los states
-            qvalues = self.turn_network(states)
-            #Recogemos los qvalues de las acciones tomadas
-            offsets = torch.tensor([0, 6, 12])
-            actions_b = torch.tensor(actions_b, dtype=torch.long)
-            actions_global = actions_b + offsets
-            q_selected = qvalues.gather(1, actions_global)
-            q_selected = q_selected * warrior_mask.float()
-            q_selected = q_selected.sum(dim=1)
-            target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
-            td_errors = []
-            with torch.no_grad():
-                for q_select,tar in zip(q_selected,target):
-                    td_errors.append(abs(q_select-tar))
-            #Caculamos la perdida por haber tomado la decisión que tomamos
-            loss = self.loss_function(q_selected,target,weights)
-            self._optimize_step(loss, self.optimizer2, self.turn_network, self.target_turn_network, "replayed_turn")
-            self.replay_memory_turn.update_priorities(indices, td_errors)
-            return loss.item()
+        if len(self.replay_memory_turn) < BATCH_SIZE:
+            return None
+        self.replayed_turn += 1
+        #Recoges las experencias que usaremos como base
+        batch,indices,weights = self.replay_memory_turn.sample(BATCH_SIZE)
+        weights = torch.tensor(weights,dtype=torch.float32)
+        #Divides los elementos de cada experiencia
+        states = batch.states
+        warrior_mask = batch.alive
+        next_states = batch.next_states
+        rewards = batch.rewards
+        dones = batch.dones
+        #Convertimos los codigos de accion del entorno al formato de red
+        actions_b = self._environment_action_to_network(batch.actions)
+        #Recogemos los qvalues de los states
+        qvalues = self.turn_network(states)
+        #Recogemos los qvalues de las acciones tomadas
+        offsets = torch.tensor([0, 6, 12])
+        actions_global = actions_b + offsets
+        q_selected = qvalues.gather(1, actions_global)
+        q_selected = q_selected * warrior_mask.float()
+        q_selected = q_selected.sum(dim=1)
+        target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
+        with torch.no_grad():
+            td_errors = torch.abs(q_selected - target)
+        #Caculamos la perdida por haber tomado la decisión que tomamos
+        loss = self.loss_function(q_selected,target,weights)
+        self._optimize_step(loss, self.optimizer2, self.turn_network, self.target_turn_network, "replayed_turn")
+        self.replay_memory_turn.update_priorities(indices, td_errors.detach().cpu().numpy())
+        return loss.item()
         
     def loss_function(self,input,target,weigths):
         loss = nn.SmoothL1Loss(reduction="none") 
@@ -170,24 +146,22 @@ class PlayerAIV:
         return logits.masked_fill(~mask, float("-inf"))
 
     def turn(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive, enemy_disposition):
-
         obs = batch_encoded_obs.float()
         logits = self.turn_network(obs)  # (N, 18)
         masked_logits = self.mask_turn(own_disposition, own_cooldowns, own_alive, enemy_disposition, logits)
 
-        actions = torch.full((self.N, 3), -1, dtype=torch.long)  # -1 = sin acción (muerto/vacío)
-        for slot in range(3):
-            start, end = slot * 6, slot * 6 + 6
-            slot_logits = masked_logits[:, start:end]  # (N, 6)
-            hay_valida = (slot_logits != float("-inf")).any(dim=1)
+        masked_3d = masked_logits.view(self.N, 3, 6)          # (N, 3, 6)
+        hay_valida = (masked_3d != float("-inf")).any(dim=-1)  # (N, 3)
+        greedy = torch.argmax(masked_3d, dim=-1)                # (N, 3)
 
-            greedy = torch.argmax(slot_logits, dim=1)
-            random_action = self._random_valid_action(slot_logits)
-            explora = torch.rand(self.N) < self.epsilon_turn
-            elegido = torch.where(explora, random_action, greedy)
+        random_action = self._random_valid_action(masked_3d.reshape(self.N * 3, 6))
+        random_action = random_action.view(self.N, 3)
 
-            codigo = self._decode_ability_index(elegido)  # 0-3 habilidad, 4->5 movPos, 5->6 movNeg
-            actions[:, slot] = torch.where(hay_valida, codigo, torch.full_like(codigo, -1))
+        explora = torch.rand(self.N, 3) < self.epsilon_turn
+        elegido = torch.where(explora, random_action, greedy)   # (N, 3)
+
+        codigo = self._decode_ability_index(elegido) 
+        actions = torch.where(hay_valida, codigo, torch.full_like(codigo, -1))
 
         return actions
     
@@ -203,40 +177,25 @@ class PlayerAIV:
                torch.where(idx_0_5 == 5, torch.full_like(idx_0_5, 6), idx_0_5))
 
     def mask_turn(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, logits):
-
         N = own_disposition.shape[0]
-        mask = torch.ones(N, 6 * 3, dtype=torch.bool)
+        # (N, 3) -> (N, 3, 6): un guerrero muerto invalida sus 6 acciones de golpe
+        mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
+        mask[:, :, :4] &= ~own_cooldowns
+        
+        table = self.environment.target_mask_por_tipo_habilidad
+        target_mask_full = table[own_disposition]              # (N, 3, 4, 3)
 
-        for slot in range(3):
-            base = slot * 6
-            vivo = own_alive[:, slot]  # (N,)
+        enemy_ocupado = (enemy_disposition > 0).unsqueeze(1).unsqueeze(1)  # (N, 1, 1, 3)
+        hay_target_valido = (target_mask_full & enemy_ocupado).any(dim=-1)   # (N, 3, 4)
+        sin_target = ~hay_target_valido & target_mask_full.any(dim=-1)       # (N, 3, 4)
 
-            # guerrero muerto/inexistente -> las 6 acciones de este slot inválidas
-            for ability_index in range(6):
-                col = base + ability_index
-                mask[:, col] = torch.where(vivo, mask[:, col], torch.zeros_like(mask[:, col]))
+        mask[:, :, :4] &= ~sin_target
 
-            # cooldowns de las 4 habilidades
-            for ability_index in range(4):
-                en_cd = own_cooldowns[:, slot, ability_index]
-                col = base + ability_index
-                mask[:, col] = torch.where(en_cd, torch.zeros_like(mask[:, col]), mask[:, col])
+        mask[:, 0, 5] = False   # movNeg inválido en slot 0
+        mask[:, 2, 4] = False   # movPos inválido en slot 2
 
-            tipo_actor = own_disposition[:, slot]
-            for ability_index in range(4):
-                target_mask = self.environment.target_mask_por_tipo_habilidad[tipo_actor, ability_index]
-                enemy_ocupado = enemy_disposition > 0  # (N, 3)
-                hay_target_valido = (target_mask & enemy_ocupado).any(dim=1)
-                sin_target = ~hay_target_valido & target_mask.any(dim=1)  # solo aplica a habilidades con target
-                col = base + ability_index
-                mask[:, col] = torch.where(sin_target, torch.zeros_like(mask[:, col]), mask[:, col])
-
-            if slot == 0:
-                mask[:, base + 5] = False  # movNeg inválido en slot 0
-            elif slot == 2:
-                mask[:, base + 4] = False  # movPos inválido en slot 2
-
-        return logits.masked_fill(~mask, float("-inf"))
+        mask_flat = mask.reshape(N, 18)
+        return logits.masked_fill(~mask_flat, float("-inf"))
 
     @staticmethod
     def _random_valid_action(masked_logits):
@@ -323,17 +282,13 @@ class PlayerAIV:
                 
     def _multi_agent_double_dqn_target(self, batch, next_states, rewards, dones):
         with torch.no_grad():
-            next_disposition = torch.tensor(
-                [x.next_state.pl_types if x.next_state is not None else [0, 0, 0] for x in batch], dtype=torch.long)
-            next_alive = torch.tensor(
-                [x.next_state.pl_alive if x.next_state is not None else [False, False, False] for x in batch], dtype=torch.bool)
-            next_cooldowns = torch.tensor(
-                [x.next_state.pl_cooldowns if x.next_state is not None else [[False]*4]*3 for x in batch], dtype=torch.bool)
-            next_opp_disp = torch.tensor(
-                [x.next_state.opp_disposition if x.next_state is not None else [0, 0, 0] for x in batch], dtype=torch.long)
+            next_disposition = batch.next_types
+            next_alive = batch.next_alive
+            next_cooldowns = batch.next_cooldowns
+            next_opp_disp = batch.next_opp_types
 
             next_masks = self.mask_turn(next_disposition, next_cooldowns, next_alive, next_opp_disp,
-                                        torch.ones(len(batch), 18, dtype=torch.bool))
+                                        torch.ones(len(next_states), 18, dtype=torch.bool))
             next_qvalues_main = self.turn_network(next_states)
             next_qvalues_main = next_qvalues_main.masked_fill(~next_masks, float("-inf"))
             next_q1 = next_qvalues_main[:, 0:6]
@@ -345,22 +300,17 @@ class PlayerAIV:
             next_actions = torch.stack([next_a1, next_a2 + 6, next_a3 + 12], dim=1)
             target_qvalues = self.target_turn_network(next_states)
             next_qvalues = target_qvalues.gather(1, next_actions)
-            next_warrior_mask = torch.tensor(
-                [x.next_state.pl_alive if x.next_state is not None else [False, False, False] for x in batch],
-                dtype=torch.bool
-            )
+            next_warrior_mask = batch.next_alive
             next_qvalues = (next_qvalues * next_warrior_mask.float()).sum(dim=1)
             return rewards + DISCOUNT_FACTOR * next_qvalues * (~dones)
         
     @staticmethod
     def _environment_action_to_network(action):
-        if action is None or action == -1:
-            return 0
-        if action == 5:
-            return 4
-        if action == 6:
-            return 5
-        return action
+        out = action.clone()
+        out = torch.where(action == -1, torch.zeros_like(out), out)
+        out = torch.where(action == 5, torch.full_like(out, 4), out)
+        out = torch.where(action == 6, torch.full_like(out, 5), out)
+        return out
 
 
     @staticmethod
