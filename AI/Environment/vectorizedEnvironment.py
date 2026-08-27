@@ -29,7 +29,7 @@ class VectorizedEnvironment:
         self.winner = torch.full((N,), -1, dtype=torch.long)
         self.turn_number = torch.zeros(N, dtype=torch.int)
         self._build_static_tables()
-        self.stats = StatsV()  # CAMBIO: Stats -> StatsV
+        self.stats = StatsV()
 
     def reset(self):
         self.p1_disposition = torch.zeros((self.N, 3), dtype=torch.long)
@@ -179,8 +179,13 @@ class VectorizedEnvironment:
         mask_self_heal_3 = mask_self_heal.unsqueeze(1)
         mask_team_heal_3 = mask_team_heal.unsqueeze(1)
         mask_ataque_3 = mask_ataque.unsqueeze(1)
+        mask_movPos_4 = mask_movPos.view(-1, 1, 1)
+        mask_movNeg_4 = mask_movNeg.view(-1, 1, 1)
 
-        moved, own_new_disposition_movement = self._resolve_action_movement(actors,own_disposition,actions_actor,pos)
+        (moved, own_new_disposition_movement,
+         own_new_health_movement, own_new_cd_movement) = self._resolve_action_movement(
+            actors, own_disposition, own_health, own_cooldowns, actions_actor, pos
+        )
 
         own_new_disp = own_disposition.clone()
         own_new_disp = torch.where(mask_movNeg_3,own_new_disposition_movement,own_new_disp)
@@ -202,6 +207,8 @@ class VectorizedEnvironment:
                                                                       own_health,own_alive)
 
         own_new_health = own_health.clone()
+        own_new_health = torch.where(mask_movNeg_3, own_new_health_movement, own_new_health)
+        own_new_health = torch.where(mask_movPos_3, own_new_health_movement, own_new_health)
         own_new_health = torch.where(mask_self_heal_3,own_health_self,own_new_health)
         own_new_health = torch.where(mask_team_heal_3,own_health_team,own_new_health)
         enemy_new_health = torch.where(mask_ataque_3,enemy_health_atacado,enemy_health)
@@ -209,6 +216,9 @@ class VectorizedEnvironment:
         mask_usa_habilidad = (mask_ataque | mask_self_heal | mask_team_heal | mask_defend)
 
         own_cd_new = self._update_own_cooldowns(actors,actions_actor,pos,own_cooldowns,mask_usa_habilidad)
+
+        own_cd_new = torch.where(mask_movNeg_4, own_new_cd_movement, own_cd_new)
+        own_cd_new = torch.where(mask_movPos_4, own_new_cd_movement, own_cd_new)
 
         enemy_alive_final = torch.where(mask_ataque_3,enemy_new_alive,enemy_alive)
         heal = torch.zeros_like(own_health[:, 0])
@@ -220,25 +230,57 @@ class VectorizedEnvironment:
             own_new_disp,enemy_disposition,own_new_health,enemy_new_health,
             own_cd_new,own_alive,enemy_alive_final)
 
-    def _resolve_action_movement(self, actors, own_disposition, actions_actor, pos):
+    def _resolve_action_movement(self, actors, own_disposition, own_health, own_cooldowns, actions_actor, pos):
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
         moved = (mask_movPos | mask_movNeg).float()
 
-        own_new_disposition = own_disposition.clone()
         pos_destino_pos = (pos + 1).clamp(max=2)
+        pos_destino_neg = (pos - 1).clamp(min=0)
+
+        own_new_disposition = own_disposition.clone()
         origen = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
         destino = own_disposition.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
         own_new_disposition.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino, origen).unsqueeze(1))
         own_new_disposition.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen, destino).unsqueeze(1))
 
-        pos_destino_neg = (pos - 1).clamp(min=0)
         origen2 = own_new_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
         destino2 = own_new_disposition.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
         own_new_disposition_final = own_new_disposition.clone()
         own_new_disposition_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino2, origen2).unsqueeze(1))
         own_new_disposition_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen2, destino2).unsqueeze(1))
-        return moved, own_new_disposition_final
+
+        own_new_health = own_health.clone()
+        origen_h = own_health.gather(1, pos.unsqueeze(1)).squeeze(1)
+        destino_h = own_health.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
+        own_new_health.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_h, origen_h).unsqueeze(1))
+        own_new_health.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_h, destino_h).unsqueeze(1))
+
+        origen_h2 = own_new_health.gather(1, pos.unsqueeze(1)).squeeze(1)
+        destino_h2 = own_new_health.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
+        own_new_health_final = own_new_health.clone()
+        own_new_health_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_h2, origen_h2).unsqueeze(1))
+        own_new_health_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_h2, destino_h2).unsqueeze(1))
+
+        pos_e = pos.view(-1, 1, 1).expand(-1, 1, 4)
+        pos_destino_pos_e = pos_destino_pos.view(-1, 1, 1).expand(-1, 1, 4)
+        pos_destino_neg_e = pos_destino_neg.view(-1, 1, 1).expand(-1, 1, 4)
+        mask_movPos_4 = mask_movPos.view(-1, 1, 1).expand(-1, 1, 4)
+        mask_movNeg_4 = mask_movNeg.view(-1, 1, 1).expand(-1, 1, 4)
+
+        own_new_cd = own_cooldowns.clone()
+        origen_cd = own_cooldowns.gather(1, pos_e)
+        destino_cd = own_cooldowns.gather(1, pos_destino_pos_e)
+        own_new_cd.scatter_(1, pos_e, torch.where(mask_movPos_4, destino_cd, origen_cd))
+        own_new_cd.scatter_(1, pos_destino_pos_e, torch.where(mask_movPos_4, origen_cd, destino_cd))
+
+        origen_cd2 = own_new_cd.gather(1, pos_e)
+        destino_cd2 = own_new_cd.gather(1, pos_destino_neg_e)
+        own_new_cd_final = own_new_cd.clone()
+        own_new_cd_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_cd2, origen_cd2))
+        own_new_cd_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_cd2, destino_cd2))
+
+        return moved, own_new_disposition_final, own_new_health_final, own_new_cd_final
 
     def _resolve_action_attack(self, actors, accion_actor, enemy_disposition, enemy_health, enemy_alive, enemy_actions):
         ability_idx = accion_actor.clamp(0, 3)
@@ -336,10 +378,6 @@ class VectorizedEnvironment:
         self.winner = torch.where(termina_ahora, nuevo_winner, self.winner)
         self.ended = self.ended | termina_ahora
 
-        # CAMBIO: se pasan las máscaras exactas de causa de fin (ambos/solo_p1/
-        # solo_p2/por_turnos) en vez de re-derivarlas en StatsV — evita el
-        # placeholder impreciso que teníamos antes para "empate por muerte"
-        # vs "empate por turnos".
         self.stats.close_finished_games(
             termina_ahora, self.winner, self.p1_deaths, self.p2_deaths, self.turn_number,
             por_muerte_mask=(ambos | solo_p1 | solo_p2), por_turnos_mask=por_turnos
