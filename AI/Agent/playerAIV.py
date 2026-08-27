@@ -35,9 +35,11 @@ class PlayerAIV:
         self.replay_memory_sel.push_batch(c_state,action,reward,next_c_state,done)
         
     def remember_turn_batch(self, observation, action, reward, next_observation, done,
-                            alive, next_types, next_alive, next_cooldowns, next_opp_types):
+                            alive, types, cooldowns, opp_types,
+                            next_types, next_alive, next_cooldowns, next_opp_types):
         self.replay_memory_turn.push_batch(observation, action, reward, next_observation, done,
-                                            alive, next_types, next_alive, next_cooldowns, next_opp_types)
+                                            alive, types, cooldowns, opp_types, 
+                                            next_types, next_alive, next_cooldowns, next_opp_types)
             
     def replay_selection(self):
         if len(self.replay_memory_sel) < BATCH_SIZE: return None
@@ -69,20 +71,24 @@ class PlayerAIV:
         if len(self.replay_memory_turn) < BATCH_SIZE:
             return None
         self.replayed_turn += 1
-        #Recoges las experencias que usaremos como base
-        batch,indices,weights = self.replay_memory_turn.sample(BATCH_SIZE)
-        weights = torch.tensor(weights,dtype=torch.float32)
-        #Divides los elementos de cada experiencia
+        batch, indices, weights = self.replay_memory_turn.sample(BATCH_SIZE)
+        weights = torch.tensor(weights, dtype=torch.float32)
+
         states = batch.states
         warrior_mask = batch.alive
         next_states = batch.next_states
         rewards = batch.rewards
         dones = batch.dones
-        #Convertimos los codigos de accion del entorno al formato de red
         actions_b = self._environment_action_to_network(batch.actions)
-        #Recogemos los qvalues de los states
-        qvalues = self.turn_network(states)
-        #Recogemos los qvalues de las acciones tomadas
+
+        current_mask_flat = self.mask_turn(                                       # NUEVO
+            batch.types, batch.cooldowns, batch.alive, batch.opp_types,            # NUEVO — requiere que
+            torch.ones(len(states), 18, dtype=torch.bool)                          # NUEVO   estos campos existan
+        )                                                                          # NUEVO   en `batch`
+        current_action_mask = (current_mask_flat != float("-inf")).view(-1, 3, 6)  # NUEVO
+
+        qvalues = self.turn_network(states, action_mask=current_action_mask)       # CAMBIO: se pasa action_mask
+
         offsets = torch.tensor([0, 6, 12])
         actions_global = actions_b + offsets
         q_selected = qvalues.gather(1, actions_global)
@@ -91,8 +97,7 @@ class PlayerAIV:
         target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
         with torch.no_grad():
             td_errors = torch.abs(q_selected - target)
-        #Caculamos la perdida por haber tomado la decisión que tomamos
-        loss = self.loss_function(q_selected,target,weights)
+        loss = self.loss_function(q_selected, target, weights)
         self._optimize_step(loss, self.optimizer2, self.turn_network, self.target_turn_network, "replayed_turn")
         self.replay_memory_turn.update_priorities(indices, td_errors.detach().cpu().numpy())
         return loss.item()
@@ -289,7 +294,9 @@ class PlayerAIV:
 
             next_masks = self.mask_turn(next_disposition, next_cooldowns, next_alive, next_opp_disp,
                                         torch.ones(len(next_states), 18, dtype=torch.bool))
-            next_qvalues_main = self.turn_network(next_states)
+            next_action_mask = (next_masks != float("-inf")).view(-1, 3, 6)                        
+
+            next_qvalues_main = self.turn_network(next_states, action_mask=next_action_mask)        
             next_qvalues_main = next_qvalues_main.masked_fill(~next_masks, float("-inf"))
             next_q1 = next_qvalues_main[:, 0:6]
             next_q2 = next_qvalues_main[:, 6:12]
@@ -298,7 +305,7 @@ class PlayerAIV:
             next_a2 = next_q2.argmax(dim=1)
             next_a3 = next_q3.argmax(dim=1)
             next_actions = torch.stack([next_a1, next_a2 + 6, next_a3 + 12], dim=1)
-            target_qvalues = self.target_turn_network(next_states)
+            target_qvalues = self.target_turn_network(next_states, action_mask=next_action_mask)    
             next_qvalues = target_qvalues.gather(1, next_actions)
             next_warrior_mask = batch.next_alive
             next_qvalues = (next_qvalues * next_warrior_mask.float()).sum(dim=1)

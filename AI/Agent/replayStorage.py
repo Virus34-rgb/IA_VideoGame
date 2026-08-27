@@ -3,7 +3,8 @@ import torch
 
 ReplayBatch = namedtuple("ReplayBatch",
     ["states", "actions", "rewards", "next_states", "dones",
-     "alive", "next_types", "next_alive", "next_cooldowns", "next_opp_types"])
+     "alive", "types", "cooldowns", "opp_types",                          # NUEVO: types, cooldowns, opp_types
+     "next_types", "next_alive", "next_cooldowns", "next_opp_types"])
 
 
 class ReplayStorage:
@@ -16,16 +17,20 @@ class ReplayStorage:
         self.next_states = torch.zeros(capacity, state_dim)
         self.dones = torch.zeros(capacity, dtype=torch.bool)
 
-        # Exclusivos de la IA de turno (mask_turn / double dqn multi-agente).
-        # Solo se reservan si is_turn_storage=True; en selección se quedan a None.
         if is_turn_storage:
             self.alive = torch.zeros(capacity, 3, dtype=torch.bool)
+            self.types = torch.zeros(capacity, 3, dtype=torch.long)                    # NUEVO — igual shape/dtype que next_types
+            self.cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)             # NUEVO — igual shape/dtype que next_cooldowns
+            self.opp_types = torch.zeros(capacity, 3, dtype=torch.long)                # NUEVO — igual shape/dtype que next_opp_types
             self.next_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.next_alive = torch.zeros(capacity, 3, dtype=torch.bool)
             self.next_cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)
             self.next_opp_types = torch.zeros(capacity, 3, dtype=torch.long)
         else:
             self.alive = None
+            self.types = None                                                          # NUEVO
+            self.cooldowns = None                                                       # NUEVO
+            self.opp_types = None                                                       # NUEVO
             self.next_types = None
             self.next_alive = None
             self.next_cooldowns = None
@@ -36,13 +41,15 @@ class ReplayStorage:
             return ReplayBatch(
                 self.states[values], self.actions[values], self.rewards[values],
                 self.next_states[values], self.dones[values],
-                self.alive[values], self.next_types[values], self.next_alive[values],
+                self.alive[values],
+                self.types[values], self.cooldowns[values], self.opp_types[values],    # NUEVO
+                self.next_types[values], self.next_alive[values],
                 self.next_cooldowns[values], self.next_opp_types[values],
             )
         return ReplayBatch(
             self.states[values], self.actions[values], self.rewards[values],
             self.next_states[values], self.dones[values],
-            None, None, None, None, None,
+            None, None, None, None, None, None, None, None,                            # CAMBIO: 3 None más (12 campos tras states..dones)
         )
 
     def state_dict(self):
@@ -52,7 +59,9 @@ class ReplayStorage:
         }
         if self.is_turn_storage:
             state.update({
-                "alive": self.alive, "next_types": self.next_types,
+                "alive": self.alive,
+                "types": self.types, "cooldowns": self.cooldowns, "opp_types": self.opp_types,   # NUEVO
+                "next_types": self.next_types,
                 "next_alive": self.next_alive, "next_cooldowns": self.next_cooldowns,
                 "next_opp_types": self.next_opp_types,
             })
@@ -66,6 +75,9 @@ class ReplayStorage:
         self.dones.copy_(state["dones"])
         if self.is_turn_storage:
             self.alive.copy_(state["alive"])
+            self.types.copy_(state["types"])                                            # NUEVO
+            self.cooldowns.copy_(state["cooldowns"])                                     # NUEVO
+            self.opp_types.copy_(state["opp_types"])                                     # NUEVO
             self.next_types.copy_(state["next_types"])
             self.next_alive.copy_(state["next_alive"])
             self.next_cooldowns.copy_(state["next_cooldowns"])
