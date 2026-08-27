@@ -39,7 +39,7 @@ SAVE_MODEL_FRACTION = 0.05   # ~5% de los lotes del run
 POOL_RANGE_FRACTION = 0.01   # ~1% de los lotes del run
 POOL_PORCENTAGE = 0.3
 SELECTION_REPLAYS_PER_BATCH = 100   # antes eran ~1536, ajusta empezando bajo
-TURN_REPLAYS_PER_BATCH = 400
+TURN_REPLAYS_PER_BATCH = 800
 
 #CONSTANTES PER
 ALPHA = 0.8 #A mayor nummero mas prioridad se le da a a la prioridad 1.0 MAS AGRESIVO 0.6 MAS CONSERVADOR

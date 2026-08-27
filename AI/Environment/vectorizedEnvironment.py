@@ -168,8 +168,8 @@ class VectorizedEnvironment:
 
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
-        mask_self_heal = (actors == 2) & (actions_actor == 2)
-        mask_team_heal = (actors == 5) & (actions_actor == 2)
+        mask_self_heal = (actors == 2) & (actions_actor == 1)
+        mask_team_heal = (actors == 5) & (actions_actor == 1)
         mask_defend = (((actors == 5) & (actions_actor == 3)) |((actors == 3) & (actions_actor == 2)) |
                     ((actors == 1) & (actions_actor == 2)))
         mask_ataque = ~(mask_movPos | mask_movNeg | mask_self_heal | mask_team_heal | mask_defend)
