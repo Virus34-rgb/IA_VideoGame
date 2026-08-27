@@ -217,10 +217,11 @@ def run_comparison(config: RunConfig, run_specs: list):
 # ==================================================================
 # CONFIGURACIÓN
 # ==================================================================
-VERSION = 4
-N_BATCH = 512
-TRAIN_EPISODES = math.ceil(300000 / N_BATCH)
-EVAL_EPISODES = math.ceil(30000 / N_BATCH)
+VERSION = 9
+N_BATCH = 2048
+
+TRAIN_EPISODES = math.ceil(200000 / N_BATCH)
+EVAL_EPISODES = math.ceil(20000 / N_BATCH)
 
 RUN_SELF_PLAY = True
 RUN_EVALUATION = True

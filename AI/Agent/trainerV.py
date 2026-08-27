@@ -89,10 +89,10 @@ class TrainerV:
             p2_alive_now = self.environment.p2_alive
             p1_types_now = self.environment.p1_disposition                        
             p1_cd_now = self.environment.p1_cooldowns                            
-            p2_opp_types_now = self.environment.p2_disposition                   
+            p2_opp_types_now = self.environment.p1_disposition                   
             p2_types_now = self.environment.p2_disposition                        
             p2_cd_now = self.environment.p2_cooldowns                             
-            p1_opp_types_now = self.environment.p1_disposition                    
+            p1_opp_types_now = self.environment.p2_disposition                    
 
             action_p1 = self.player1.turn(obs1_tensor, self.environment.p1_disposition,
                                         self.environment.p1_cooldowns, self.environment.p1_alive,
