@@ -85,12 +85,18 @@ class TrainerV:
         reward2_acum = torch.zeros(self.N)
 
         while not self.environment.ended.all():
-                # crudos ANTES del turno (estado actual)
             p1_alive_now = self.environment.p1_alive
             p2_alive_now = self.environment.p2_alive
+            p1_types_now = self.environment.p1_disposition                        
+            p1_cd_now = self.environment.p1_cooldowns                            
+            p2_opp_types_now = self.environment.p2_disposition                   
+            p2_types_now = self.environment.p2_disposition                        
+            p2_cd_now = self.environment.p2_cooldowns                             
+            p1_opp_types_now = self.environment.p1_disposition                    
+
             action_p1 = self.player1.turn(obs1_tensor, self.environment.p1_disposition,
-                                           self.environment.p1_cooldowns, self.environment.p1_alive,
-                                           self.environment.p2_disposition)
+                                        self.environment.p1_cooldowns, self.environment.p1_alive,
+                                        self.environment.p2_disposition)
             action_p2 = self._turn_mixed_opponent(obs2_tensor, self._opponent_from_pool_mask,
                                                     self._grouped_opponents, p2_training_player)
 
@@ -101,11 +107,15 @@ class TrainerV:
 
             if learn_p1:
                 self._remember_turn_batch(self.player1, obs1_tensor, action_p1, reward1, next_obs1_tensor, ended,
-                                   alive=p1_alive_now, next_types=p1_types_next, next_alive=p1_alive_next,
-                                   next_cooldowns=p1_cd_next, next_opp_types=p2_types_next)
+                                alive=p1_alive_now,
+                                types=p1_types_now, cooldowns=p1_cd_now, opp_types=p2_opp_types_now,   # NUEVO
+                                next_types=p1_types_next, next_alive=p1_alive_next,
+                                next_cooldowns=p1_cd_next, next_opp_types=p2_types_next)
             if learn_p2:
                 self._remember_turn_batch(p2_training_player, obs2_tensor, action_p2, reward2, next_obs2_tensor, ended,
-                                        alive=p2_alive_now, next_types=p2_types_next, next_alive=p2_alive_next,
+                                        alive=p2_alive_now,
+                                        types=p2_types_now, cooldowns=p2_cd_now, opp_types=p1_opp_types_now,  # NUEVO
+                                        next_types=p2_types_next, next_alive=p2_alive_next,
                                         next_cooldowns=p2_cd_next, next_opp_types=p1_types_next,
                                         skip_mask=self._opponent_from_pool_mask)
 
@@ -148,8 +158,9 @@ class TrainerV:
             actions[idx_partidas] = acciones_pool[idx_partidas]
         return actions
 
-    def _remember_turn_batch(self,player,states,actions,rewards,next_states,
-                             ended,alive,next_types,next_alive,next_cooldowns,next_opp_types,skip_mask=None):
+    def _remember_turn_batch(self, player, states, actions, rewards, next_states,
+                         ended, alive, types, cooldowns, opp_types,           # NUEVO
+                         next_types, next_alive, next_cooldowns, next_opp_types, skip_mask=None):
         if skip_mask is not None:
             valid = ~skip_mask
             states = states[valid]
@@ -158,6 +169,9 @@ class TrainerV:
             next_states = next_states[valid]
             ended = ended[valid]
             alive = alive[valid]
+            types = types[valid]                                                  
+            cooldowns = cooldowns[valid]                                         
+            opp_types = opp_types[valid]                                         
             next_types = next_types[valid]
             next_alive = next_alive[valid]
             next_cooldowns = next_cooldowns[valid]
@@ -166,8 +180,9 @@ class TrainerV:
         if states.shape[0] == 0:
             return
 
-        player.remember_turn_batch(states,actions,rewards,next_states,ended,alive,
-                                   next_types,next_alive,next_cooldowns,next_opp_types)
+        player.remember_turn_batch(states, actions, rewards, next_states, ended, alive,
+                                types, cooldowns, opp_types,                
+                                next_types, next_alive, next_cooldowns, next_opp_types)
 
     def _remember_and_replay_selection_batch(self,cstates,actions,reward_acum,
                                              player,player_name,batch_idx,skip_mask=None):

@@ -1,6 +1,7 @@
 # mainV.py
 import math
 import os
+import shutil
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -17,26 +18,30 @@ import constants
 
 
 class MainV:
-    def __init__(self, config: RunConfig, steps: list, N: int, player_class: Optional[Callable] = None):
+    def __init__(self, config: RunConfig, steps: list, N: int,
+                 player_class: Optional[Callable] = None, log_dir: Optional[str] = None):
         self.config = config
         self.steps = steps
         self.N = N
-        # NUEVO: permite inyectar una clase de PlayerAIV distinta (para
-        # comparar arquitecturas, no solo hiperparámetros) sin tocar el
-        # resto de la clase.
         self.player_class = player_class or PlayerAIV
+        self.log_dir = log_dir or self.config.base_path
         self.player1 = None
         self.environment = None
         self.logger = None
         self.opponent_pool = OpponentPoolV(self.config.path_opp_pool)
 
     def setup(self):
+        if constants.DELETE_DIRECTORIES:
+            shutil.rmtree(self.config.p2_path, ignore_errors=True)
+            shutil.rmtree(self.config.p2_path, ignore_errors=True)
         os.makedirs(self.config.p1_path, exist_ok=True)
         os.makedirs(self.config.p2_path, exist_ok=True)
+        os.makedirs(self.log_dir, exist_ok=True)  # NUEVO: asegurar que la carpeta de logs existe
+
         self.environment = VectorizedEnvironment(self.N)
         self.player1 = self.player_class(self.N, self.environment)
         self.logger = MetricsLogger(
-            output_dir=self.config.base_path,
+            output_dir=self.log_dir,  # CAMBIO: antes era self.config.base_path
             run_name=f"v{self.config.version}",
         )
         self.logger.dump_config(constants, extra={
@@ -138,7 +143,7 @@ class MainV:
         print(f"Versión:  IA V{self.config.version}   |   N (partidas por lote): {self.N}")
         for step in self.steps:
             print(f"  - {step.name}: {step.action}, {step.episodes} lotes")
-        print(f"Logs en:  {self.config.base_path}")
+        print(f"Logs en:  {self.log_dir}")  # CAMBIO: reflejar el log_dir real, no base_path
         print("=" * 65)
 
     def _print_summary(self):
@@ -146,7 +151,7 @@ class MainV:
         print("                         FINALIZADO")
         print("=" * 65)
         print(f"Modelos guardados en: {self.config.base_path}")
-        print(f"Logs (loss/progreso/config): {self.config.base_path}")
+        print(f"Logs (loss/progreso/config): {self.log_dir}")  # CAMBIO
 
     @staticmethod
     def _format_time(seconds):
@@ -165,12 +170,6 @@ class MainV:
 # ==================================================================
 @dataclass
 class RunSpec:
-    """
-    Especifica una configuración completa de run: nombre (para identificar
-    sus CSV/PNG), tamaño de lote, número de lotes de entrenamiento/evaluación,
-    overrides puntuales de constants.py, y opcionalmente una clase de
-    PlayerAIV distinta (para comparar arquitecturas, no solo hiperparámetros).
-    """
     run_name: str
     N: int
     train_batches: int
@@ -179,8 +178,7 @@ class RunSpec:
     player_class: Optional[Callable] = None
 
 
-def run_single(config: RunConfig, run_spec: RunSpec):
-
+def run_single(config: RunConfig, run_spec: RunSpec, shared_log_dir: Optional[str] = None):
     originales = {}
     for key, value in run_spec.constants_overrides.items():
         originales[key] = getattr(constants, key)
@@ -193,53 +191,36 @@ def run_single(config: RunConfig, run_spec: RunSpec):
             eval_episodes=run_spec.eval_batches,
         )
         steps = build_steps(run_config)
-        main = MainV(run_config, steps, N=run_spec.N, player_class=run_spec.player_class)
+        main = MainV(
+            run_config, steps, N=run_spec.N,
+            player_class=run_spec.player_class,
+            log_dir=shared_log_dir,
+        )
         main.run()
-        return run_config.base_path, f"v{run_config.version}"
+        return main.log_dir, f"v{run_config.version}"  # CAMBIO: devuelve el log_dir real usado
     finally:
         for key, value in originales.items():
             setattr(constants, key, value)
 
 
 def run_comparison(config: RunConfig, run_specs: list):
-    """
-    Ejecuta todos los runs y al terminar genera una comparación
-    conjunta aunque cada run tenga su propio directorio.
-    """
-
-    runs = []
-
+    shared_log_dir = config.base_path  # CAMBIO: carpeta compartida fija para toda la comparación
+    run_names = []
     for spec in run_specs:
-        print(f"\n{'#' * 65}\n"f" RUN: {spec.run_name}\n"f"{'#' * 65}")
+        print(f"\n{'#'*65}\n RUN: {spec.run_name}\n{'#'*65}")
+        _, versioned_name = run_single(config, spec, shared_log_dir=shared_log_dir)
+        run_names.append(versioned_name)
 
-        base_path, versioned_name = run_single(config, spec)
-
-        runs.append((base_path, versioned_name))
-
-    print(
-        f"\n{'=' * 65}\n"
-        f" COMPARACIÓN FINAL\n"
-        f"{'=' * 65}"
-    )
-
-    comparison_path = MetricsLogger.compare_runs(
-        runs=runs,
-        labels=[spec.run_name for spec in run_specs],
-        output_dir=config.base_path,
-        show=True
-    )
-
-    print(f"\nComparación guardada en:")
-    print(comparison_path)
+    MetricsLogger.compare_runs(shared_log_dir, run_names, labels=[s.run_name for s in run_specs])
 
 
 # ==================================================================
 # CONFIGURACIÓN
 # ==================================================================
-VERSION = 3
+VERSION = 4
 N_BATCH = 512
-TRAIN_EPISODES = math.ceil(1000000 / N_BATCH)
-EVAL_EPISODES = math.ceil(100000 / N_BATCH)
+TRAIN_EPISODES = math.ceil(300000 / N_BATCH)
+EVAL_EPISODES = math.ceil(30000 / N_BATCH)
 
 RUN_SELF_PLAY = True
 RUN_EVALUATION = True
@@ -252,7 +233,6 @@ PLAY_AGAINST_AI = False
 PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
-# NUEVO: activa el modo comparación en vez de un único run
 RUN_COMPARISON = False
 
 def build_steps(config: RunConfig):
@@ -314,10 +294,8 @@ if __name__ == "__main__":
     if RUN_COMPARISON:
         run_specs = [
             RunSpec(run_name="baseline", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES),
-            RunSpec(run_name="gamma_alto", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
-                    constants_overrides={"DISCOUNT_FACTOR": 0.99}),
-            RunSpec(run_name="replays_40", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
-                    constants_overrides={"TURN_REPLAYS_PER_BATCH": 40}),
+            RunSpec(run_name="NoDuelingDQN", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+                    constants_overrides={"USE_DUELING_DQN": False}),
         ]
         run_comparison(config, run_specs)
     else:

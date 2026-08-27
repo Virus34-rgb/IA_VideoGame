@@ -23,7 +23,8 @@ class ReplayMemoryAN(object):
         self.max_priority = 1.0
     
     def push_batch(self, states, actions, rewards, next_states, dones,
-                alive, next_types, next_alive, next_cooldowns, next_opp_types):
+            alive, types, cooldowns, opp_types,                       # NUEVO: types, cooldowns, opp_types
+            next_types, next_alive, next_cooldowns, next_opp_types):
         n = len(states)
         priorities = numpy.full(n, self.max_priority, dtype=numpy.float32)
         indices = self.memory.add_batch(priorities)
@@ -33,6 +34,9 @@ class ReplayMemoryAN(object):
         self.memoryData.next_states[indices] = next_states
         self.memoryData.dones[indices] = dones
         self.memoryData.alive[indices] = alive
+        self.memoryData.types[indices] = types                            
+        self.memoryData.cooldowns[indices] = cooldowns                     
+        self.memoryData.opp_types[indices] = opp_types                    
         self.memoryData.next_types[indices] = next_types
         self.memoryData.next_alive[indices] = next_alive
         self.memoryData.next_cooldowns[indices] = next_cooldowns
