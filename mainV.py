@@ -301,8 +301,10 @@ if __name__ == "__main__":
     if RUN_COMPARISON:
         run_specs = [
             RunSpec(run_name="baseline", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES),
-            RunSpec(run_name="NoDuelingDQN", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
-                    constants_overrides={"USE_DUELING_DQN": False}),
+            RunSpec(run_name="NSteps", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+                    constants_overrides={"N_STEP": 3}),
+            RunSpec(run_name="NSteps", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+                    constants_overrides={"N_STEP": 5}),
         ]
         run_comparison(config, run_specs)
     else:

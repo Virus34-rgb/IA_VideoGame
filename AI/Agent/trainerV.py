@@ -1,10 +1,11 @@
 import os
 import time
 import torch
+import constants
 
 from AI.Agent.choose_stateV import Choose_stateV
+from AI.Agent.nstep_buffer import NStepBuffer
 from AI.Agent.observationV import ObservationV
-from constants import MAX_TURNS, POOL_PORCENTAGE, POOL_RANGE_FRACTION, SAVE_MODEL_FRACTION, SELECTION_REPLAYS_PER_BATCH, TURN_REPLAYS_PER_BATCH, WARRIOR_QUANTITY
 
 
 class TrainerV:
@@ -24,9 +25,7 @@ class TrainerV:
         self.logger = logger
         self.snapshot_every = snapshot_every
         self.progress_every = progress_every
-        self._catalog_ids = torch.arange(1, WARRIOR_QUANTITY + 1, dtype=torch.long)
-        # NUEVO: estado de asignación de oponentes del pool, per-partida.
-        # Se actualiza cada EPISODES_RANGE_POOL lotes dentro de _run.
+        self._catalog_ids = torch.arange(1, constants.WARRIOR_QUANTITY + 1, dtype=torch.long)
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._grouped_opponents = {}
 
@@ -44,8 +43,8 @@ class TrainerV:
                    learn_p1=False, learn_p2=False, stats_path=self.path_stats2, restore_epsilon=True)
 
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon):
-        save_every = max(1, int(batches * SAVE_MODEL_FRACTION))
-        pool_every = max(1, int(batches * POOL_RANGE_FRACTION))
+        save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
+        pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
         snapshot_every = max(1, batches // 50) 
         backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
@@ -58,7 +57,7 @@ class TrainerV:
                 self.opponent_pool.save_version(p2_training_player)
 
             if batch_idx != 0 and batch_idx % pool_every == 0:
-                from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(self.N, POOL_PORCENTAGE)
+                from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(self.N, constants.POOL_PORCENTAGE)
                 self._opponent_from_pool_mask = from_pool
                 self._grouped_opponents = self.opponent_pool.build_grouped_opponents(
                     checkpoint_idx, self.player1.__class__, self.N, self.environment
@@ -84,15 +83,18 @@ class TrainerV:
         reward1_acum = torch.zeros(self.N)
         reward2_acum = torch.zeros(self.N)
 
+        n_steps_buffer_p1 = NStepBuffer(n_step=constants.N_STEP, gamma=constants.DISCOUNT_FACTOR)
+        n_steps_buffer_p2 = NStepBuffer(n_step=constants.N_STEP, gamma=constants.DISCOUNT_FACTOR)
+
         while not self.environment.ended.all():
             p1_alive_now = self.environment.p1_alive
             p2_alive_now = self.environment.p2_alive
             p1_types_now = self.environment.p1_disposition                        
             p1_cd_now = self.environment.p1_cooldowns                            
-            p2_opp_types_now = self.environment.p2_disposition                   
+            p2_opp_types_now = self.environment.p1_disposition                   
             p2_types_now = self.environment.p2_disposition                        
             p2_cd_now = self.environment.p2_cooldowns                             
-            p1_opp_types_now = self.environment.p1_disposition                    
+            p1_opp_types_now = self.environment.p2_disposition                    
 
             action_p1 = self.player1.turn(obs1_tensor, self.environment.p1_disposition,
                                         self.environment.p1_cooldowns, self.environment.p1_alive,
@@ -106,25 +108,77 @@ class TrainerV:
             p2_types_next, p2_alive_next, p2_cd_next = self.environment.p2_disposition, self.environment.p2_alive, self.environment.p2_cooldowns
 
             if learn_p1:
-                self._remember_turn_batch(self.player1, obs1_tensor, action_p1, reward1, next_obs1_tensor, ended,
-                                alive=p1_alive_now,
-                                types=p1_types_now, cooldowns=p1_cd_now, opp_types=p2_opp_types_now,   # NUEVO
-                                next_types=p1_types_next, next_alive=p1_alive_next,
-                                next_cooldowns=p1_cd_next, next_opp_types=p2_types_next)
+                experience_p1 = n_steps_buffer_p1.push(obs1_tensor, action_p1, reward1, ended, p1_alive_now,
+                                                   p1_types_now, p1_cd_now, p1_opp_types_now)
+                if experience_p1 is not None:
+                    self._remember_turn_batch(
+                        self.player1, experience_p1.states,
+                        experience_p1.actions,
+                        experience_p1.rewards,
+                        experience_p1.next_states,
+                        experience_p1.dones,
+                        alive=experience_p1.alive,
+                        types=experience_p1.types,
+                        cooldowns=experience_p1.cooldowns,
+                        opp_types=experience_p1.opp_types,
+                        next_types=experience_p1.next_types,
+                        next_alive=experience_p1.next_alive,
+                        next_cooldowns=experience_p1.next_cooldowns,
+                        next_opp_types=experience_p1.next_opp_types,)
             if learn_p2:
-                self._remember_turn_batch(p2_training_player, obs2_tensor, action_p2, reward2, next_obs2_tensor, ended,
-                                        alive=p2_alive_now,
-                                        types=p2_types_now, cooldowns=p2_cd_now, opp_types=p1_opp_types_now,  # NUEVO
-                                        next_types=p2_types_next, next_alive=p2_alive_next,
-                                        next_cooldowns=p2_cd_next, next_opp_types=p1_types_next,
-                                        skip_mask=self._opponent_from_pool_mask)
+                experience_p2 = n_steps_buffer_p2.push(obs2_tensor, action_p2, reward2, ended, p2_alive_now,
+                                    p2_types_now, p2_cd_now, p2_opp_types_now)
+                if experience_p2 is not None:
+                    self._remember_turn_batch(
+                        p2_training_player,
+                        experience_p2.states,
+                        experience_p2.actions,
+                        experience_p2.rewards,
+                        experience_p2.next_states,
+                        experience_p2.dones,
+                        alive=experience_p2.alive,
+                        types=experience_p2.types,
+                        cooldowns=experience_p2.cooldowns,
+                        opp_types=experience_p2.opp_types,
+                        next_types=experience_p2.next_types,
+                        next_alive=experience_p2.next_alive,
+                        next_cooldowns=experience_p2.next_cooldowns,
+                        next_opp_types=experience_p2.next_opp_types,
+                        skip_mask=self._opponent_from_pool_mask,
+                    )
 
             obs1_tensor, obs2_tensor = next_obs1_tensor, next_obs2_tensor
             reward1_acum += reward1
             reward2_acum += reward2
+            
+        if learn_p1:
+            for experience_p1 in n_steps_buffer_p1.flush():
+                self._remember_turn_batch(
+                    self.player1, experience_p1.states, experience_p1.actions,
+                    experience_p1.rewards, experience_p1.next_states, experience_p1.dones,
+                    alive=experience_p1.alive, types=experience_p1.types,
+                    cooldowns=experience_p1.cooldowns, opp_types=experience_p1.opp_types,
+                    next_types=experience_p1.next_types, next_alive=experience_p1.next_alive,
+                    next_cooldowns=experience_p1.next_cooldowns, next_opp_types=experience_p1.next_opp_types,
+                )
+
+        if learn_p2:
+            for experience_p2 in n_steps_buffer_p2.flush():
+                self._remember_turn_batch(
+                    p2_training_player, experience_p2.states, experience_p2.actions,
+                    experience_p2.rewards, experience_p2.next_states, experience_p2.dones,
+                    alive=experience_p2.alive, types=experience_p2.types,
+                    cooldowns=experience_p2.cooldowns, opp_types=experience_p2.opp_types,
+                    next_types=experience_p2.next_types, next_alive=experience_p2.next_alive,
+                    next_cooldowns=experience_p2.next_cooldowns, next_opp_types=experience_p2.next_opp_types,
+                    skip_mask=self._opponent_from_pool_mask,  # NUEVO: mismo criterio que en el
+                    # flujo normal del while — sin esto, las transiciones truncadas de partidas
+                    # jugadas contra el pool de oponentes contaminarían el replay buffer de
+                    # p2_training_player.
+                )
 
         if learn_p1:
-            for _ in range(TURN_REPLAYS_PER_BATCH):
+            for _ in range(constants.TURN_REPLAYS_PER_BATCH):
                 loss1_turn = self.player1.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, self.player1.replayed_turn, "p1", "turn", loss1_turn)
@@ -134,7 +188,7 @@ class TrainerV:
                 self.player1.update_epsilon(n_games=self.N)
 
         if learn_p2:
-            for _ in range(TURN_REPLAYS_PER_BATCH):
+            for _ in range(constants.TURN_REPLAYS_PER_BATCH):
                 loss2_turn = p2_training_player.replay_turn()
             if self.logger:
                 self.logger.log_loss(batch_idx, p2_training_player.replayed_turn, "p2", "turn", loss2_turn)
@@ -204,7 +258,7 @@ class TrainerV:
             player.remember_selection_batch(c2,a2,rewards,c3,torch.zeros(c2.shape[0], dtype=torch.bool))
             player.remember_selection_batch(c3,a3,rewards,None,torch.ones(c3.shape[0], dtype=torch.bool))
 
-        for _ in range(SELECTION_REPLAYS_PER_BATCH):
+        for _ in range(constants.SELECTION_REPLAYS_PER_BATCH):
             loss = player.replay_selection()
             if self.logger:
                 self.logger.log_loss(batch_idx,player.replayed_selection,player_name,"selection",loss)
@@ -299,7 +353,7 @@ class TrainerV:
         health_norm_p2 = self.environment.p2_healths / maxh_p2
         life_p1 = torch.where(self.environment.p1_alive, health_norm_p1, torch.zeros_like(health_norm_p1))
         life_p2 = torch.where(self.environment.p2_alive, health_norm_p2, torch.zeros_like(health_norm_p2))
-        turn_norm = (self.environment.turn_number.float() / MAX_TURNS).clamp(max=1.0)
+        turn_norm = (self.environment.turn_number.float() / constants.MAX_TURNS).clamp(max=1.0)
 
         obs1_tensor = ObservationV.normalize_batch(
             self.environment.p1_disposition, self.environment.p1_alive, speed_p1, health_norm_p1,
@@ -340,8 +394,6 @@ class TrainerV:
             if f"{name}_sel" in backup:
                 player.epsilon_sel = backup[f"{name}_sel"]
 
-    # CORREGIDO: el cuerpo de esta función estaba incompleto (cortado tras
-    # `elapsed = ...`) — faltaban pct, eps_per_sec, eta y el print.
     def _print_progress(self, episode, total_episodes, start_time):
         if total_episodes == 0:
             return
