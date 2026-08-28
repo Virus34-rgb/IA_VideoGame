@@ -1,7 +1,7 @@
 
 
 from AI.Environment.gameState import GameState
-from AI.Environment.stats import Stats
+from Antiguos.stats import Stats
 from AI.Environment.warrior import Warrior
 from AI.Environment.warriorFactory import get_warriors_classes
 from constants import DISCOUNT_FACTOR, REWARD_WEIGHTS, TURN_PENALTY, WIN_REWARD, MAX_TURNS, MAX_DEATHS_PER_TEAM
