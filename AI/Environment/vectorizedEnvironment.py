@@ -29,7 +29,7 @@ class VectorizedEnvironment:
         self.winner = torch.full((N,), -1, dtype=torch.long)
         self.turn_number = torch.zeros(N, dtype=torch.int)
         self._build_static_tables()
-        self.stats = StatsV()  # CAMBIO: Stats -> StatsV
+        self.stats = StatsV()
 
     def reset(self):
         self.p1_disposition = torch.zeros((self.N, 3), dtype=torch.long)
@@ -361,10 +361,10 @@ class VectorizedEnvironment:
         )
         win_p2 = -win_p1
 
-        rewardP1 = self._reward(damage=damage_p1 - damage_p2, deaths=newDeaths_p1 - newDeaths_p2,
+        rewardP1 = self._reward(damage=damage_p1 - damage_p2, deaths=newDeaths_p2 - newDeaths_p1,
                                  win=win_p1, blocks=damage_avoided_p1, heal=healed_p1,
                                  shaping_weight=DISCOUNT_FACTOR * shapping2 - shapping1)
-        rewardP2 = self._reward(damage=damage_p2 - damage_p1, deaths=newDeaths_p2 - newDeaths_p1,
+        rewardP2 = self._reward(damage=damage_p2 - damage_p1, deaths=newDeaths_p1 - newDeaths_p2,
                                  win=win_p2, blocks=damage_avoided_p2, heal=healed_p2,
                                  shaping_weight=-(DISCOUNT_FACTOR * shapping2 - shapping1))
         return rewardP1, rewardP2

@@ -4,10 +4,7 @@ from AI.Agent.turnNetwork import TurnNetwork
 from AI.Agent.selectionNetwork import SelectionNetwork
 from AI.Agent.replayMemoryAN import ReplayMemoryAN
 from AI.Agent.replayMemoryPM import ReplayMemoryPM
-from constants import (ABILITIES, BATCH_SIZE, COPY_DQN, DISCOUNT_FACTOR, EPSILON_SEL_DECAY, EPSILON_SEL_MIN,
-                        EPSILON_SELECTION, EPSILON_TURN, EPSILON_TURN_DECAY, EPSILON_TURN_MIN,
-                        SELECTION_LEARNING_RATE, SELECTION_REPLAY_DATA, TURN_LEARNING_RATE,
-                        TURN_REPLAY_DATA, WARRIOR_QUANTITY)
+import constants
 
 
 class PlayerAIV:
@@ -16,18 +13,18 @@ class PlayerAIV:
         self.N = N
         self.environment = environment
         self.name = "DqnPlayerV"
-        self.epsilon_sel = EPSILON_SELECTION
-        self.epsilon_turn = EPSILON_TURN
+        self.epsilon_sel = constants.EPSILON_SELECTION
+        self.epsilon_turn = constants.EPSILON_TURN
         self.selection_network = SelectionNetwork()
         self.target_selection_network = SelectionNetwork()
         self.target_selection_network.load_state_dict(self.selection_network.state_dict())
-        self.optimizer = torch.optim.Adam(self.selection_network.parameters(), lr=SELECTION_LEARNING_RATE)
-        self.replay_memory_sel = ReplayMemoryPM(SELECTION_REPLAY_DATA,46)
+        self.optimizer = torch.optim.Adam(self.selection_network.parameters(), lr=constants.SELECTION_LEARNING_RATE)
+        self.replay_memory_sel = ReplayMemoryPM(constants.SELECTION_REPLAY_DATA,46)
         self.turn_network = TurnNetwork()
         self.target_turn_network = TurnNetwork()
         self.target_turn_network.load_state_dict(self.turn_network.state_dict())
-        self.optimizer2 = torch.optim.Adam(self.turn_network.parameters(), lr=TURN_LEARNING_RATE)
-        self.replay_memory_turn = ReplayMemoryAN(TURN_REPLAY_DATA,58)
+        self.optimizer2 = torch.optim.Adam(self.turn_network.parameters(), lr=constants.TURN_LEARNING_RATE)
+        self.replay_memory_turn = ReplayMemoryAN(constants.TURN_REPLAY_DATA,58)
         self.replayed_selection = 0
         self.replayed_turn = 0
         
@@ -42,9 +39,9 @@ class PlayerAIV:
                                             next_types, next_alive, next_cooldowns, next_opp_types)
             
     def replay_selection(self):
-        if len(self.replay_memory_sel) < BATCH_SIZE: return None
+        if len(self.replay_memory_sel) < constants.BATCH_SIZE: return None
         self.replayed_selection += 1
-        batch, indices, weights = self.replay_memory_sel.sample(BATCH_SIZE)
+        batch, indices, weights = self.replay_memory_sel.sample(constants.BATCH_SIZE)
         weights = torch.tensor(weights, dtype=torch.float32)
 
         states = batch.states
@@ -59,7 +56,7 @@ class PlayerAIV:
         with torch.no_grad():
             next_actions = self.selection_network(next_states).argmax(dim=1)
             next_qvalues = self.target_selection_network(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
-            target = (rewards + DISCOUNT_FACTOR * next_qvalues * (~dones))
+            target = (rewards + constants.DISCOUNT_FACTOR * next_qvalues * (~dones))
             td_errors = torch.abs(q_selected - target)
 
         loss = self.loss_function(q_selected, target, weights)
@@ -68,10 +65,10 @@ class PlayerAIV:
         return loss.item()
         
     def replay_turn(self):
-        if len(self.replay_memory_turn) < BATCH_SIZE:
+        if len(self.replay_memory_turn) < constants.BATCH_SIZE:
             return None
         self.replayed_turn += 1
-        batch, indices, weights = self.replay_memory_turn.sample(BATCH_SIZE)
+        batch, indices, weights = self.replay_memory_turn.sample(constants.BATCH_SIZE)
         weights = torch.tensor(weights, dtype=torch.float32)
 
         states = batch.states
@@ -128,7 +125,7 @@ class PlayerAIV:
     def mask_selection(self, logits, disposition):
         
         N = disposition.shape[0]
-        mask = torch.ones(N, WARRIOR_QUANTITY * 3, dtype=torch.bool)
+        mask = torch.ones(N, constants.WARRIOR_QUANTITY * 3, dtype=torch.bool)
 
         ocupado = disposition > 0  # (N, 3)
         warrior_idx = (disposition - 1).clamp(min=0)  # (N, 3), evita índice -1 donde vacío
@@ -142,7 +139,7 @@ class PlayerAIV:
         # Invalida las WARRIOR_QUANTITY acciones que colocarían algo en un slot ya ocupado
         for slot in range(3):
             slot_ocupado = ocupado[:, slot]  # (N,)
-            for wi in range(WARRIOR_QUANTITY):
+            for wi in range(constants.WARRIOR_QUANTITY):
                 accion = torch.full((N, 1), wi * 3 + slot, dtype=torch.long)
                 mask.scatter_(1, accion, torch.where(slot_ocupado.unsqueeze(1),
                                                        torch.zeros_like(accion, dtype=torch.bool),
@@ -268,10 +265,10 @@ class PlayerAIV:
             }, path)
     
     def update_epsilon(self, n_games=1):
-        decay_sel = EPSILON_SEL_DECAY ** n_games
-        decay_turn = EPSILON_TURN_DECAY ** n_games
-        self.epsilon_sel = max(EPSILON_SEL_MIN, self.epsilon_sel * decay_sel)
-        self.epsilon_turn = max(EPSILON_TURN_MIN, self.epsilon_turn * decay_turn)
+        decay_sel = constants.EPSILON_SEL_DECAY ** n_games
+        decay_turn = constants.EPSILON_TURN_DECAY ** n_games
+        self.epsilon_sel = max(constants.EPSILON_SEL_MIN, self.epsilon_sel * decay_sel)
+        self.epsilon_turn = max(constants.EPSILON_TURN_MIN, self.epsilon_turn * decay_turn)
         
     def update_beta(self):
         self.replay_memory_sel.update_beta(self.replayed_selection)
@@ -282,7 +279,7 @@ class PlayerAIV:
             loss.backward()
             optimizer.step()
             replayed = getattr(self, replayed_counter_attr)
-            if replayed % COPY_DQN == 0:
+            if replayed % constants.COPY_DQN == 0:
                 target_network.load_state_dict(network.state_dict())
                 
     def _multi_agent_double_dqn_target(self, batch, next_states, rewards, dones):
@@ -309,7 +306,7 @@ class PlayerAIV:
             next_qvalues = target_qvalues.gather(1, next_actions)
             next_warrior_mask = batch.next_alive
             next_qvalues = (next_qvalues * next_warrior_mask.float()).sum(dim=1)
-            return rewards + DISCOUNT_FACTOR * next_qvalues * (~dones)
+            return rewards + constants.DISCOUNT_FACTOR ** constants.N_STEP * next_qvalues * (~dones)
         
     @staticmethod
     def _environment_action_to_network(action):
