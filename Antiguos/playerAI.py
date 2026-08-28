@@ -4,7 +4,7 @@ from numpy import mean
 import torch
 from torch import nn
 from AI.Agent.turnNetwork import TurnNetwork
-from AI.Agent.observation import Observation
+from Antiguos.observation import Observation
 from AI.Agent.selectionNetwork import SelectionNetwork
 from AI.Agent.replayMemoryAN import ReplayMemoryAN
 from AI.Agent.replayMemoryPM import ReplayMemoryPM

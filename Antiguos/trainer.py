@@ -2,9 +2,9 @@ import os
 import random
 import time
 
-from AI.Agent.choose_state import Choose_state
-from AI.Agent.observation import Observation
-from AI.Agent.playerAI import PlayerAI
+from Antiguos.choose_state import Choose_state
+from Antiguos.observation import Observation
+from Antiguos.playerAI import PlayerAI
 from constants import EPISODES_RANGE_POOL, EPISODES_SAVE_MODEL, POOL_PORCENTAGE
 
 

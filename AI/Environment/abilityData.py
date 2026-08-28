@@ -1,8 +1,26 @@
+"""
+Definición de los datos de una habilidad individual.
 
+Las habilidades son la base de las acciones de los guerreros durante el turno.
+"""
+from dataclasses import dataclass
+from typing import List
+
+
+@dataclass(frozen=True)
 class AbilityData:
-    def __init__(self,name,id,damage,target_positions,can_repeat):
-        self.name = name
-        self.id = id #1-4
-        self.damage = damage
-        self.target_positions = target_positions
-        self.can_repeat = can_repeat
+    """
+    Datos inmutables de una habilidad.
+
+    Attributes:
+        name: Nombre de la habilidad.
+        id: Identificador numérico (1-4, dentro del conjunto de habilidades del guerrero).
+        damage: Cantidad de daño o curación que inflige (0 para habilidades defensivas).
+        target_positions: Lista de posiciones (0, 1, 2) que puede atacar/curar. Vacío si es auto-target.
+        can_repeat: Si se puede usar en el mismo turno (False = entra en cooldown por 1 turno).
+    """
+    name: str
+    id: int
+    damage: int
+    target_positions: List[int]
+    can_repeat: bool

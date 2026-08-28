@@ -1,4 +1,5 @@
 class GameState:
+    """Estado inmutable de una partida (para observación)."""
     def __init__(
         self,
         p1_disposition,

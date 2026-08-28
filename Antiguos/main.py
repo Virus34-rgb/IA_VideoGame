@@ -2,11 +2,11 @@
 import os
 import time
 
-from AI.Agent.opponent_pool import OpponentPool
-from AI.Agent.playerAI import PlayerAI
-from AI.Agent.playerNoIA import PlayerNoAI
-from AI.Environment.environment import Environment
-from AI.Agent.trainer import Trainer
+from Antiguos.opponent_pool import OpponentPool
+from Antiguos.playerAI import PlayerAI
+from Antiguos.playerNoIA import PlayerNoAI
+from Antiguos.environment import Environment
+from Antiguos.trainer import Trainer
 from AI.Logging.metrics_logger import MetricsLogger
 from config import RunConfig
 from training_step import TrainingStep
