@@ -217,11 +217,11 @@ def run_comparison(config: RunConfig, run_specs: list):
 # ==================================================================
 # CONFIGURACIÓN
 # ==================================================================
-VERSION = 9
+VERSION = 1
 N_BATCH = 2048
 
-TRAIN_EPISODES = math.ceil(200000 / N_BATCH)
-EVAL_EPISODES = math.ceil(20000 / N_BATCH)
+TRAIN_EPISODES = math.ceil(50000 / N_BATCH)
+EVAL_EPISODES = math.ceil(5000 / N_BATCH)
 
 RUN_SELF_PLAY = True
 RUN_EVALUATION = True
@@ -234,7 +234,7 @@ PLAY_AGAINST_AI = False
 PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
-RUN_COMPARISON = False
+RUN_COMPARISON = True
 
 def build_steps(config: RunConfig):
     steps = []
@@ -295,8 +295,10 @@ if __name__ == "__main__":
     if RUN_COMPARISON:
         run_specs = [
             RunSpec(run_name="baseline", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES),
-            RunSpec(run_name="NoDuelingDQN", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
-                    constants_overrides={"USE_DUELING_DQN": False}),
+            RunSpec(run_name="NSteps", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+                    constants_overrides={"N_STEP": 3}),
+            RunSpec(run_name="NSteps2", N=N_BATCH, train_batches=TRAIN_EPISODES, eval_batches=EVAL_EPISODES,
+                    constants_overrides={"N_STEP": 5}),
         ]
         run_comparison(config, run_specs)
     else:
