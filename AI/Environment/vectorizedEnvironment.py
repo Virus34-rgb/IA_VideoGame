@@ -162,7 +162,8 @@ class VectorizedEnvironment:
                 dmg, avoided, blocked, moved, healed,
                 new_own_disp, new_enemy_disp, new_own_health, new_enemy_health,
                 new_own_cd, new_own_alive, new_enemy_alive,
-                new_own_abilities,   # NUEVO
+                new_own_abilities,
+                ability_pool_idx,
             ) = self._resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
@@ -188,9 +189,6 @@ class VectorizedEnvironment:
             blocks_p2 += torch.where(~es_p1, torch.zeros_like(blocked), blocked)
             heal_p1 += torch.where(es_p1, healed, torch.zeros_like(healed))
             heal_p2 += torch.where(~es_p1, healed, torch.zeros_like(healed))
-            
-            own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1)  # (N,4)
-            ability_pool_idx = own_slot_abilities.gather(1, actor_action.clamp(0, 3).unsqueeze(1)).squeeze(1)     # (N,)
 
             self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)
             self.stats.accumulate_attacks(actor_type, ability_pool_idx, es_p1, ~ya_terminadas_antes)
@@ -288,6 +286,7 @@ class VectorizedEnvironment:
             own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
             own_cd_new, own_alive, enemy_alive_final,
             own_abilities_new,
+            ability_pool_idx,
         )
 
     def _resolve_action_movement(
