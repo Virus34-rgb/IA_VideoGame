@@ -351,8 +351,8 @@ def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
 # ================================================================
 
 # Parámetros globales del run
-VERSION = 6
-N_BATCH = 2048
+VERSION = 7
+N_BATCH = 512
 TRAIN_EPISODES = math.ceil(100_000 / N_BATCH)
 EVAL_EPISODES = math.ceil(10_000 / N_BATCH)
 

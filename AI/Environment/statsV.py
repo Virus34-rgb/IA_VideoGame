@@ -8,7 +8,7 @@ import torch
 from dataclasses import dataclass
 from typing import Dict, List, Any
 
-from constants import WARRIOR_QUANTITY
+from constants import MAX_POOL_SIZE, WARRIOR_QUANTITY
 
 
 @dataclass
@@ -107,8 +107,8 @@ class StatsV:
         self.p2_movements: float = 0.0
 
         # Tensores acumuladores por tipo de guerrero y habilidad
-        self._p1_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, 4)
-        self._p2_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, 4)
+        self._p1_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
+        self._p2_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
         self._p1_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
         self._p2_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
 
@@ -208,14 +208,14 @@ class StatsV:
         mask_p2 = mask & ~es_p1
 
         if mask_p1.any():
-            idx = tipo_actor[mask_p1] * 4 + accion_actor[mask_p1]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * 4)
-            self._p1_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, 4).float()
+            idx = tipo_actor[mask_p1] * constants.MAX_POOL_SIZE + accion_actor[mask_p1]
+            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
+            self._p1_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
 
         if mask_p2.any():
-            idx = tipo_actor[mask_p2] * 4 + accion_actor[mask_p2]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * 4)
-            self._p2_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, 4).float()
+            idx = tipo_actor[mask_p2] * constants.MAX_POOL_SIZE + accion_actor[mask_p2]
+            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
+            self._p2_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
 
     def accumulate_warrior_use(self, warrior1: torch.Tensor, warrior2: torch.Tensor) -> None:
         """
@@ -503,7 +503,7 @@ class StatsV:
             warrior = warriors_classes[warrior_id]
             lines.append(f"  Guerrero {warrior_id}:")
             for ability_idx, count in enumerate(counts):
-                ability_name = warrior.abilities[ability_idx].name
+                ability_name = warrior.ability_pool[ability_idx].name
                 pct = count / total * 100 if total > 0 else 0.0
                 lines.append(f"    {ability_name:15s} {int(count):4d} ({pct:6.2f}%)")
         return lines
