@@ -12,7 +12,7 @@ from AI.Agent.choose_state import ChooseStateV
 from AI.Agent.nstep_buffer import NStepBuffer
 from AI.Agent.observationV import ObservationV
 from AI.Agent.eloRating import EloRating
-from AI.Environment.abilitySampling import sample_abilities   # NUEVO
+from AI.Environment.abilitySampling import sample_abilities_batch_all_types
 
 
 class TrainerV:
@@ -44,7 +44,7 @@ class TrainerV:
         self._grouped_opponents: Dict[int, Tuple[Any, torch.Tensor]] = {}
         self._current_catalog_abilities: torch.Tensor = torch.zeros(
             constants.WARRIOR_QUANTITY, constants.ABILITIES_PER_WARRIOR, dtype=torch.long,
-        )  
+        )   
 
     def train(self) -> None:
         self._load_if_exists()
@@ -138,11 +138,9 @@ class TrainerV:
         )
 
     def _run_batch(self, batch_idx: int, learn_p1: bool, learn_p2: bool, p2_training_player) -> None:
-        catalog_list = [
-            sample_abilities(self.environment.warriors_classes[wid])
-            for wid in sorted(self.environment.warriors_classes.keys())
-        ]
-        self._current_catalog_abilities = torch.tensor(catalog_list, dtype=torch.long)  # (WARRIOR_QUANTITY, 4)
+        self._current_catalog_abilities = sample_abilities_batch_all_types(
+            self.environment.warriors_classes, self.N, constants.ABILITIES_PER_WARRIOR
+        )
 
         self.environment.reset()
         self.player1.reset_noise()
@@ -234,8 +232,12 @@ class TrainerV:
 
         health1 = self.environment.max_health_por_tipo[warr1_1]
         health2 = self.environment.max_health_por_tipo[warr2_1]
-        abilities1 = self._current_catalog_abilities[warr1_1 - 1]   
-        abilities2 = self._current_catalog_abilities[warr2_1 - 1]  
+        abilities1 = self._current_catalog_abilities[
+            self.environment.indices, warr1_1 - 1
+        ]
+        abilities2 = self._current_catalog_abilities[
+            self.environment.indices, warr2_1 - 1
+        ]
         self.environment.team_selection(warr1_1, pos1_1, warr2_1, pos2_1, selected=0, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
         cstate1_2 = self._encode_choose_batch(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
@@ -246,8 +248,12 @@ class TrainerV:
 
         health1 = self.environment.max_health_por_tipo[warr1_2]
         health2 = self.environment.max_health_por_tipo[warr2_2]
-        abilities1 = self._current_catalog_abilities[warr1_2 - 1]   
-        abilities2 = self._current_catalog_abilities[warr2_2 - 1]   
+        abilities1 = self._current_catalog_abilities[
+            self.environment.indices, warr1_2 - 1
+        ]
+        abilities2 = self._current_catalog_abilities[
+            self.environment.indices, warr2_2 - 1
+        ]
         self.environment.team_selection(warr1_2, pos1_2, warr2_2, pos2_2, selected=1, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
         cstate1_3 = self._encode_choose_batch(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
@@ -258,8 +264,12 @@ class TrainerV:
 
         health1 = self.environment.max_health_por_tipo[warr1_3]
         health2 = self.environment.max_health_por_tipo[warr2_3]
-        abilities1 = self._current_catalog_abilities[warr1_3 - 1]  
-        abilities2 = self._current_catalog_abilities[warr2_3 - 1]   
+        abilities1 = self._current_catalog_abilities[
+            self.environment.indices, warr1_3 - 1
+        ]
+        abilities2 = self._current_catalog_abilities[
+            self.environment.indices, warr2_3 - 1
+        ]
         self.environment.team_selection(warr1_3, pos1_3, warr2_3, pos2_3, selected=2, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
         selection_states_p1 = (cstate1_1, cstate1_2, cstate1_3)
@@ -271,10 +281,10 @@ class TrainerV:
 
     def _encode_choose_batch(self, disposition, opp_initial_warrior, opp_initial_position):
         catalog_batch = self._catalog_ids.unsqueeze(0).expand(self.N, -1)
-        catalog_abilities_batch = self._current_catalog_abilities.unsqueeze(0).expand(self.N, -1, -1)   # NUEVO (N,WQ,4)
+        catalog_abilities_batch = self._current_catalog_abilities   # CAMBIADO: ya viene (N,WQ,4), no hace falta expand
         return ChooseStateV.encode_choose_state_batch(
             disposition, catalog_batch, opp_initial_warrior, opp_initial_position,
-            catalog_abilities_batch,   # NUEVO
+            catalog_abilities_batch,
         )
 
     def _replay_turn_and_selection(self, player, selection_states, selection_actions, reward_acum, player_name, batch_idx, skip_mask=None) -> None:

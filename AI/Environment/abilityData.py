@@ -15,7 +15,8 @@ class EffectType(IntEnum):
     ATTACK = 0
     SELF_HEAL = 1
     TEAM_HEAL = 2
-    DEFEND = 3
+    DEFEND_FULL = 3 
+    DEFEND_HALF = 4
 
 
 @dataclass(frozen=True)

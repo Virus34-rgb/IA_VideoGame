@@ -12,7 +12,7 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         id=1, name="Knight", max_health=35, speed=10,
         ability_pool=[
             AbilityData("Smite", 0, 10, [0], 1, EffectType.ATTACK),
-            AbilityData("Guard Up", 1, 0, [], 1, EffectType.DEFEND),
+            AbilityData("Guard Up", 1, 0, [], 1, EffectType.DEFEND_FULL),
             AbilityData("Slice", 2, 7, [0, 1, 2], 0, EffectType.ATTACK),
             AbilityData("Throw", 3, 9, [2], 0, EffectType.ATTACK),
             AbilityData("Shield Bash", 4, 8, [0], 1, EffectType.ATTACK),
@@ -36,11 +36,11 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         id=3, name="Rogue", max_health=23, speed=20,
         ability_pool=[
             AbilityData("BackAttack", 0, 13, [2], 1, EffectType.ATTACK),
-            AbilityData("Hide", 1, 0, [], 1, EffectType.DEFEND),
+            AbilityData("Hide", 1, 0, [], 1, EffectType.DEFEND_FULL),
             AbilityData("PoisonGas", 2, 9, [0, 1, 2], 1, EffectType.ATTACK),
             AbilityData("Knife", 3, 8, [0], 0, EffectType.ATTACK),
             AbilityData("Ambush", 4, 16, [0], 2, EffectType.ATTACK),
-            AbilityData("Vanish", 5, 0, [], 2, EffectType.DEFEND),
+            AbilityData("Vanish", 5, 0, [], 2, EffectType.DEFEND_FULL),
         ]
     )
 
@@ -61,7 +61,7 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         ability_pool=[
             AbilityData("Charge", 0, 8, [0, 1], 0, EffectType.ATTACK),
             AbilityData("HealAll", 1, 11, [], 2, EffectType.TEAM_HEAL),
-            AbilityData("Defend", 2, 0, [], 1, EffectType.DEFEND),
+            AbilityData("Defend", 2, 0, [], 1, EffectType.DEFEND_HALF),
             AbilityData("Light", 3, 7, [0, 1, 2], 1, EffectType.ATTACK),
             AbilityData("Holy Nova", 4, 9, [0, 1, 2], 1, EffectType.ATTACK),
             AbilityData("Renew", 5, 7, [], 1, EffectType.SELF_HEAL),
