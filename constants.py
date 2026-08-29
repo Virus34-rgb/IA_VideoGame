@@ -31,7 +31,16 @@ COPY_DQN = 50                     # Frecuencia de copia a target network (en pas
 # ============================================================
 WARRIOR_QUANTITY = 5              # Número de tipos de guerreros
 ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 habilidades, 4=movPos, 5=movNeg)
-MAX_POOL_SIZE = 7
+# ============================================================
+# Pool de habilidades por instancia (NUEVO)
+# ============================================================
+MAX_POOL_SIZE = 6          # Tamaño de la pool de habilidades por tipo de guerrero
+ABILITIES_PER_WARRIOR = 4  # Habilidades equipadas simultáneamente (no cambia)
+NUM_SLOTS = 3              # Nº de slots de combate por equipo (sustituye el uso indebido de MAX_DEATHS_PER_TEAM)
+
+# Dimensiones de estado derivadas (NUEVO) — usarlas como default en las redes
+TURN_STATE_DIM = 58 + 3 * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
+SELECTION_STATE_DIM = 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
 # ============================================================
 # Juego - Recompensas
 # ============================================================
