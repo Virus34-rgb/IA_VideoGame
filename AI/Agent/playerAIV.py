@@ -420,7 +420,7 @@ class PlayerAIV:
         mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
 
         # Cooldowns: desactivar habilidades en enfriamiento
-        mask[:, :, :4] &= ~own_cooldowns
+        mask[:, :, :4] &= (own_cooldowns == 0)
 
         # Objetivos: desactivar habilidades sin enemigo alcanzable
         table = self.environment.target_mask_por_tipo_habilidad
