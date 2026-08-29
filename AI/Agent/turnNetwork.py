@@ -6,7 +6,8 @@ y enmascaramiento de acciones inválidas.
 """
 import torch
 from torch import nn
-from constants import USE_DUELING_DQN
+from AI.Agent.noisy_linear import NoisyLinear
+import constants
 
 
 class TurnNetwork(nn.Module):
@@ -25,6 +26,7 @@ class TurnNetwork(nn.Module):
         output_size: int = 18,
         num_slots: int = 3,
         actions_per_slot: int = 6,
+        sigma_init=0.5,
     ) -> None:
         """
         Args:
@@ -34,14 +36,8 @@ class TurnNetwork(nn.Module):
             actions_per_slot: Acciones disponibles por guerrero.
         """
         super().__init__()
-        assert output_size == num_slots * actions_per_slot, (
-            f"output_size ({output_size}) debe ser num_slots*actions_per_slot "
-            f"({num_slots}*{actions_per_slot})"
-        )
         self.num_slots = num_slots
         self.actions_per_slot = actions_per_slot
-
-        # Tronco compartido
         self.shared = nn.Sequential(
             nn.Linear(input_size, 128),
             nn.ReLU(),
@@ -50,14 +46,11 @@ class TurnNetwork(nn.Module):
             nn.Linear(64, 32),
             nn.ReLU(),
         )
-
-        if USE_DUELING_DQN:
-            # Dueling: valor del estado (por slot) + ventaja (por acción)
-            self.value = nn.Linear(32, num_slots)
-            self.advantage = nn.Linear(32, output_size)
+        if constants.USE_DUELING_DQN:
+            self.value = NoisyLinear(32, self.num_slots, std_init=sigma_init)        # ← Ruido aquí
+            self.advantage = NoisyLinear(32, output_size, std_init=sigma_init)       # ← Y aquí
         else:
-            # Salida directa
-            self.value = nn.Linear(32, output_size)
+            self.value = NoisyLinear(32, output_size, std_init=sigma_init)           # ← O aquí
 
     def forward(self, x: torch.Tensor, action_mask: torch.Tensor | None = None) -> torch.Tensor:
         """
@@ -71,11 +64,9 @@ class TurnNetwork(nn.Module):
             (batch, output_size) logits (Q-values) de cada acción.
         """
         trunk = self.shared(x)
-
-        if USE_DUELING_DQN:
-            # Dueling: Q = V(s) + (A(s,a) - mean(A(s,·)))
-            val = self.value(trunk).view(-1, self.num_slots, 1)          # (B, 3, 1)
-            adv = self.advantage(trunk).view(-1, self.num_slots, self.actions_per_slot)  # (B, 3, 6)
+        if constants.USE_DUELING_DQN:
+            val = self.value(trunk).view(-1, self.num_slots, 1)
+            adv = self.advantage(trunk).view(-1, self.num_slots, self.actions_per_slot)
 
             if action_mask is not None:
                 mask = action_mask.float()  # (B, 3, 6), 1.0 = válida, 0.0 = inválida
@@ -91,3 +82,10 @@ class TurnNetwork(nn.Module):
             logits = self.value(trunk)
 
         return logits
+    
+    def reset_noise(self):
+        if constants.USE_DUELING_DQN:
+            self.value.reset_noise()
+            self.advantage.reset_noise()
+        else:
+            self.value.reset_noise()

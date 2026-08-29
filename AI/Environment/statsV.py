@@ -284,7 +284,14 @@ class StatsV:
     # Generación de informes
     # ------------------------------------------------------------
 
-    def guardar_stats(self, path: str, warriors_classes: Dict[int, Any]) -> None:
+    def guardar_stats(
+        self, 
+        path: str, 
+        warriors_classes: Dict[int, Any],
+        p1_elo: float = 0.0,
+        p2_elo: float = 0.0,
+        pool_elos: Dict[int, float] | None = None,
+        ) -> None:
         """
         Guarda un informe de estadísticas en un archivo de texto.
 
@@ -300,6 +307,7 @@ class StatsV:
 
         sections = [
             self._section_resultados(summary),
+            self._section_elo(p1_elo, p2_elo, pool_elos or {}),
             self._section_recompensa(summary),
             self._section_seleccion(p1_warrior_use, p2_warrior_use),
             self._section_dano(summary),
@@ -450,6 +458,23 @@ class StatsV:
             f"Daño evitado P1:           {s.p1_tot_damage_evaded:.2f} -> {d['p1_damage_evaded_avg']:.2f}/partida",
             f"Daño evitado P2:           {s.p2_tot_damage_evaded:.2f} -> {d['p2_damage_evaded_avg']:.2f}/partida",
         ])
+        
+    def _section_elo(self, p1_elo: float, p2_elo: float, pool_elos: Dict[int, float]) -> str:
+        """Genera la sección de ratings Elo (P1, P2 y snapshots de la pool)."""
+        lines = [
+            f"Elo P1:                    {p1_elo:.1f}",
+            f"Elo P2:                    {p2_elo:.1f}",
+            "",
+        ]
+        if pool_elos:
+            lines.append(f"Snapshots en la pool:      {len(pool_elos)}")
+            lines.append("")
+            # Ordenados de mayor a menor Elo para lectura rápida
+            for cp_id, elo in sorted(pool_elos.items(), key=lambda kv: kv[1], reverse=True):
+                lines.append(f"  Checkpoint {cp_id:>4d}:        {elo:.1f}")
+        else:
+            lines.append("Pool vacía (sin snapshots aún).")
+        return self._section("ELO (MATCHMAKING)", lines)
 
     # ------------------------------------------------------------
     # Utilidades de formateo (estáticas)

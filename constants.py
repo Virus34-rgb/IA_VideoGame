@@ -13,6 +13,7 @@ EPSILON_SEL_MIN = 0.05            # Épsilon mínimo para selección
 EPSILON_TURN_MIN = 0.05           # Épsilon mínimo para turno
 EPSILON_SEL_DECAY = 0.99998       # Decaimiento por lote para selección
 EPSILON_TURN_DECAY = 0.99998      # Decaimiento por lote para turno
+EPSILON_RESIDUAL = 0.01
 
 # ============================================================
 # IA - Parámetros de aprendizaje
@@ -35,16 +36,16 @@ ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 
 # Juego - Recompensas
 # ============================================================
 REWARD_WEIGHTS = {
-    "damage": 1,                  # Daño infligido (diferencia entre P1 y P2)
-    "deaths": 10,                 # Muertes causadas
+    "damage": 0,                  # Daño infligido (diferencia entre P1 y P2)
+    "deaths": 35,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
-    "blocks": 1,                  # Daño bloqueado/evadido
-    "heal": 1,                    # Curación realizada
-    "shaping_weight": 2,          # Peso para la diferencia de vida (shaping)
+    "blocks": 0,                  # Daño bloqueado/evadido
+    "heal": 0,                    # Curación realizada
+    "shaping_weight": 1,          # Peso para la diferencia de vida (shaping)
 }
-TURN_PENALTY = 5                  # Penalización por turno (para fomentar partidas cortas)
-WIN_REWARD = 500                  # Recompensa base por ganar la partida
-MAX_TURNS = 40                    # Límite de turnos por partida
+TURN_PENALTY = 30                # Penalización por turno (para fomentar partidas cortas)
+WIN_REWARD = 1000                  # Recompensa base por ganar la partida
+MAX_TURNS = 30                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
 
 # ============================================================
@@ -71,6 +72,16 @@ PER_EPSILON = 0.1                 # Pequeño épsilon para evitar prioridades ce
 # ============================================================
 # N-step y arquitectura
 # ============================================================
-N_STEP = 1                        # Número de pasos para N-step returns (1 = estándar)
+N_STEP = 3                        # Número de pasos para N-step returns (1 = estándar)
 USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
+NOISY_SIGMA_INIT = 0.2   # Valor inicial de la desviación sigma
+RESET_IN_DECISIONS = True
+
+# ============================================================
+# ELO
+# ============================================================
+ELO_INITIAL = 1000.0
+ESTANDAR_ELO = 400
+K_FACTOR_ELO = 32
+ELO_TEMPERATURE = 150
