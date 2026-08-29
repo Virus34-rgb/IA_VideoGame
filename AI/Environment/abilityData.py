@@ -23,4 +23,14 @@ class AbilityData:
     id: int
     damage: int
     target_positions: List[int]
-    can_repeat: bool
+    turn_cd: float
+    effect_type: EffectType
+    
+    
+from enum import Enum, auto
+
+class EffectType(Enum):
+    ATTACK = auto()
+    SELF_HEAL = auto()
+    TEAM_HEAL = auto()
+    DEFEND = auto()

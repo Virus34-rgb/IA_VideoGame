@@ -7,21 +7,11 @@ Todas las operaciones están vectorizadas para maximizar el rendimiento.
 import torch
 from typing import Tuple, Dict, Any, Optional
 
+from AI.Environment.abilityData import EffectType
 from AI.Environment.gameState import GameState
 from AI.Environment.statsV import StatsV
 from AI.Environment.warriorFactory import get_warriors_classes
-from constants import (
-    DISCOUNT_FACTOR,
-    REWARD_WEIGHTS,
-    TURN_PENALTY_BASE,
-    TURN_PENALTY_RAMP_START,
-    TURN_PENALTY_RAMP_TURNS,
-    TURN_PENALTY_MAX,
-    DRAW_PENALTY,
-    WIN_REWARD,
-    MAX_TURNS,
-    MAX_DEATHS_PER_TEAM,
-)
+import constants
 
 
 class VectorizedEnvironment:
@@ -79,7 +69,9 @@ class VectorizedEnvironment:
         self.ended: torch.Tensor
         self.winner: torch.Tensor
         self.turn_number: torch.Tensor
-
+        self.p1_instance_abilities = torch.Tensor
+        self.p2_instance_abilities = torch.Tensor
+        
         # Estadísticas
         self.stats: StatsV = StatsV()
         
@@ -97,8 +89,8 @@ class VectorizedEnvironment:
         self.p2_disposition = torch.zeros((self.N, 3), dtype=torch.long)
         self.p1_healths = torch.zeros((self.N, 3), dtype=torch.float)
         self.p2_healths = torch.zeros((self.N, 3), dtype=torch.float)
-        self.p1_cooldowns = torch.zeros((self.N, 3, 4), dtype=torch.bool)
-        self.p2_cooldowns = torch.zeros((self.N, 3, 4), dtype=torch.bool)
+        self.p1_cooldowns = torch.zeros((self.N, 3, 4), dtype=torch.long)
+        self.p2_cooldowns = torch.zeros((self.N, 3, 4), dtype=torch.long)
         self.p1_alive = torch.zeros((self.N, 3), dtype=torch.bool)
         self.p2_alive = torch.zeros((self.N, 3), dtype=torch.bool)
         self.p1_initialWarrior = torch.zeros(self.N, dtype=torch.long)
@@ -110,6 +102,9 @@ class VectorizedEnvironment:
         self.ended = torch.zeros(self.N, dtype=torch.bool)
         self.winner = torch.full((self.N,), -1, dtype=torch.long)
         self.turn_number = torch.zeros(self.N, dtype=torch.int)
+        
+        self.p1_instance_abilities = torch.zeros((self.N, 3, 4), dtype=torch.long)
+        self.p2_instance_abilities = torch.zeros((self.N, 3, 4), dtype=torch.long)
 
         self.stats.start_batch(self.N)
         return self.get_state()
@@ -133,6 +128,8 @@ class VectorizedEnvironment:
         selected: int,
         health1: torch.Tensor,
         health2: torch.Tensor,
+        abilities1:torch.Tensor,
+        abilities2:torch.Tensor,
     ) -> GameState:
         """
         Selecciona un guerrero para cada jugador en la fase de draft.
@@ -142,8 +139,9 @@ class VectorizedEnvironment:
             pos1, pos2: (N,) posiciones (0-2) donde se colocan.
             selected: 0, 1 o 2 (paso de selección).
             health1, health2: (N,) vida inicial de los guerreros.
+            abilities1, abilities2 : (N,4) las 4 habilidades del guerrero  
         """
-        self._warrior_selected(warrior_p1, pos1, warrior_p2, pos2, selected, health1, health2)
+        self._warrior_selected(warrior_p1, pos1, warrior_p2, pos2, selected, health1, health2,abilities1,abilities2)
         return self.get_state()
 
     def _warrior_selected(
@@ -155,6 +153,8 @@ class VectorizedEnvironment:
         selected: int,
         health1: torch.Tensor,
         health2: torch.Tensor,
+        abilities1:torch.Tensor,
+        abilities2:torch.Tensor,
     ) -> None:
         """
         Implementación interna de la selección de guerreros.
@@ -173,7 +173,9 @@ class VectorizedEnvironment:
         self.p2_healths[self.indices, pos2] = health2
         self.p1_alive[self.indices, pos1] = True
         self.p2_alive[self.indices, pos2] = True
-
+        self.p1_instance_abilities[self.indices,pos1] = abilities1
+        self.p2_instance_abilities[self.indices,pos2] = abilities2
+        
         # Acumular estadísticas de selección
         self.stats.accumulate_warrior_use(warrior1, warrior2)
 
@@ -197,11 +199,18 @@ class VectorizedEnvironment:
         """
         self.turn_number += 1
 
-        # Reiniciar cooldowns de guerreros vivos (duran 1 turno)
-        # NOTA: esto es correcto porque los cooldowns se activan en _update_own_cooldowns
-        # y se reinician al inicio del siguiente turno.
-        self.p1_cooldowns = self.p1_cooldowns & ~self.p1_alive.unsqueeze(-1)
-        self.p2_cooldowns = self.p2_cooldowns & ~self.p2_alive.unsqueeze(-1)
+        # Decremento de cooldowns al inicio del turno: cada guerrero vivo reduce en 1
+        # (mínimo 0) el cooldown restante de sus 4 habilidades.
+        self.p1_cooldowns = torch.where(
+            self.p1_alive.unsqueeze(-1),
+            (self.p1_cooldowns - 1).clamp(min=0),
+            self.p1_cooldowns,
+        )
+        self.p2_cooldowns = torch.where(
+            self.p2_alive.unsqueeze(-1),
+            (self.p2_cooldowns - 1).clamp(min=0),
+            self.p2_cooldowns,
+        )
 
         ya_terminadas_antes = self.ended.clone()
 
@@ -245,6 +254,7 @@ class VectorizedEnvironment:
             own_alive = torch.where(player_mask, self.p1_alive, self.p2_alive)
             enemy_alive = torch.where(player_mask, self.p2_alive, self.p1_alive)
             own_cooldowns = torch.where(player_mask_3, self.p1_cooldowns, self.p2_cooldowns)
+            own_instance_abilities = torch.where(player_mask_3, self.p1_instance_abilities, self.p2_instance_abilities) 
             actor_type = own_disp.gather(1, pos.unsqueeze(1)).squeeze(1)
 
             # Resolver la acción del actor actual
@@ -261,6 +271,7 @@ class VectorizedEnvironment:
                 new_own_cd,
                 new_own_alive,
                 new_enemy_alive,
+                new_own_instance_abilities,
             ) = self._resolve_action(
                 pos,
                 actor_type,
@@ -273,6 +284,7 @@ class VectorizedEnvironment:
                 enemy_alive,
                 actor_action,
                 enemy_actions,
+                own_instance_abilities,
             )
 
             # Actualizar el estado global del entorno para todos los jugadores
@@ -284,6 +296,8 @@ class VectorizedEnvironment:
             self.p2_alive = torch.where(player_mask, new_enemy_alive, new_own_alive)
             self.p1_cooldowns = torch.where(player_mask_3, new_own_cd, self.p1_cooldowns)
             self.p2_cooldowns = torch.where(~player_mask_3, new_own_cd, self.p2_cooldowns)
+            self.p1_instance_abilities = torch.where(player_mask_3, new_own_instance_abilities, self.p1_instance_abilities)
+            self.p2_instance_abilities = torch.where(~player_mask_3, new_own_instance_abilities, self.p2_instance_abilities)
 
             # Acumular métricas
             damage_p1 += torch.where(es_p1, dmg, torch.zeros_like(dmg))
@@ -355,7 +369,9 @@ class VectorizedEnvironment:
         enemy_alive: torch.Tensor,
         actions_actor: torch.Tensor,
         enemy_actions: torch.Tensor,
+        own_instance_abilities,
     ) -> Tuple[
+        torch.Tensor,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
@@ -388,29 +404,24 @@ class VectorizedEnvironment:
                 - nuevo estado de vida enemigo
         """
         # Máscaras de tipos de acción
-        mask_movPos = (actions_actor == 5) & (pos != 2)
-        mask_movNeg = (actions_actor == 6) & (pos != 0)
-        mask_self_heal = (actors == 2) & (actions_actor == 1)
-        mask_team_heal = (actors == 5) & (actions_actor == 1)
+        mask_movPos = (actions_actor == 5) & (pos != 2) & actor_alive_now
+        mask_movNeg = (actions_actor == 6) & (pos != 0) & actor_alive_now
+        effect = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx]
+        mask_self_heal = (effect == EffectType.SELF_HEAL.value) & actor_alive_now
+        mask_team_heal = (effect == EffectType.TEAM_HEAL.value) & actor_alive_now
+        mask_defend = (effect == EffectType.DEFEND.value) & actor_alive_now
+        mask_ataque = (effect == EffectType.ATTACK.value) & actor_alive_now
         # DESPUÉS
         # El actor puede haber muerto en una acción anterior de este mismo turno
         # (el orden se fija al inicio, pero own_alive se actualiza tras cada acción).
         actor_alive_now = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-
-        mask_defend = (
-            ((actors == 5) & (actions_actor == 2)) | #El índice de la accion no va de 1-4 (como en warriorFactory)
-            ((actors == 3) & (actions_actor == 1)) | #Sino de 0-3
-            ((actors == 1) & (actions_actor == 1))
-        ) & actor_alive_now
-        mask_movPos = mask_movPos & actor_alive_now
-        mask_movNeg = mask_movNeg & actor_alive_now
-        mask_self_heal = mask_self_heal & actor_alive_now
-        mask_team_heal = mask_team_heal & actor_alive_now
-        mask_ataque = ~(mask_movPos | mask_movNeg | mask_self_heal | mask_team_heal | mask_defend) & actor_alive_now
+        
+        own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1,1,1).expand(-1,1,4)).squeeze(1)  # (N,4)
+        ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0,3).unsqueeze(1)).squeeze(1)
         
         # Resolver movimiento (si procede)
         moved, new_disp_mov, new_health_mov, new_cd_mov = self._resolve_action_movement(
-            actors, own_disposition, own_health, own_cooldowns, actions_actor, pos
+            actors, own_disposition, own_health, own_cooldowns, ability_pool_idx, pos
         )
 
         # Aplicar movimiento
@@ -422,7 +433,7 @@ class VectorizedEnvironment:
         damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack = (
             self._resolve_action_attack(
                 actors,
-                actions_actor,
+                ability_pool_idx,
                 enemy_disposition,
                 enemy_health,
                 enemy_alive,
@@ -433,8 +444,8 @@ class VectorizedEnvironment:
         blocked = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
 
         # Resolver curación (self o team)
-        healed_self, own_health_self = self._resolve_action_self_heal(actors, actions_actor, pos, own_health)
-        healed_team, own_health_team = self._resolve_action_team_heal(actors, actions_actor, own_disposition, own_health, own_alive)
+        healed_self, own_health_self = self._resolve_action_self_heal(actors, ability_pool_idx, pos, own_health)
+        healed_team, own_health_team = self._resolve_action_team_heal(actors, ability_pool_idx, own_disposition, own_health, own_alive)
 
         # Aplicar curas y movimiento a la salud
         own_new_health = own_health.clone()
@@ -446,7 +457,7 @@ class VectorizedEnvironment:
 
         # Resolver cooldowns
         mask_usa_habilidad = (mask_ataque | mask_self_heal | mask_team_heal | mask_defend)
-        own_cd_new = self._update_own_cooldowns(actors, actions_actor, pos, own_cooldowns, mask_usa_habilidad)
+        own_cd_new = self._update_own_cooldowns(actors, ability_pool_idx, pos, own_cooldowns, mask_usa_habilidad)
 
         # Aplicar cooldowns del movimiento
         mask_movPos_4 = mask_movPos.view(-1, 1, 1)
@@ -677,20 +688,20 @@ class VectorizedEnvironment:
         mask_usa_habilidad: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Actualiza los cooldowns después de usar una habilidad.
-
-        Las habilidades no repetibles se marcan como en enfriamiento.
+        Fija el cooldown de la habilidad usada a su valor turn_cd.
+        El decremento por turno ya se aplicó de forma centralizada en turn(),
+        antes de resolver acciones; esta función solo escribe el cooldown pleno
+        en la posición de la habilidad concreta que se acaba de usar.
         """
         ability_idx = accion_actor.clamp(0, 3)
-        can_repeat = self.can_repeat_por_tipo_habilidad[actors, ability_idx]
+        turns_cd = self.turn_cd_por_tipo_habilidad[actors, ability_idx]
 
         slot_expand = pos.view(-1, 1, 1).expand(-1, 1, 4)
         actor_cd = own_cooldowns.gather(1, slot_expand).squeeze(1)
-        reset_cd = torch.zeros_like(actor_cd)
         ability_onehot = torch.nn.functional.one_hot(ability_idx, num_classes=4).bool()
 
-        # Si la habilidad no se puede repetir, activar su cooldown
-        marked = torch.where((~can_repeat).unsqueeze(1), reset_cd | ability_onehot, reset_cd)
+        turns_cd_expand = turns_cd.unsqueeze(1).expand(-1, 4)
+        marked = torch.where(ability_onehot, turns_cd_expand, actor_cd)
         new_actor_cd = torch.where(mask_usa_habilidad.unsqueeze(1), marked, actor_cd)
 
         return own_cooldowns.scatter(1, slot_expand, new_actor_cd.unsqueeze(1))
@@ -715,11 +726,12 @@ class VectorizedEnvironment:
         Verifica si las partidas han terminado y actualiza winner/ended.
         """
         ya_terminadas = self.ended.clone()
-
-        ambos_muertos = (self.p1_deaths >= MAX_DEATHS_PER_TEAM) & (self.p2_deaths >= MAX_DEATHS_PER_TEAM)
-        solo_p1_muerto = (self.p1_deaths >= MAX_DEATHS_PER_TEAM) & ~ambos_muertos
-        solo_p2_muerto = (self.p2_deaths >= MAX_DEATHS_PER_TEAM) & ~ambos_muertos & ~solo_p1_muerto
-        por_turnos = (self.turn_number > MAX_TURNS) & ~(ambos_muertos | solo_p1_muerto | solo_p2_muerto)
+        max_deaths = constants.MAX_DEATHS_PER_TEAM
+        
+        ambos_muertos = (self.p1_deaths >= max_deaths) & (self.p2_deaths >= max_deaths)
+        solo_p1_muerto = (self.p1_deaths >= max_deaths) & ~ambos_muertos
+        solo_p2_muerto = (self.p2_deaths >= max_deaths) & ~ambos_muertos & ~solo_p1_muerto
+        por_turnos = (self.turn_number > max_deaths) & ~(ambos_muertos | solo_p1_muerto | solo_p2_muerto)
         # Desempate por límite de turnos: gana quien tenga menos bajas; si empatan,
         # quien tenga más vida normalizada de equipo; empate real solo si ambos empatan.
         p1_health_norm = self._normalized_team_health(self.p1_healths, self.p1_disposition)
@@ -773,15 +785,15 @@ class VectorizedEnvironment:
         hasta un techo TURN_PENALTY_MAX, para presionar a resolver la partida antes.
         """
         turn = self.turn_number.float()
-        exceso = (turn - TURN_PENALTY_RAMP_START).clamp(min=0.0)
-        progresion = (exceso / TURN_PENALTY_RAMP_TURNS).clamp(max=1.0)
-        return TURN_PENALTY_BASE + progresion * (TURN_PENALTY_MAX - TURN_PENALTY_BASE)
+        exceso = (turn - constants.TURN_PENALTY_RAMP_START).clamp(min=0.0)
+        progresion = (exceso / constants.TURN_PENALTY_RAMP_TURNS).clamp(max=1.0)
+        return constants.TURN_PENALTY_BASE + progresion * (constants.TURN_PENALTY_MAX - constants.TURN_PENALTY_BASE)
 
     def _reward(self, **components: torch.Tensor) -> torch.Tensor:
         
         """Calcula la recompensa total como combinación lineal de componentes."""
         
-        weighted = sum(REWARD_WEIGHTS[name] * value for name, value in components.items())
+        weighted = sum(constants.REWARD_WEIGHTS[name] * value for name, value in components.items())
         return weighted - self._turn_penalty()
 
     def _calculate_rewards(
@@ -811,33 +823,33 @@ class VectorizedEnvironment:
         empate = self.winner == 2
         win_p1 = torch.where(
             gano_p1,
-            torch.full_like(damage_p1, WIN_REWARD),
+            torch.full_like(damage_p1, constants.WIN_REWARD),
             torch.where(
                 gano_p2,
-                torch.full_like(damage_p1, -WIN_REWARD),
+                torch.full_like(damage_p1, - constants.WIN_REWARD),
                 torch.where(
                     empate,
-                    torch.full_like(damage_p1, -DRAW_PENALTY),
+                    torch.full_like(damage_p1, - constants.DRAW_PENALTY),
                     torch.zeros_like(damage_p1),
                 ),
             ),
         )
         win_p2 = torch.where(
             gano_p2,
-            torch.full_like(damage_p1, WIN_REWARD),
+            torch.full_like(damage_p1, constants.WIN_REWARD),
             torch.where(
                 gano_p1,
-                torch.full_like(damage_p1, -WIN_REWARD),
+                torch.full_like(damage_p1, - constants.WIN_REWARD),
                 torch.where(
                     empate,
-                    torch.full_like(damage_p1, -DRAW_PENALTY),
+                    torch.full_like(damage_p1, - constants.DRAW_PENALTY),
                     torch.zeros_like(damage_p1),
                 ),
             ),
         )
 
         # Shaping (diferencia de salud descontada)
-        shaping_term_p1 = DISCOUNT_FACTOR * health_diff_after - health_diff_before
+        shaping_term_p1 = constants.DISCOUNT_FACTOR * health_diff_after - health_diff_before
         shaping_term_p2 = -shaping_term_p1
 
         # Recompensa para P1
@@ -872,26 +884,26 @@ class VectorizedEnvironment:
         - target_mask_por_tipo_habilidad
         """
         num_types = max(self.warriors_classes.keys()) + 1
-        num_abilities = 4
-        num_slots = 3
+        num_abilities = constants.MAX_POOL_SIZE
+        num_slots = constants.MAX_DEATHS_PER_TEAM
 
         max_health_por_tipo = torch.zeros(num_types, dtype=torch.float)
         speed_por_tipo = torch.zeros(num_types, dtype=torch.float)
         damage_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.float)
-        can_repeat_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.bool)
+        turn_cd_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)
         target_mask_por_tipo_habilidad = torch.zeros(num_types, num_abilities, num_slots, dtype=torch.bool)
 
         for warrior_id, warrior_data in self.warriors_classes.items():
             max_health_por_tipo[warrior_id] = warrior_data.max_health
             speed_por_tipo[warrior_id] = warrior_data.speed
-            for ability_idx, ability in enumerate(warrior_data.abilities):
+            for ability_idx, ability in enumerate(warrior_data.ability_pool):
                 damage_por_tipo_habilidad[warrior_id, ability_idx] = ability.damage
-                can_repeat_por_tipo_habilidad[warrior_id, ability_idx] = ability.can_repeat
+                turn_cd_por_tipo_habilidad[warrior_id, ability_idx] = ability.turn_cd
                 for target_pos in ability.target_positions:
                     target_mask_por_tipo_habilidad[warrior_id, ability_idx, target_pos] = True
 
         self.max_health_por_tipo = max_health_por_tipo
         self.speed_por_tipo = speed_por_tipo
         self.damage_por_tipo_habilidad = damage_por_tipo_habilidad
-        self.can_repeat_por_tipo_habilidad = can_repeat_por_tipo_habilidad
+        self.turn_cd_por_tipo_habilidad = turn_cd_por_tipo_habilidad
         self.target_mask_por_tipo_habilidad = target_mask_por_tipo_habilidad

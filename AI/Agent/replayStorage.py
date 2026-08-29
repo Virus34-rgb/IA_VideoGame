@@ -37,11 +37,11 @@ class ReplayStorage:
         if is_turn_storage:
             self.alive = torch.zeros(capacity, 3, dtype=torch.bool)
             self.types = torch.zeros(capacity, 3, dtype=torch.long)
-            self.cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)
+            self.cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.long)
             self.opp_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.next_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.next_alive = torch.zeros(capacity, 3, dtype=torch.bool)
-            self.next_cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)
+            self.next_cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.long)
             self.next_opp_types = torch.zeros(capacity, 3, dtype=torch.long)
         else:
             self.alive = None

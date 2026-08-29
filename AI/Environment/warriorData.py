@@ -25,9 +25,9 @@ class WarriorData:
     name: str
     max_health: int
     speed: int
-    abilities: List[AbilityData] = field(default_factory=list)
+    ability_pool: List[AbilityData] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Validación básica: asegura que el guerrero tenga exactamente 4 habilidades."""
-        if len(self.abilities) != 4:
+        if len(self.ability_pool) <= 4:
             raise ValueError(f"Warrior {self.name} debe tener 4 habilidades, tiene {len(self.abilities)}")

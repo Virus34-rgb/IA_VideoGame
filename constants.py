@@ -31,7 +31,7 @@ COPY_DQN = 50                     # Frecuencia de copia a target network (en pas
 # ============================================================
 WARRIOR_QUANTITY = 5              # Número de tipos de guerreros
 ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 habilidades, 4=movPos, 5=movNeg)
-
+MAX_POOL_SIZE = 7
 # ============================================================
 # Juego - Recompensas
 # ============================================================

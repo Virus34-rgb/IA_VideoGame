@@ -69,7 +69,7 @@ class ObservationV:
         health = torch.where(pl_alive, pl_health_norm, torch.zeros_like(pl_health_norm)).unsqueeze(-1)
 
         # Cooldowns: 1 = usable, 0 = en cooldown (o muerto)
-        cd_usable = (~pl_cooldowns).float()
+        cd_usable = (pl_cooldowns == 0).float()
         cd_usable = torch.where(pl_alive.unsqueeze(-1), cd_usable, torch.zeros_like(cd_usable))
         extra_zeros = torch.zeros(N, 3, 2)  # para movimientos (se codifican siempre 0)
 
