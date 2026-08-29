@@ -13,7 +13,11 @@ from AI.Environment.warriorFactory import get_warriors_classes
 from constants import (
     DISCOUNT_FACTOR,
     REWARD_WEIGHTS,
-    TURN_PENALTY,
+    TURN_PENALTY_BASE,
+    TURN_PENALTY_RAMP_START,
+    TURN_PENALTY_RAMP_TURNS,
+    TURN_PENALTY_MAX,
+    DRAW_PENALTY,
     WIN_REWARD,
     MAX_TURNS,
     MAX_DEATHS_PER_TEAM,
@@ -388,13 +392,22 @@ class VectorizedEnvironment:
         mask_movNeg = (actions_actor == 6) & (pos != 0)
         mask_self_heal = (actors == 2) & (actions_actor == 1)
         mask_team_heal = (actors == 5) & (actions_actor == 1)
-        mask_defend = (
-            ((actors == 5) & (actions_actor == 3)) |
-            ((actors == 3) & (actions_actor == 2)) |
-            ((actors == 1) & (actions_actor == 2))
-        )
-        mask_ataque = ~(mask_movPos | mask_movNeg | mask_self_heal | mask_team_heal | mask_defend)
+        # DESPUÉS
+        # El actor puede haber muerto en una acción anterior de este mismo turno
+        # (el orden se fija al inicio, pero own_alive se actualiza tras cada acción).
+        actor_alive_now = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
 
+        mask_defend = (
+            ((actors == 5) & (actions_actor == 2)) | #El índice de la accion no va de 1-4 (como en warriorFactory)
+            ((actors == 3) & (actions_actor == 1)) | #Sino de 0-3
+            ((actors == 1) & (actions_actor == 1))
+        ) & actor_alive_now
+        mask_movPos = mask_movPos & actor_alive_now
+        mask_movNeg = mask_movNeg & actor_alive_now
+        mask_self_heal = mask_self_heal & actor_alive_now
+        mask_team_heal = mask_team_heal & actor_alive_now
+        mask_ataque = ~(mask_movPos | mask_movNeg | mask_self_heal | mask_team_heal | mask_defend) & actor_alive_now
+        
         # Resolver movimiento (si procede)
         moved, new_disp_mov, new_health_mov, new_cd_mov = self._resolve_action_movement(
             actors, own_disposition, own_health, own_cooldowns, actions_actor, pos
@@ -571,10 +584,10 @@ class VectorizedEnvironment:
             enemy_id_slot = enemy_disposition[:, slot]
             enemy_action_slot = enemy_actions[:, slot]
 
-            # Bloqueo completo (Knight o Rogue con Guard/Hide)
-            full_block = ((enemy_id_slot == 1) | (enemy_id_slot == 3)) & (enemy_action_slot == 2)
-            # Bloqueo medio (Cleric con Defend)
-            half_block = (enemy_id_slot == 5) & (enemy_action_slot == 3)
+            # Bloqueo completo (Knight con Guard Up [idx1] o Rogue con Hide [idx1])
+            full_block = ((enemy_id_slot == 1) | (enemy_id_slot == 3)) & (enemy_action_slot == 1)
+            # Bloqueo medio (Cleric con Defend [idx2])
+            half_block = (enemy_id_slot == 5) & (enemy_action_slot == 2)
 
             hit_damage = torch.where(
                 full_block,
@@ -707,12 +720,30 @@ class VectorizedEnvironment:
         solo_p1_muerto = (self.p1_deaths >= MAX_DEATHS_PER_TEAM) & ~ambos_muertos
         solo_p2_muerto = (self.p2_deaths >= MAX_DEATHS_PER_TEAM) & ~ambos_muertos & ~solo_p1_muerto
         por_turnos = (self.turn_number > MAX_TURNS) & ~(ambos_muertos | solo_p1_muerto | solo_p2_muerto)
+        # Desempate por límite de turnos: gana quien tenga menos bajas; si empatan,
+        # quien tenga más vida normalizada de equipo; empate real solo si ambos empatan.
+        p1_health_norm = self._normalized_team_health(self.p1_healths, self.p1_disposition)
+        p2_health_norm = self._normalized_team_health(self.p2_healths, self.p2_disposition)
+
+        p1_menos_bajas = self.p1_deaths < self.p2_deaths
+        p2_menos_bajas = self.p2_deaths < self.p1_deaths
+        bajas_iguales = ~p1_menos_bajas & ~p2_menos_bajas
+
+        HEALTH_EPS = 1e-4
+        p1_mas_vida = bajas_iguales & (p1_health_norm > p2_health_norm + HEALTH_EPS)
+        p2_mas_vida = bajas_iguales & (p2_health_norm > p1_health_norm + HEALTH_EPS)
+
+        por_turnos_gana_p1 = por_turnos & (p1_menos_bajas | p1_mas_vida)
+        por_turnos_gana_p2 = por_turnos & (p2_menos_bajas | p2_mas_vida)
+        por_turnos_empate = por_turnos & ~(por_turnos_gana_p1 | por_turnos_gana_p2)
 
         new_winner = self.winner.clone()
         new_winner = torch.where(ambos_muertos, torch.full_like(new_winner, 2), new_winner)
         new_winner = torch.where(solo_p1_muerto, torch.full_like(new_winner, 1), new_winner)
         new_winner = torch.where(solo_p2_muerto, torch.full_like(new_winner, 0), new_winner)
-        new_winner = torch.where(por_turnos, torch.full_like(new_winner, 2), new_winner)
+        new_winner = torch.where(por_turnos_gana_p1, torch.full_like(new_winner, 0), new_winner)
+        new_winner = torch.where(por_turnos_gana_p2, torch.full_like(new_winner, 1), new_winner)
+        new_winner = torch.where(por_turnos_empate, torch.full_like(new_winner, 2), new_winner)
 
         termina_ahora = (ambos_muertos | solo_p1_muerto | solo_p2_muerto | por_turnos) & ~ya_terminadas
 
@@ -734,12 +765,24 @@ class VectorizedEnvironment:
         """ Calcula la salud total normalizada de un equipo."""
         return (healths / self.max_health_por_tipo[disposition]).sum(dim=1)
 
+# DESPUÉS
+    def _turn_penalty(self) -> torch.Tensor:
+        """
+        Penalización de turno progresiva: baja en los primeros turnos (no penaliza
+        el posicionamiento inicial) y creciente a partir de TURN_PENALTY_RAMP_START,
+        hasta un techo TURN_PENALTY_MAX, para presionar a resolver la partida antes.
+        """
+        turn = self.turn_number.float()
+        exceso = (turn - TURN_PENALTY_RAMP_START).clamp(min=0.0)
+        progresion = (exceso / TURN_PENALTY_RAMP_TURNS).clamp(max=1.0)
+        return TURN_PENALTY_BASE + progresion * (TURN_PENALTY_MAX - TURN_PENALTY_BASE)
+
     def _reward(self, **components: torch.Tensor) -> torch.Tensor:
         
         """Calcula la recompensa total como combinación lineal de componentes."""
         
         weighted = sum(REWARD_WEIGHTS[name] * value for name, value in components.items())
-        return weighted - TURN_PENALTY
+        return weighted - self._turn_penalty()
 
     def _calculate_rewards(
         self,
@@ -762,17 +805,36 @@ class VectorizedEnvironment:
         self.p2_deaths += newDeaths_p2
         self._check_end_conditions()
 
-        # Recompensa por victoria/derrota
+        # Recompensa por victoria/derrota/empate
+        gano_p1 = self.winner == 0
+        gano_p2 = self.winner == 1
+        empate = self.winner == 2
         win_p1 = torch.where(
-            self.winner == 0,
+            gano_p1,
             torch.full_like(damage_p1, WIN_REWARD),
             torch.where(
-                self.winner == 1,
+                gano_p2,
                 torch.full_like(damage_p1, -WIN_REWARD),
-                torch.zeros_like(damage_p1)
-            )
+                torch.where(
+                    empate,
+                    torch.full_like(damage_p1, -DRAW_PENALTY),
+                    torch.zeros_like(damage_p1),
+                ),
+            ),
         )
-        win_p2 = -win_p1
+        win_p2 = torch.where(
+            gano_p2,
+            torch.full_like(damage_p1, WIN_REWARD),
+            torch.where(
+                gano_p1,
+                torch.full_like(damage_p1, -WIN_REWARD),
+                torch.where(
+                    empate,
+                    torch.full_like(damage_p1, -DRAW_PENALTY),
+                    torch.zeros_like(damage_p1),
+                ),
+            ),
+        )
 
         # Shaping (diferencia de salud descontada)
         shaping_term_p1 = DISCOUNT_FACTOR * health_diff_after - health_diff_before

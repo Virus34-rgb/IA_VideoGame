@@ -36,16 +36,22 @@ ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 
 # Juego - Recompensas
 # ============================================================
 REWARD_WEIGHTS = {
-    "damage": 1,                  # Daño infligido (diferencia entre P1 y P2)
+    "damage": 1.3,                  # Daño infligido (diferencia entre P1 y P2)
     "deaths": 50,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
-    "blocks": 0,                  # Daño bloqueado/evadido
-    "heal": 0,                    # Curación realizada
+    "blocks": 0.6,                  # Daño bloqueado/evadido
+    "heal": 0.6,                    # Curación realizada
     "shaping_weight": 2,          # Peso para la diferencia de vida (shaping)
 }
-TURN_PENALTY = 15                # Penalización por turno (para fomentar partidas cortas)
+# DESPUÉS
+TURN_PENALTY_BASE = 8             # Penalización de turno en fase inicial (turnos <= RAMP_START)
+TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización empieza a crecer
+TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
+TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
 WIN_REWARD = 1500                  # Recompensa base por ganar la partida
-MAX_TURNS = 30                    # Límite de turnos por partida
+# AÑADIR, junto a WIN_REWARD
+DRAW_PENALTY = 300                # Penalización por resultado en empate (20% de WIN_REWARD)
+MAX_TURNS = 20                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
 
 # ============================================================
@@ -61,7 +67,11 @@ POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de
 # ============================================================
 SELECTION_REPLAYS_PER_BATCH = 600  # Número de replays de selección por lote
 TURN_REPLAYS_PER_BATCH = 1200       # Número de replays de turno por lote
-
+"""
+TURN_REPLAYS_PER_BATCH_nuevo ≈ TURN_REPLAYS_PER_BATCH_actual × (avg_turns_nuevo / avg_turns_actual)
+R_turn = (TURN_REPLAYS_PER_BATCH × BATCH_SIZE) / (N_BATCH × avg_turns)
+R_sel  = (SELECTION_REPLAYS_PER_BATCH × BATCH_SIZE) / (N_BATCH × 3)
+"""
 # PER (Prioritized Experience Replay)
 ALPHA = 0.8                       # Factor de priorización (0=uniforme, 1=máxima prioridad)
 BETA_START = 0.4                  # Factor de importancia inicial (para IS weights)
@@ -72,7 +82,7 @@ PER_EPSILON = 0.1                 # Pequeño épsilon para evitar prioridades ce
 # ============================================================
 # N-step y arquitectura
 # ============================================================
-N_STEP = 3                        # Número de pasos para N-step returns (1 = estándar)
+N_STEP = 3                       # Número de pasos para N-step returns (1 = estándar) (N-STEP 5 victorias desequilibradas)
 USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
 NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma

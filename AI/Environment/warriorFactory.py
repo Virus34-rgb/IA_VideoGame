@@ -23,13 +23,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     knight = WarriorData(
         id=1,
         name="Knight",
-        max_health=27,
+        max_health=32,
         speed=10,
         abilities=[
-            AbilityData("Smite", 1, 15, [0], False),      # Golpe fuerte al frente
+            AbilityData("Smite", 1, 10, [0], False),      # Golpe fuerte al frente
             AbilityData("Guard Up", 2, 0, [], False),    # Bloquea todo daño este turno
-            AbilityData("Slice", 3, 5, [0, 1, 2], True), # Ataque en área (repetible)
-            AbilityData("Throw", 4, 12, [2], True),       # Ataque a distancia (repetible)
+            AbilityData("Slice", 3, 6, [0, 1, 2], True), # Ataque en área (repetible)
+            AbilityData("Throw", 4, 8, [2], True),       # Ataque a distancia (repetible)
         ]
     )
 
@@ -39,13 +39,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     archer = WarriorData(
         id=2,
         name="Archer",
-        max_health=19,
+        max_health=25,
         speed=18,
         abilities=[
-            AbilityData("Arrow", 1, 11, [1], True),       # Ataque al centro
+            AbilityData("Arrow", 1, 8, [1], True),       # Ataque al centro
             AbilityData("Heal", 2, 8, [], False),        # Curación personal (6 de vida)
             AbilityData("Arrow2", 3, 9, [2], True),      # Ataque a la retaguardia
-            AbilityData("Rain", 4, 14, [0, 1, 2], False), # Lluvia de flechas (todas las posiciones)
+            AbilityData("Rain", 4, 7, [0, 1, 2], False), # Lluvia de flechas (todas las posiciones)
         ]
     )
 
@@ -55,13 +55,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     rogue = WarriorData(
         id=3,
         name="Rogue",
-        max_health=15,
+        max_health=20,
         speed=20,
         abilities=[
-            AbilityData("BackAttack", 1, 18, [2], False), # Ataque crítico a la retaguardia
+            AbilityData("BackAttack", 1, 11, [2], False), # Ataque crítico a la retaguardia
             AbilityData("Hide", 2, 0, [], False),        # Se oculta (bloquea daño)
-            AbilityData("PoisonGas", 3, 13, [0, 1, 2], False), # Veneno en área
-            AbilityData("Knife", 4, 10, [0], True),       # Ataque repetible al frente
+            AbilityData("PoisonGas", 3, 6, [0, 1, 2], False), # Veneno en área
+            AbilityData("Knife", 4, 7, [0], True),       # Ataque repetible al frente
         ]
     )
 
@@ -71,12 +71,12 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     wizard = WarriorData(
         id=4,
         name="Wizard",
-        max_health=17,
+        max_health=22,
         speed=12,
         abilities=[
-            AbilityData("Magic Missile", 1, 7, [0, 1, 2], True), # Daño bajo pero seguro
-            AbilityData("Zap", 2, 14, [1, 2], False),       # Rayo a centro/retaguardia
-            AbilityData("FireBall", 3, 11, [0, 1, 2], False), # Bola de fuego en área
+            AbilityData("Magic Missile", 1, 6, [0, 1, 2], True), # Daño bajo pero seguro
+            AbilityData("Zap", 2, 10, [1, 2], False),       # Rayo a centro/retaguardia
+            AbilityData("FireBall", 3, 8, [0, 1, 2], False), # Bola de fuego en área
             AbilityData("StaffAttack", 4, 8, [0], True),   # Ataque físico repetible
         ]
     )
@@ -87,13 +87,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     cleric = WarriorData(
         id=5,
         name="Cleric",
-        max_health=21,
+        max_health=27,
         speed=14,
         abilities=[
-            AbilityData("Charge", 1, 10, [0, 1], True),    # Ataque modesto al frente/centro
+            AbilityData("Charge", 1, 7, [0, 1], True),    # Ataque modesto al frente/centro
             AbilityData("HealAll", 2, 9, [], False),     # Cura a todos los aliados
             AbilityData("Defend", 3, 0, [], False),      # Reduce daño recibido 50% este turno
-            AbilityData("Light", 4, 9, [0, 1, 2], False), # Ataque de luz en área
+            AbilityData("Light", 4, 6, [0, 1, 2], False), # Ataque de luz en área
         ]
     )
 
