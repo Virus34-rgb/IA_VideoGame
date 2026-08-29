@@ -235,7 +235,9 @@ class VectorizedEnvironment:
         mask_movNeg = (actions_actor == 6) & (pos != 0) & actor_alive_now
         mask_self_heal = es_habilidad & (effect_type == EffectType.SELF_HEAL) & actor_alive_now
         mask_team_heal = es_habilidad & (effect_type == EffectType.TEAM_HEAL) & actor_alive_now
-        mask_defend = es_habilidad & (effect_type == EffectType.DEFEND) & actor_alive_now
+        mask_defend = es_habilidad & (
+            (effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)
+        ) & actor_alive_now
         mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
 
         moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov = self._resolve_action_movement(
@@ -355,17 +357,17 @@ class VectorizedEnvironment:
         return moved, own_new_disp_final, own_new_health_final, own_new_cd_final, own_new_abilities_final
 
     def _resolve_action_attack(
-        self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
-        enemy_instance_abilities,
+    self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
+    enemy_instance_abilities,
     ):
         would_be_damage = self.damage_por_tipo_habilidad[actors, ability_pool_idx]
         target_mask = self.target_mask_por_tipo_habilidad[actors, ability_pool_idx]
 
         enemy_ability_pool_idx = enemy_instance_abilities.gather(
             2, enemy_actions.clamp(0, 3).unsqueeze(-1)
-        ).squeeze(-1)  # (N,3)
-        enemy_effect_type = self.effect_type_por_tipo_habilidad[enemy_disposition, enemy_ability_pool_idx]  # (N,3)
-        enemy_es_habilidad = (enemy_actions >= 0) & (enemy_actions <= 3)  # (N,3)
+        ).squeeze(-1)
+        enemy_effect_type = self.effect_type_por_tipo_habilidad[enemy_disposition, enemy_ability_pool_idx]
+        enemy_es_habilidad = (enemy_actions >= 0) & (enemy_actions <= 3)
 
         enemy_new_health = enemy_health.clone()
         damage_total = torch.zeros_like(would_be_damage)
@@ -374,11 +376,9 @@ class VectorizedEnvironment:
 
         for slot in range(3):
             es_target = target_mask[:, slot] & enemy_alive[:, slot]
-            enemy_id_slot = enemy_disposition[:, slot]
-            enemy_defending = (enemy_effect_type[:, slot] == EffectType.DEFEND) & enemy_es_habilidad[:, slot]  # NUEVO
 
-            full_block = ((enemy_id_slot == 1) | (enemy_id_slot == 3)) & enemy_defending
-            half_block = (enemy_id_slot == 5) & enemy_defending
+            full_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_FULL) & enemy_es_habilidad[:, slot]
+            half_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_HALF) & enemy_es_habilidad[:, slot]
 
             hit_damage = torch.where(
                 full_block, torch.zeros_like(would_be_damage),

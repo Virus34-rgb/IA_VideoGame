@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Any
 
 from constants import MAX_POOL_SIZE, WARRIOR_QUANTITY
+import constants
 
 
 @dataclass
