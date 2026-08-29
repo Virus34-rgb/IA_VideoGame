@@ -28,7 +28,7 @@ class PlayerAIV:
         - Exploración ε-greedy (a futuro reemplazado por Noisy Networks)
     """
 
-    def __init__(self, N: int, environment: Any) -> None:
+    def __init__(self, N: int, environment: Any,use_replay : bool = True) -> None:
         """
         Args:
             N: Número de partidas paralelas.
@@ -41,36 +41,43 @@ class PlayerAIV:
         # Parámetros de exploración
         self.epsilon_sel: float = constants.EPSILON_SELECTION
         self.epsilon_turn: float = constants.EPSILON_TURN
+        self.epsilon_residual : float = constants.EPSILON_RESIDUAL
 
         # Red de selección
-        self.selection_network: SelectionNetwork = SelectionNetwork()
-        self.target_selection_network: SelectionNetwork = SelectionNetwork()
+        self.selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
+        self.target_selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
         self.target_selection_network.load_state_dict(self.selection_network.state_dict())
         self.optimizer_sel = torch.optim.Adam(
             self.selection_network.parameters(),
             lr=constants.SELECTION_LEARNING_RATE,
         )
-        self.replay_memory_sel = ReplayMemoryPM(
-            constants.SELECTION_REPLAY_DATA,
-            state_dim=46,  # Dimensión del estado de selección
-        )
 
         # Red de turno
-        self.turn_network: TurnNetwork = TurnNetwork()
-        self.target_turn_network: TurnNetwork = TurnNetwork()
+        self.turn_network: TurnNetwork = TurnNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
+        self.target_turn_network: TurnNetwork = TurnNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
         self.target_turn_network.load_state_dict(self.turn_network.state_dict())
         self.optimizer_turn = torch.optim.Adam(
             self.turn_network.parameters(),
             lr=constants.TURN_LEARNING_RATE,
         )
-        self.replay_memory_turn = ReplayMemoryAN(
-            constants.TURN_REPLAY_DATA,
-            state_dim=58,  # Dimensión de la observación del turno
-        )
+        if use_replay:
+            self.replay_memory_sel = ReplayMemoryPM(
+                constants.SELECTION_REPLAY_DATA,
+                state_dim=46,  # Dimensión del estado de selección
+            )
+            self.replay_memory_turn = ReplayMemoryAN(
+                constants.TURN_REPLAY_DATA,
+                state_dim=58,  # Dimensión de la observación del turno
+            )
+        else:
+            self.replay_memory_sel = None
+            self.replay_memory_turn = None
 
         # Contadores de replays (para sincronización y beta)
         self.replayed_selection: int = 0
         self.replayed_turn: int = 0
+        
+        self.elo = constants.ELO_INITIAL
 
     def remember_selection_batch(
         self,
@@ -123,6 +130,9 @@ class PlayerAIV:
         Returns:
             Pérdida del paso, o None si no hay suficientes experiencias.
         """
+        self.selection_network.reset_noise()
+        self.target_selection_network.reset_noise()
+        
         if len(self.replay_memory_sel) < constants.BATCH_SIZE:
             return None
 
@@ -174,6 +184,9 @@ class PlayerAIV:
         Returns:
             Pérdida del paso, o None si no hay suficientes experiencias.
         """
+        self.turn_network.reset_noise()
+        self.target_turn_network.reset_noise()
+        
         if len(self.replay_memory_turn) < constants.BATCH_SIZE:
             return None
 
@@ -262,6 +275,9 @@ class PlayerAIV:
                 - position: (N,) posición donde colocarlo (0-2)
                 - action_index: (N,) índice de acción usado (para guardar en replay)
         """
+        if(constants.RESET_IN_DECISIONS):
+            self.selection_network.reset_noise()
+
         states = batch_encoded_states.float()
         logits = self.selection_network(states)
         masked_logits = self._mask_selection(logits, disposition)
@@ -273,7 +289,8 @@ class PlayerAIV:
         random_action = self._random_valid_action(masked_logits)
 
         # Exploración: si el oponente no ha seleccionado nada (primer paso), forzar exploración
-        explora = (torch.rand(self.N) < self.epsilon_sel) | (opp_initial_warrior == 0)
+        epsilon_efectivo = self.epsilon_residual if not self.selection_network.training else 0.0
+        explora = (torch.rand(self.N) < epsilon_efectivo) | (opp_initial_warrior == 0)
         action = torch.where(explora, random_action, greedy)
 
         warrior_index = action // 3
@@ -348,6 +365,9 @@ class PlayerAIV:
         Returns:
             actions: (N, 3) acciones elegidas (0-3 habilidad, 5=movPos, 6=movNeg, -1 si muerto).
         """
+        if(constants.RESET_IN_DECISIONS):
+            self.turn_network.reset_noise()
+
         obs = batch_encoded_obs.float()
         logits = self.turn_network(obs)
         masked_logits = self.mask_turn(
@@ -369,7 +389,8 @@ class PlayerAIV:
         random_action = random_action.view(self.N, 3)
 
         # Exploración ε-greedy por slot
-        explora = torch.rand(self.N, 3) < self.epsilon_turn
+        epsilon_efectivo = self.epsilon_residual if not self.turn_network.training else 0.0
+        explora = torch.rand(self.N, 3) < epsilon_efectivo
         elegido = torch.where(explora, random_action, greedy)
 
         # Convertir índice de red (0-5) a código de entorno (0-3,5,6)
@@ -469,6 +490,12 @@ class PlayerAIV:
         decay_turn = constants.EPSILON_TURN_DECAY ** n_games
         self.epsilon_sel = max(constants.EPSILON_SEL_MIN, self.epsilon_sel * decay_sel)
         self.epsilon_turn = max(constants.EPSILON_TURN_MIN, self.epsilon_turn * decay_turn)
+        
+    def reset_noise(self):
+        self.selection_network.reset_noise()
+        self.turn_network.reset_noise()
+        self.target_selection_network.reset_noise()
+        self.target_turn_network.reset_noise()
 
     def update_beta(self) -> None:
         """Actualiza el factor beta de PER para ambas memorias."""
@@ -580,6 +607,7 @@ class PlayerAIV:
                     "epsilon": getattr(self, eps_attr),
                     "replayed": getattr(self, replayed_attr),
                     "replay_memory": replay_memory.state_dict(),
+                    "elo": self.elo,   # ← NUEVO, 
                 },
                 path,
             )
@@ -596,6 +624,7 @@ class PlayerAIV:
             setattr(self, eps_attr, checkpoint["epsilon"])
             setattr(self, replayed_attr, checkpoint["replayed"])
             replay_memory.load_state_dict(checkpoint["replay_memory"])
+            self.elo = float(checkpoint.get("elo", constants.ELO_INITIAL))
 
     def load_model_inference_only(self, path1: str, path2: str) -> None:
         """Carga solo las redes (sin optimizador ni buffer) para inferencia."""
@@ -606,6 +635,7 @@ class PlayerAIV:
             net.load_state_dict(checkpoint["dqn"])
             # target_net no es necesario para inferencia, pero se carga por si acaso
             setattr(self, eps_attr, checkpoint["epsilon"])
+            self.elo = float(checkpoint.get("elo", constants.ELO_INITIAL))
 
     def save_model_inference_only(self, path1: str, path2: str) -> None:
         """Guarda solo las redes (sin optimizador ni buffer) para la pool."""
@@ -616,6 +646,7 @@ class PlayerAIV:
                 {
                     "dqn": net.state_dict(),
                     "epsilon": getattr(self, eps_attr),
+                    "elo": self.elo,   # ← NUEVO
                 },
                 path,
             )

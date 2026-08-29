@@ -14,7 +14,7 @@ import constants
 from AI.Agent.choose_state import ChooseStateV
 from AI.Agent.nstep_buffer import NStepBuffer
 from AI.Agent.observationV import ObservationV
-
+from AI.Agent.eloRating import EloRating
 
 class TrainerV:
     """
@@ -84,6 +84,7 @@ class TrainerV:
         # Estado de asignación de oponentes de la pool (se actualiza periódicamente)
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._grouped_opponents: Dict[int, Tuple[Any, torch.Tensor]] = {}
+        
 
     def train(self) -> None:
         """Ejecuta el entrenamiento completo (carga de modelos, entrenamiento y guardado)."""
@@ -104,6 +105,10 @@ class TrainerV:
         """Ejecuta la evaluación (sin aprendizaje)."""
         self.environment.stats.reset()
         self._load_if_exists()
+        self.player1.selection_network.eval()
+        self.player1.turn_network.eval()
+        self.player2.selection_network.eval()
+        self.player2.turn_network.eval()
         self._run(
             batches=self.eval_batches,
             epsilon_turn=0.02,
@@ -113,6 +118,10 @@ class TrainerV:
             stats_path=self.path_stats2,
             restore_epsilon=True,
         )
+        self.player1.selection_network.train()
+        self.player1.turn_network.train()
+        self.player2.selection_network.train()
+        self.player2.turn_network.train()
 
     def _run(
         self,
@@ -139,7 +148,7 @@ class TrainerV:
         pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
         snapshot_every = max(1, batches // 50)
 
-        backup = self._set_epsilons(epsilon_turn, epsilon_sel)
+        #backup = self._set_epsilons(epsilon_turn, epsilon_sel)
         start_time = time.time()
 
         # P2 puede ser reemplazado por oponentes de la pool durante el entrenamiento
@@ -155,7 +164,7 @@ class TrainerV:
             # Actualizar asignación de oponentes de la pool (periódicamente)
             if batch_idx != 0 and batch_idx % pool_every == 0:
                 from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(
-                    self.N, constants.POOL_PORCENTAGE
+                    self.N, constants.POOL_PORCENTAGE, self.player1.elo
                 )
                 self._opponent_from_pool_mask = from_pool
                 self._grouped_opponents = (
@@ -171,7 +180,37 @@ class TrainerV:
 
             # Ejecutar un lote
             self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player)
-
+            
+            # Recoger ganadores
+            winners = self.environment.winner #0 P1, 1 P2, 2 empate
+            S_p1 = torch.where(
+                winners == 0, torch.ones_like(winners, dtype=torch.float),
+                torch.where(winners == 1, torch.zeros_like(winners, dtype=torch.float),
+                            torch.full_like(winners, 0.5, dtype=torch.float)))
+            S_p2 = torch.where(
+                winners == 1, torch.ones_like(winners, dtype=torch.float),
+                torch.where(winners == 0, torch.zeros_like(winners, dtype=torch.float),
+                            torch.full_like(winners, 0.5, dtype=torch.float)))
+            mask_no_pool = ~self._opponent_from_pool_mask
+            n = mask_no_pool.sum()
+            #Actualización de elos
+            if learn_p1 or learn_p2 : 
+                if n != 0:
+                    S_agg_p1 = S_p1[mask_no_pool].mean().item()
+                    elo1 = self.player1.elo
+                    elo2 = self.player2.elo
+                    expected = EloRating.expected_score(elo1,elo2)
+                    self.player1.elo = EloRating.update_elo(elo1,expected,S_agg_p1)
+                    self.player2.elo = EloRating.update_elo(elo2,1-expected,1-S_agg_p1)
+                if self._opponent_from_pool_mask.sum() != 0:
+                    for cp_id, (jugador, partida_indices) in self._grouped_opponents.items():
+                        S_agg_cp = S_p2[partida_indices].mean().item()
+                        elo1 = self.player1.elo
+                        elo2 = self.opponent_pool.get_elo(cp_id)
+                        expected = EloRating.expected_score(elo1,elo2)
+                        self.player1.elo = EloRating.update_elo(elo1, expected, 1 - S_agg_cp)
+                        new_elo2 = EloRating.update_elo(elo2,1-expected,S_agg_cp)
+                        self.opponent_pool.update_elo(cp_id,new_elo2)
             # Logging de snapshot
             if self.logger and (learn_p1 or learn_p2) and snapshot_every and batch_idx % snapshot_every == 0:
                 self.logger.log_snapshot(
@@ -179,6 +218,9 @@ class TrainerV:
                     self.player1,
                     p2_training_player,
                     self.environment.stats,
+                    elo_p1=self.player1.elo,
+                    elo_p2=p2_training_player.elo,
+                    pool_elos=self.opponent_pool.elos,
                 )
 
             # Mostrar progreso
@@ -188,10 +230,15 @@ class TrainerV:
             print()
 
         # Guardar estadísticas finales
-        self.environment.stats.guardar_stats(stats_path, self.environment.warriors_classes)
+        self.environment.stats.guardar_stats(
+            stats_path, 
+            self.environment.warriors_classes,
+            p1_elo=self.player1.elo,          
+            p2_elo=p2_training_player.elo,       
+            pool_elos=self.opponent_pool.elos,)
 
-        if restore_epsilon:
-            self._restore_epsilons(backup)
+        #if restore_epsilon:
+            #self._restore_epsilons(backup)
             
     def _run_batch(
         self,
@@ -205,6 +252,8 @@ class TrainerV:
         """
         # 1. Selección de equipos
         self.environment.reset()
+        self.player1.reset_noise()
+        self.player2.reset_noise()
         selection_states_p1, selection_actions_p1, selection_states_p2, selection_actions_p2 = (
             self._select_teams(p2_training_player)
         )
@@ -231,7 +280,7 @@ class TrainerV:
             obs1_tensor, obs2_tensor = self._build_observations()
             reward1_acum += self._last_reward1
             reward2_acum += self._last_reward2
-
+        
         # 4. Flush de experiencias pendientes en N‑step buffers
         if learn_p1:
             for experience in n_steps_buffer_p1.flush():
@@ -256,7 +305,7 @@ class TrainerV:
             )
             if self.train_batches != 0:
                 self.player1.update_beta()
-                self.player1.update_epsilon(n_games=self.N)
+                #self.player1.update_epsilon(n_games=self.N)
 
         # 6. Replay de turno y selección para P2
         if learn_p2:
@@ -271,11 +320,12 @@ class TrainerV:
             )
             if self.train_batches != 0:
                 p2_training_player.update_beta()
-                p2_training_player.update_epsilon(n_games=self.N)
+                #p2_training_player.update_epsilon(n_games=self.N)
 
         # 7. Acumular rewards totales (para estadísticas)
         self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
         self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
+        
 
     def _run_turn(
         self,
