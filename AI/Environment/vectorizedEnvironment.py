@@ -781,7 +781,7 @@ class VectorizedEnvironment:
         # Recompensa para P1
         rewardP1 = self._reward(
             damage=damage_p1 - damage_p2,
-            deaths=newDeaths_p1 - newDeaths_p2,
+            deaths=newDeaths_p2 - newDeaths_p1,
             win=win_p1,
             blocks=damage_avoided_p1,
             heal=healed_p1,
@@ -791,7 +791,7 @@ class VectorizedEnvironment:
         # Recompensa para P2
         rewardP2 = self._reward(
             damage=damage_p2 - damage_p1,
-            deaths=newDeaths_p2 - newDeaths_p1,
+            deaths=newDeaths_p1 - newDeaths_p2,
             win=win_p2,
             blocks=damage_avoided_p2,
             heal=healed_p2,

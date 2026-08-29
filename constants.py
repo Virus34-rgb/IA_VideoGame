@@ -36,15 +36,15 @@ ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 
 # Juego - Recompensas
 # ============================================================
 REWARD_WEIGHTS = {
-    "damage": 0,                  # Daño infligido (diferencia entre P1 y P2)
-    "deaths": 35,                 # Muertes causadas
+    "damage": 1,                  # Daño infligido (diferencia entre P1 y P2)
+    "deaths": 50,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
     "blocks": 0,                  # Daño bloqueado/evadido
     "heal": 0,                    # Curación realizada
-    "shaping_weight": 1,          # Peso para la diferencia de vida (shaping)
+    "shaping_weight": 2,          # Peso para la diferencia de vida (shaping)
 }
-TURN_PENALTY = 30                # Penalización por turno (para fomentar partidas cortas)
-WIN_REWARD = 1000                  # Recompensa base por ganar la partida
+TURN_PENALTY = 15                # Penalización por turno (para fomentar partidas cortas)
+WIN_REWARD = 1500                  # Recompensa base por ganar la partida
 MAX_TURNS = 30                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
 
@@ -59,8 +59,8 @@ POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de
 # ============================================================
 # Replay y priorización (PER)
 # ============================================================
-SELECTION_REPLAYS_PER_BATCH = 400  # Número de replays de selección por lote
-TURN_REPLAYS_PER_BATCH = 800       # Número de replays de turno por lote
+SELECTION_REPLAYS_PER_BATCH = 600  # Número de replays de selección por lote
+TURN_REPLAYS_PER_BATCH = 1200       # Número de replays de turno por lote
 
 # PER (Prioritized Experience Replay)
 ALPHA = 0.8                       # Factor de priorización (0=uniforme, 1=máxima prioridad)
@@ -75,13 +75,13 @@ PER_EPSILON = 0.1                 # Pequeño épsilon para evitar prioridades ce
 N_STEP = 3                        # Número de pasos para N-step returns (1 = estándar)
 USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
-NOISY_SIGMA_INIT = 0.2   # Valor inicial de la desviación sigma
+NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma
 RESET_IN_DECISIONS = True
 
 # ============================================================
 # ELO
 # ============================================================
 ELO_INITIAL = 1000.0
-ESTANDAR_ELO = 400
+ESTANDAR_ELO = 150
 K_FACTOR_ELO = 32
-ELO_TEMPERATURE = 150
+ELO_TEMPERATURE = 15
