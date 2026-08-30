@@ -224,8 +224,8 @@ class StatsV:
         Args:
             warrior1, warrior2: (N,) IDs de los guerreros seleccionados por P1 y P2.
         """
-        c1 = torch.bincount(warrior1, minlength=WARRIOR_QUANTITY + 1)[1:]
-        c2 = torch.bincount(warrior2, minlength=WARRIOR_QUANTITY + 1)[1:]
+        c1 = torch.bincount(warrior1, minlength=constants.WARRIOR_QUANTITY + 1)[1:]
+        c2 = torch.bincount(warrior2, minlength=constants.WARRIOR_QUANTITY + 1)[1:]
         self._p1_warrior_use_tensor += c1.float()
         self._p2_warrior_use_tensor += c2.float()
 
