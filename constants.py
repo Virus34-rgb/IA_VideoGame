@@ -49,17 +49,20 @@ GOLD_POR_BATALLA = 100
 MAX_ABILITY_LEVEL = 5
 GOLD_NORM_REF = 500  # referencia para normalizar el oro en la observación (ajustable)
 
-# Dimensión de estado de selección, calculada según el modo activo
-if USE_META_GAME:
-    SELECTION_STATE_DIM = (
-        MAX_CASTLE_SIZE * (WARRIOR_QUANTITY + ABILITIES_PER_WARRIOR * MAX_POOL_SIZE + ABILITIES_PER_WARRIOR)
-        + MAX_CASTLE_SIZE   # edad por instancia
-        + 1                 # oro
-        + WARRIOR_QUANTITY  # one-hot del guerrero inicial del rival
-        + 1                 # posición inicial del rival
-    )
-else:
-    SELECTION_STATE_DIM = 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
+def get_selection_state_dim(use_meta: bool = None) -> int:
+    """Devuelve la dimensión del estado de selección según el modo."""
+    if use_meta is None:
+        use_meta = USE_META_GAME
+    if use_meta:
+        return (
+            MAX_CASTLE_SIZE * (WARRIOR_QUANTITY + ABILITIES_PER_WARRIOR * MAX_POOL_SIZE + ABILITIES_PER_WARRIOR)
+            + MAX_CASTLE_SIZE   # edad por instancia
+            + 1                 # oro
+            + WARRIOR_QUANTITY  # one-hot del guerrero inicial del rival
+            + 1                 # posición inicial del rival
+        )
+    else:
+        return 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
 
 TURN_STATE_DIM = 58 + 3 * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
 # ============================================================

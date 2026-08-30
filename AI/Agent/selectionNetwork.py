@@ -9,7 +9,7 @@ import constants
 
 
 class SelectionNetwork(nn.Module):
-    def __init__(self, input_size: int = constants.SELECTION_STATE_DIM, output_size: int = None, sigma_init=0.5) -> None:
+    def __init__(self, input_size: int = None, output_size: int = None, sigma_init=0.5) -> None:
         super().__init__()
         if output_size is None:
             output_size = constants.MAX_CASTLE_SIZE * 3 if constants.USE_META_GAME else constants.WARRIOR_QUANTITY * 3
