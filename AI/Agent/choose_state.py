@@ -1,73 +1,93 @@
 """
 Módulo para codificar el estado de selección de equipo (fase de draft).
-Proporciona versiones vectorizadas (batch) y no vectorizadas (single).
+Soporta dos modos, elegidos por constants.USE_META_GAME:
+  - Catálogo: 5 tipos fijos por lote (modo histórico, sin meta-juego).
+  - Castillo: hasta MAX_CASTLE_SIZE instancias propias del castillo de esa partida.
 """
 import torch
 
-from AI.Agent.observationV import ObservationV
-from constants import WARRIOR_QUANTITY
+from constants import WARRIOR_QUANTITY, MAX_POOL_SIZE
+import constants
 
 
 class ChooseStateV:
-    """
-    Representa el estado visible para la selección de guerreros.
-    Utilizado para la fase de draft donde se eligen 3 héroes de entre los disponibles.
-    """
-
-    def __init__(
-        self,
-        pl_disposition_ids: list[int],
-        pl_warriors: list[int],
-        opp_initial_warrior: int,
-        opp_initial_position: int,
-    ) -> None:
-        """
-        Args:
-            pl_disposition_ids: IDs de los héroes ya colocados (3 posiciones, 0 si vacío).
-            pl_warriors: IDs de todos los héroes disponibles para seleccionar.
-            opp_initial_warrior: ID del primer héroe que el oponente ha seleccionado (0 si ninguno).
-            opp_initial_position: Posición donde el oponente colocó su primer héroe (0-2).
-        """
+    def __init__(self, pl_disposition_ids, pl_warriors, opp_initial_warrior, opp_initial_position):
         self.pl_disposition = pl_disposition_ids
         self.pl_warriors = pl_warriors
         self.opp_initial_warrior = opp_initial_warrior
         self.opp_initialPosition = opp_initial_position
 
+    # ------------------------------------------------------------
+    # Modo catálogo (histórico, sin meta-juego)
+    # ------------------------------------------------------------
     @staticmethod
-    def encode_choose_state_batch(
-        pl_disposition: torch.Tensor,        # (N, 3)
-        pl_warriors_ids: torch.Tensor,       # (N, WARRIOR_QUANTITY)  catálogo completo (one‑hot o IDs)
-        opp_initial_warrior: torch.Tensor,   # (N,)
-        opp_initial_position: torch.Tensor,  # (N,)
+    def encode_choose_state_batch_catalog(
+        pl_disposition: torch.Tensor,
+        pl_warriors_ids: torch.Tensor,
+        opp_initial_warrior: torch.Tensor,
+        opp_initial_position: torch.Tensor,
+        catalog_abilities: torch.Tensor,   # (N, WARRIOR_QUANTITY, 4)
     ) -> torch.Tensor:
-        """
-        Devuelve un tensor de forma (N, dim_estado) con la codificación concatenada.
-
-        El estado codificado contiene:
-        - One‑hot de la disposición actual (3 * WARRIOR_QUANTITY)
-        - One‑hot de todos los guerreros disponibles (WARRIOR_QUANTITY * WARRIOR_QUANTITY)
-        - One‑hot del primer guerrero del oponente (WARRIOR_QUANTITY)
-        - Posición del oponente normalizada (1)
-        """
-        # One‑hot de la disposición actual
-        idx_disp = (pl_disposition - 1).clamp(min=0)  # (N,3)
+        idx_disp = (pl_disposition - 1).clamp(min=0)
         one_hot_disp = torch.nn.functional.one_hot(idx_disp, num_classes=WARRIOR_QUANTITY).float()
         one_hot_disp = one_hot_disp * (pl_disposition > 0).unsqueeze(-1).float()
-        one_hot_disp = one_hot_disp.flatten(start_dim=1)  # (N, 3*WQ)
+        one_hot_disp = one_hot_disp.flatten(start_dim=1)
 
-        # One‑hot de los guerreros disponibles (catálogo)
-        # pl_warriors_ids se asume que es un tensor (N, WQ) con IDs o 0 para no disponible
-        idx_w = (pl_warriors_ids - 1).clamp(min=0)  # (N, WQ)
+        idx_w = (pl_warriors_ids - 1).clamp(min=0)
         one_hot_w = torch.nn.functional.one_hot(idx_w, num_classes=WARRIOR_QUANTITY).float()
         one_hot_w = one_hot_w * (pl_warriors_ids > 0).unsqueeze(-1).float()
-        one_hot_w = one_hot_w.flatten(start_dim=1)  # (N, WQ*WQ)
+        one_hot_w = one_hot_w.flatten(start_dim=1)
 
-        # One‑hot del primer guerrero del oponente
         idx_opp = (opp_initial_warrior - 1).clamp(min=0)
         one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=WARRIOR_QUANTITY).float()
         one_hot_opp = one_hot_opp * (opp_initial_warrior > 0).unsqueeze(-1).float()
 
-        # Normalizar posición (0-2) a [0,1]
-        pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)  # (N,1)
+        pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)
 
-        return torch.cat([one_hot_disp, one_hot_w, one_hot_opp, pos_norm], dim=-1)
+        catalog_onehot = torch.nn.functional.one_hot(catalog_abilities, num_classes=MAX_POOL_SIZE).float()
+        catalog_onehot = catalog_onehot.flatten(start_dim=1)
+
+        return torch.cat([one_hot_disp, one_hot_w, one_hot_opp, pos_norm, catalog_onehot], dim=-1)
+
+    # ------------------------------------------------------------
+    # Modo castillo (meta-juego)
+    # ------------------------------------------------------------
+    @staticmethod
+    def encode_choose_state_batch_castle(
+        castle_types: torch.Tensor,             # (N, MAX_CASTLE_SIZE)
+        castle_abilities: torch.Tensor,          # (N, MAX_CASTLE_SIZE, 4)
+        castle_abilities_levels: torch.Tensor,   # (N, MAX_CASTLE_SIZE, 4)
+        battle_fought: torch.Tensor,             # (N, MAX_CASTLE_SIZE)
+        castle_alive: torch.Tensor,              # (N, MAX_CASTLE_SIZE)
+        gold: torch.Tensor,                      # (N,)
+        opp_initial_warrior: torch.Tensor,
+        opp_initial_position: torch.Tensor,
+    ) -> torch.Tensor:
+        N = castle_types.shape[0]
+
+        idx = (castle_types - 1).clamp(min=0)
+        one_hot_types = torch.nn.functional.one_hot(idx, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_types = one_hot_types * castle_alive.unsqueeze(-1).float()
+        one_hot_types_flat = one_hot_types.flatten(start_dim=1)
+
+        abilities_onehot = torch.nn.functional.one_hot(castle_abilities, num_classes=MAX_POOL_SIZE).float()
+        abilities_onehot = abilities_onehot * castle_alive.view(N, constants.MAX_CASTLE_SIZE, 1, 1).float()
+        abilities_flat = abilities_onehot.flatten(start_dim=1)
+
+        levels_norm = (castle_abilities_levels.float() / constants.MAX_ABILITY_LEVEL)
+        levels_norm = levels_norm * castle_alive.view(N, constants.MAX_CASTLE_SIZE, 1).float()
+        levels_flat = levels_norm.flatten(start_dim=1)
+
+        age_norm = (battle_fought.float() / constants.MAX_BATALLAS) * castle_alive.float()
+
+        gold_norm = (gold.float() / constants.GOLD_NORM_REF).unsqueeze(-1)
+
+        idx_opp = (opp_initial_warrior - 1).clamp(min=0)
+        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_opp = one_hot_opp * (opp_initial_warrior > 0).unsqueeze(-1).float()
+        pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)
+
+        return torch.cat(
+            [one_hot_types_flat, abilities_flat, levels_flat, age_norm, gold_norm, one_hot_opp, pos_norm],
+            dim=-1,
+        )

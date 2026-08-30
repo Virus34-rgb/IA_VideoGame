@@ -351,7 +351,7 @@ def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
 # ================================================================
 
 # Parámetros globales del run
-VERSION = 5
+VERSION = 1
 N_BATCH = 2048
 TRAIN_EPISODES = math.ceil(500_000 / N_BATCH)
 EVAL_EPISODES = math.ceil(50_000 / N_BATCH)
@@ -368,7 +368,7 @@ PLAY_AGAINST_AI = False
 PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
 
-RUN_COMPARISON = False
+RUN_COMPARISON = True
 
 
 def build_steps(config: RunConfig) -> List[TrainingStep]:
@@ -460,33 +460,12 @@ if __name__ == "__main__":
                 eval_batches=EVAL_EPISODES,
             ),
             RunSpec(
-                run_name="NSteps_2",
+                run_name="NOMG",
                 N=N_BATCH,
                 train_batches=TRAIN_EPISODES,
                 eval_batches=EVAL_EPISODES,
-                constants_overrides={"N_STEP": 2},
-            ),
-            RunSpec(
-                run_name="NSteps_3",
-                N=N_BATCH,
-                train_batches=TRAIN_EPISODES,
-                eval_batches=EVAL_EPISODES,
-                constants_overrides={"N_STEP": 3},
-            ),
-            RunSpec(
-                run_name="NSteps_4",
-                N=N_BATCH,
-                train_batches=TRAIN_EPISODES,
-                eval_batches=EVAL_EPISODES,
-                constants_overrides={"N_STEP": 4},
-            ),
-            RunSpec(
-                run_name="NSteps_5",
-                N=N_BATCH,
-                train_batches=TRAIN_EPISODES,
-                eval_batches=EVAL_EPISODES,
-                constants_overrides={"N_STEP": 5},
-            ),
+                constants_overrides={"USE_META_GAME": False},
+            )
         ]
         run_comparison(config, run_specs)
     else:

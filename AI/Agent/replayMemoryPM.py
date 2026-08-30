@@ -53,6 +53,8 @@ class ReplayMemoryPM:
             dones: (batch,) bool, True si es terminal.
         """
         n = len(states)
+        if not np.isfinite(self.max_priority):
+            self.max_priority = 1.0
         priorities = np.full(n, self.max_priority, dtype=np.float32)
         indices = self.memory.add_batch(priorities)
 
