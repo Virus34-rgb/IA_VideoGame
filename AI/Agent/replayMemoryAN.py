@@ -37,49 +37,33 @@ class ReplayMemoryAN:
         self.max_priority = 1.0
 
     def push_batch(
-        self,
-        states: torch.Tensor,
-        actions: torch.Tensor,
-        rewards: torch.Tensor,
-        next_states: torch.Tensor,
-        dones: torch.Tensor,
-        alive: torch.Tensor,
-        types: torch.Tensor,
-        cooldowns: torch.Tensor,
-        opp_types: torch.Tensor,
-        next_types: torch.Tensor,
-        next_alive: torch.Tensor,
-        next_cooldowns: torch.Tensor,
-        next_opp_types: torch.Tensor,
-    ) -> None:
-        """
-        Almacena un lote de transiciones.
+            self, states, actions, rewards, next_states, dones,
+            alive, types, cooldowns, opp_types,
+            next_types, next_alive, next_cooldowns, next_opp_types,
+            instance_abilities, next_instance_abilities,   # NUEVO
+        ) -> None:
+            n = len(states)
+            priorities = np.full(n, self.max_priority, dtype=np.float32)
+            indices = self.memory.add_batch(priorities)
 
-        Args:
-            states, actions, rewards, next_states, dones: (batch, ...) tensores.
-            alive, types, cooldowns, opp_types: (batch, 3) o (batch, 3, 4)
-                para el estado actual.
-            next_types, next_alive, next_cooldowns, next_opp_types: para el siguiente estado.
-        """
-        n = len(states)
-        priorities = np.full(n, self.max_priority, dtype=np.float32)
-        indices = self.memory.add_batch(priorities)
+            self.storage.states[indices] = states
+            self.storage.actions[indices] = actions
+            self.storage.rewards[indices] = rewards
+            self.storage.next_states[indices] = next_states
+            self.storage.dones[indices] = dones
 
-        self.storage.states[indices] = states
-        self.storage.actions[indices] = actions
-        self.storage.rewards[indices] = rewards
-        self.storage.next_states[indices] = next_states
-        self.storage.dones[indices] = dones
+            self.storage.alive[indices] = alive
+            self.storage.types[indices] = types
+            self.storage.cooldowns[indices] = cooldowns
+            self.storage.opp_types[indices] = opp_types
 
-        self.storage.alive[indices] = alive
-        self.storage.types[indices] = types
-        self.storage.cooldowns[indices] = cooldowns
-        self.storage.opp_types[indices] = opp_types
+            self.storage.next_types[indices] = next_types
+            self.storage.next_alive[indices] = next_alive
+            self.storage.next_cooldowns[indices] = next_cooldowns
+            self.storage.next_opp_types[indices] = next_opp_types
 
-        self.storage.next_types[indices] = next_types
-        self.storage.next_alive[indices] = next_alive
-        self.storage.next_cooldowns[indices] = next_cooldowns
-        self.storage.next_opp_types[indices] = next_opp_types
+            self.storage.instance_abilities[indices] = instance_abilities             
+            self.storage.next_instance_abilities[indices] = next_instance_abilities   
 
     def sample(self, batch_size: int) -> Tuple[Any, np.ndarray, np.ndarray]:
         """
@@ -91,6 +75,11 @@ class ReplayMemoryAN:
             weights: pesos de importancia para la pérdida ponderada.
         """
         total = self.memory.total()
+        if not np.isfinite(total) or total == 0:
+            # Opción 1: resetear el árbol a prioridades uniformes
+            self.memory.tree.fill(1.0)
+            self.max_priority = 1.0
+            total = self.memory.total()
         segment = total / batch_size
 
         starts = np.arange(batch_size) * segment

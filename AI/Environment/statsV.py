@@ -8,7 +8,8 @@ import torch
 from dataclasses import dataclass
 from typing import Dict, List, Any
 
-from constants import WARRIOR_QUANTITY
+from constants import MAX_POOL_SIZE, WARRIOR_QUANTITY
+import constants
 
 
 @dataclass
@@ -107,8 +108,8 @@ class StatsV:
         self.p2_movements: float = 0.0
 
         # Tensores acumuladores por tipo de guerrero y habilidad
-        self._p1_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, 4)
-        self._p2_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, 4)
+        self._p1_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
+        self._p2_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
         self._p1_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
         self._p2_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
 
@@ -202,20 +203,20 @@ class StatsV:
             es_p1: (N,) bool, True si el actor es P1.
             activa: (N,) bool, True para partidas no terminadas antes de este turno.
         """
-        es_habilidad = (accion_actor >= 0) & (accion_actor <= 3)
+        es_habilidad = (accion_actor >= 0) & (accion_actor < constants.MAX_POOL_SIZE)
         mask = es_habilidad & activa
         mask_p1 = mask & es_p1
         mask_p2 = mask & ~es_p1
 
         if mask_p1.any():
-            idx = tipo_actor[mask_p1] * 4 + accion_actor[mask_p1]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * 4)
-            self._p1_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, 4).float()
+            idx = tipo_actor[mask_p1] * constants.MAX_POOL_SIZE + accion_actor[mask_p1]
+            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
+            self._p1_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
 
         if mask_p2.any():
-            idx = tipo_actor[mask_p2] * 4 + accion_actor[mask_p2]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * 4)
-            self._p2_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, 4).float()
+            idx = tipo_actor[mask_p2] * constants.MAX_POOL_SIZE + accion_actor[mask_p2]
+            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
+            self._p2_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
 
     def accumulate_warrior_use(self, warrior1: torch.Tensor, warrior2: torch.Tensor) -> None:
         """
@@ -496,14 +497,20 @@ class StatsV:
         attacks: Dict[int, List[int]],
         warriors_classes: Dict[int, Any],
     ) -> List[str]:
-        """Genera líneas de texto para el uso de habilidades por guerrero."""
-        total = sum(sum(a) for a in attacks.values())
+        """Genera líneas de texto para el uso de habilidades por guerrero.
+        Muestra el porcentaje de uso dentro del guerrero y el porcentaje global.
+        """
+        total_global = sum(sum(a) for a in attacks.values())
         lines = []
         for warrior_id, counts in attacks.items():
             warrior = warriors_classes[warrior_id]
-            lines.append(f"  Guerrero {warrior_id}:")
+            warrior_total = sum(counts)
+            # Línea de encabezado del guerrero con total y porcentaje global
+            pct_global_warrior = (warrior_total / total_global * 100) if total_global > 0 else 0.0
+            lines.append(f"  Guerrero {warrior_id} (total: {warrior_total}, {pct_global_warrior:6.2f}% global):")
             for ability_idx, count in enumerate(counts):
-                ability_name = warrior.abilities[ability_idx].name
-                pct = count / total * 100 if total > 0 else 0.0
-                lines.append(f"    {ability_name:15s} {int(count):4d} ({pct:6.2f}%)")
+                ability_name = warrior.ability_pool[ability_idx].name
+                pct_warrior = (count / warrior_total * 100) if warrior_total > 0 else 0.0
+                pct_global = (count / total_global * 100) if total_global > 0 else 0.0
+                lines.append(f"    {ability_name:15s} {int(count):4d} ({pct_warrior:6.2f}% del guerrero, {pct_global:6.2f}% global)")
         return lines

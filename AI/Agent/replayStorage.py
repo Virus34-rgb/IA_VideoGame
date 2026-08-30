@@ -11,6 +11,7 @@ ReplayBatch = namedtuple(
         "states", "actions", "rewards", "next_states", "dones",
         "alive", "types", "cooldowns", "opp_types",
         "next_types", "next_alive", "next_cooldowns", "next_opp_types",
+        "instance_abilities", "next_instance_abilities",
     ],
 )
 
@@ -37,12 +38,14 @@ class ReplayStorage:
         if is_turn_storage:
             self.alive = torch.zeros(capacity, 3, dtype=torch.bool)
             self.types = torch.zeros(capacity, 3, dtype=torch.long)
-            self.cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)
+            self.cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.long)
             self.opp_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.next_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.next_alive = torch.zeros(capacity, 3, dtype=torch.bool)
-            self.next_cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.bool)
+            self.next_cooldowns = torch.zeros(capacity, 3, 4, dtype=torch.long)
             self.next_opp_types = torch.zeros(capacity, 3, dtype=torch.long)
+            self.instance_abilities = torch.zeros(capacity, 3, 4, dtype=torch.long)
+            self.next_instance_abilities = torch.zeros(capacity, 3, 4, dtype=torch.long)
         else:
             self.alive = None
             self.types = None
@@ -52,60 +55,41 @@ class ReplayStorage:
             self.next_alive = None
             self.next_cooldowns = None
             self.next_opp_types = None
+            self.instance_abilities = None  
+            self.next_instance_abilities = None  
 
     def get_batch(self, indices: torch.Tensor) -> ReplayBatch:
-        """Devuelve un ReplayBatch con los elementos en las posiciones dadas."""
         if self.is_turn_storage:
             return ReplayBatch(
-                self.states[indices],
-                self.actions[indices],
-                self.rewards[indices],
-                self.next_states[indices],
-                self.dones[indices],
-                self.alive[indices],
-                self.types[indices],
-                self.cooldowns[indices],
-                self.opp_types[indices],
-                self.next_types[indices],
-                self.next_alive[indices],
-                self.next_cooldowns[indices],
-                self.next_opp_types[indices],
+                self.states[indices], self.actions[indices], self.rewards[indices],
+                self.next_states[indices], self.dones[indices],
+                self.alive[indices], self.types[indices], self.cooldowns[indices], self.opp_types[indices],
+                self.next_types[indices], self.next_alive[indices], self.next_cooldowns[indices], self.next_opp_types[indices],
+                self.instance_abilities[indices], self.next_instance_abilities[indices],  
             )
         else:
             return ReplayBatch(
-                self.states[indices],
-                self.actions[indices],
-                self.rewards[indices],
-                self.next_states[indices],
-                self.dones[indices],
-                None, None, None, None,
-                None, None, None, None,
+                self.states[indices], self.actions[indices], self.rewards[indices],
+                self.next_states[indices], self.dones[indices],
+                None, None, None, None, None, None, None, None, None, None,
             )
 
     def state_dict(self) -> dict:
-        """Devuelve un diccionario con todos los tensores para serialización."""
         state = {
-            "states": self.states,
-            "actions": self.actions,
-            "rewards": self.rewards,
-            "next_states": self.next_states,
-            "dones": self.dones,
+            "states": self.states, "actions": self.actions, "rewards": self.rewards,
+            "next_states": self.next_states, "dones": self.dones,
         }
         if self.is_turn_storage:
             state.update({
-                "alive": self.alive,
-                "types": self.types,
-                "cooldowns": self.cooldowns,
-                "opp_types": self.opp_types,
-                "next_types": self.next_types,
-                "next_alive": self.next_alive,
-                "next_cooldowns": self.next_cooldowns,
-                "next_opp_types": self.next_opp_types,
+                "alive": self.alive, "types": self.types, "cooldowns": self.cooldowns, "opp_types": self.opp_types,
+                "next_types": self.next_types, "next_alive": self.next_alive,
+                "next_cooldowns": self.next_cooldowns, "next_opp_types": self.next_opp_types,
+                "instance_abilities": self.instance_abilities,                
+                "next_instance_abilities": self.next_instance_abilities,      
             })
         return state
 
     def load_state_dict(self, state: dict) -> None:
-        """Carga los tensores desde un diccionario (copia in‑place)."""
         self.states.copy_(state["states"])
         self.actions.copy_(state["actions"])
         self.rewards.copy_(state["rewards"])
@@ -120,3 +104,5 @@ class ReplayStorage:
             self.next_alive.copy_(state["next_alive"])
             self.next_cooldowns.copy_(state["next_cooldowns"])
             self.next_opp_types.copy_(state["next_opp_types"])
+            self.instance_abilities.copy_(state["instance_abilities"])             
+            self.next_instance_abilities.copy_(state["next_instance_abilities"])    
