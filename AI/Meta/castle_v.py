@@ -15,7 +15,7 @@ class CastleV:
         self.battle_fought = torch.zeros((N, constants.MAX_CASTLE_SIZE), dtype=torch.long)
         self.castle_alive = torch.zeros((N, constants.MAX_CASTLE_SIZE), dtype=torch.bool)
         self.castle_has_revival = torch.zeros((N, constants.MAX_CASTLE_SIZE), dtype=torch.bool)
-        self.gold = torch.full((N,), 250, dtype=torch.long)
+        self.gold = torch.full((N,), constants.GOLD_INICIAL, dtype=torch.long)
         self.inicializar()
 
     def reset(self):

@@ -141,13 +141,19 @@ class PlayerAIV:
         loss = nn.SmoothL1Loss(reduction="none")(input, target)
         return (loss * weights).mean()
 
-    def selection(self, batch_encoded_states, disposition, opp_initial_warrior,castle_alives,castle_types):
+    def selection(self, batch_encoded_states, disposition, opp_initial_warrior, castle_alive=None, already_used=None):
+        """
+        Modo catálogo (USE_META_GAME=False): elige (tipo 1..5, posición 0-2) libremente.
+        Modo castillo (USE_META_GAME=True): elige (slot de castillo 0..MAX_CASTLE_SIZE-1, posición 0-2)
+            libremente entre las instancias vivas y no usadas aún en este draft.
+        """
         if constants.RESET_IN_DECISIONS:
             self.selection_network.reset_noise()
 
         states = batch_encoded_states.float()
         logits = self.selection_network(states)
-        masked_logits = self._mask_selection(logits, disposition,castle_alives,castle_types)
+        masked_logits = self._mask_selection(logits, disposition, castle_alive, already_used)
+
         greedy = torch.argmax(masked_logits, dim=1)
         random_action = self._random_valid_action(masked_logits)
 
@@ -155,58 +161,42 @@ class PlayerAIV:
         explora = (torch.rand(self.N) < epsilon_efectivo) | (opp_initial_warrior == 0)
         action = torch.where(explora, random_action, greedy)
 
-        warrior_index = action // 3
+        item_index = action // 3
         position = action % 3
-        return warrior_index, position, action
 
-    def _mask_selection(self, logits, disposition, castle_alive, castle_types):
+        if not constants.USE_META_GAME:
+            item_index = item_index + 1   # compatibilidad histórica: tipo 1..WARRIOR_QUANTITY
+
+        return item_index, position, action
+
+    def _mask_selection(self, logits, disposition, castle_alive=None, already_used=None):
         """
-        Construye la máscara para la selección de equipo.
-        Args:
-            logits: (N, MAX_CASTLE_SIZE * 3)
-            disposition: (N, 3) IDs de instancia ya colocados (0 = vacío)
-            castle_alive: (N, MAX_CASTLE_SIZE) booleano
-            castle_types: (N, MAX_CASTLE_SIZE) tipo de cada instancia (1..WARRIOR_QUANTITY)
-        Returns:
-            logits enmascarados
+        Máscara genérica de selección libre: para cada (item, posición), es válida si
+        el item está disponible Y la posición de combate está libre. Ni el item ni la
+        posición se emparejan de forma fija — cualquier combinación válida es elegible.
         """
-        N = logits.shape[0]
-        max_size = constants.MAX_CASTLE_SIZE
-        device = logits.device
+        N = disposition.shape[0]
+        ocupado_pos = disposition > 0   # (N,3) posiciones de combate ya colocadas
 
-        # 1. Máscara de instancias vivas
-        alive_mask = castle_alive.unsqueeze(-1).expand(-1, -1, 3).reshape(N, -1)  # (N, max_size*3)
+        if constants.USE_META_GAME:
+            num_items = constants.MAX_CASTLE_SIZE
+            item_disponible = castle_alive & ~already_used   # (N, MAX_CASTLE_SIZE)
+        else:
+            num_items = constants.WARRIOR_QUANTITY
+            usados_tipo = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool)
+            for slot in range(3):
+                tipo_en_slot = disposition[:, slot]
+                hay_tipo = tipo_en_slot > 0
+                idx = (tipo_en_slot - 1).clamp(min=0)
+                if hay_tipo.any():
+                    rows = torch.arange(N)[hay_tipo]
+                    usados_tipo[rows, idx[hay_tipo]] = True
+            item_disponible = ~usados_tipo
 
-        # 2. Máscara de instancias ya usadas
-        used_instances_mask = torch.zeros(N, max_size, dtype=torch.bool, device=device)
-        # Aplanamos disposition para marcar usados
-        flat_ids = disposition.flatten()  # (N*3,)
-        flat_mask = flat_ids > 0
-        if flat_mask.any():
-            rows = torch.arange(N, device=device).repeat_interleave(3)[flat_mask]  # (K,)
-            ids = flat_ids[flat_mask]  # (K,)
-            used_instances_mask[rows, ids] = True
-        used_expanded = used_instances_mask.unsqueeze(-1).expand(-1, -1, 3).reshape(N, -1)  # (N, max_size*3)
+        item_expand = item_disponible.unsqueeze(-1).expand(N, num_items, 3)
+        pos_libre = (~ocupado_pos).unsqueeze(1).expand(N, num_items, 3)
 
-        # 3.Máscara de tipos ya usados
-        used_types = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool, device=device)
-        for slot in range(3):
-            ids = disposition[:, slot]  # (N,)
-            mask = ids > 0
-            if mask.any():
-                rows = torch.arange(N, device=device)[mask]
-                types = castle_types[rows, ids[mask]]  # (K,)
-                used_types[rows, types - 1] = True
-
-        # Instancias cuyo tipo está usado
-        type_invalid = torch.zeros(N, max_size, dtype=torch.bool, device=device)
-        for t in range(constants.WARRIOR_QUANTITY):
-            type_mask = (castle_types == t + 1)  # (N, max_size)
-            used = used_types[:, t].unsqueeze(-1)  # (N, 1)
-            type_invalid |= type_mask & used
-        type_invalid_expanded = type_invalid.unsqueeze(-1).expand(-1, -1, 3).reshape(N, -1)
-        mask = alive_mask & ~used_expanded & ~type_invalid_expanded
-
+        mask = (item_expand & pos_libre).reshape(N, num_items * 3)
         return logits.masked_fill(~mask, float("-inf"))
 
     def turn(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities):
