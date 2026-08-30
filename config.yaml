@@ -1,0 +1,56 @@
+# ============================================================
+# Configuración del proyecto Castle Game
+# ============================================================
+
+# Parámetros de ejecución
+VERSION: 1
+N_BATCH: 2048
+TRAIN_EPISODES: 5
+EVAL_EPISODES: 1
+
+# Flags del juego
+USE_META_GAME: true
+USE_WANDB: true
+RUN_COMPARISON: false
+DELETE_DIRECTORIES: true
+
+# Flags de ejecución
+RUN_SELF_PLAY: true
+RUN_EVALUATION: true
+HUMAN_OPPONENT: "none"
+HUMAN_EPISODES: 20
+HUMAN_EPSILON: 0.1
+PLAY_AGAINST_AI: false
+PLAY_EPISODES: 20
+PLAY_EPSILON: 0.0
+
+# ============================================================
+# Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
+# ============================================================
+comparisons:
+  - run_name: "baseline"
+    N: 2048
+    train_batches: 5
+    eval_batches: 1
+    overrides: {}
+
+  - run_name: "NOMG"
+    N: 2048
+    train_batches: 5
+    eval_batches: 1
+    overrides:
+      USE_META_GAME: false
+
+  - run_name: "Noisy_off"
+    N: 1024
+    train_batches: 10
+    eval_batches: 2
+    overrides:
+      NOISY_SIGMA_INIT: 0.0
+
+  - run_name: "Gamma_099"
+    N: 2048
+    train_batches: 5
+    eval_batches: 1
+    overrides:
+      DISCOUNT_FACTOR: 0.99
