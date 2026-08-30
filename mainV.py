@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional, List
 
+import yaml
+
 from AI.Agent.opponent_poolV import OpponentPoolV
 from AI.Agent.playerAIV import PlayerAIV
 from AI.Agent.playerNoIAV import PlayerNoAIV
@@ -21,6 +23,13 @@ from AI.Logging.metrics_logger import MetricsLogger
 from config import RunConfig
 from training_step import TrainingStep
 import constants
+
+# Importar el módulo de wandb (si no existe, se puede desactivar)
+try:
+    from AI.Logging import wandb_setup
+except ImportError:
+    wandb_setup = None
+    print("Advertencia: wandb_setup no encontrado. Desactivando wandb.")
 
 
 class MainV:
@@ -66,10 +75,11 @@ class MainV:
         """
         Prepara el entorno, el jugador, el logger y la pool de oponentes.
         """
+        self.run_timestamp = time.strftime("%Y%m%d_%H%M%S")
         # Limpiar directorios antiguos si está configurado
         if constants.DELETE_DIRECTORIES:
-            shutil.rmtree(self.config.p2_path, ignore_errors=True)
-            shutil.rmtree(self.config.p2_path, ignore_errors=True)  # Nota: podría ser p1_path? Revisar.
+            shutil.rmtree(self.config.p1_path, ignore_errors=True)
+            shutil.rmtree(self.config.p2_path, ignore_errors=True) 
 
         # Crear directorios necesarios
         os.makedirs(self.config.p1_path, exist_ok=True)
@@ -80,10 +90,10 @@ class MainV:
         self.environment = VectorizedEnvironment(self.N)
         self.player1 = self.player_class(self.N, self.environment)
 
-        # Inicializar logger
+        # Inicializar logger (CSV)
         self.logger = MetricsLogger(
             output_dir=self.log_dir,
-            run_name=f"v{self.config.version}",
+            run_name=f"v{self.config.version}_{self.run_timestamp}",
         )
         self.logger.dump_config(
             constants,
@@ -95,6 +105,34 @@ class MainV:
                 ],
             },
         )
+
+        # Inicializar wandb si está activo
+        if constants.USE_WANDB and wandb_setup is not None:
+            wandb_setup.init_wandb(
+                project_name="castle-game-rl",
+                run_name=f"v{self.config.version}_{self.run_timestamp}",
+                config={
+                    "N": self.N,
+                    "learning_rate_selection": constants.SELECTION_LEARNING_RATE,
+                    "learning_rate_turn": constants.TURN_LEARNING_RATE,
+                    "discount_factor": constants.DISCOUNT_FACTOR,
+                    "n_step": constants.N_STEP,
+                    "epsilon_turn": constants.EPSILON_TURN,
+                    "epsilon_sel": constants.EPSILON_SELECTION,
+                    "batch_size": constants.BATCH_SIZE,
+                    "use_dueling": constants.USE_DUELING_DQN,
+                    "use_meta": constants.USE_META_GAME,
+                    "max_turns": constants.MAX_TURNS,
+                    "win_reward": constants.WIN_REWARD,
+                    "turn_penalty_base": constants.TURN_PENALTY_BASE,
+                    "turn_penalty_max": constants.TURN_PENALTY_MAX,
+                    "shaping_weight": constants.REWARD_WEIGHTS["shaping_weight"],
+                    "deaths_weight": constants.REWARD_WEIGHTS["deaths"],
+                    "blocks_weight": constants.REWARD_WEIGHTS["blocks"],
+                    "heal_weight": constants.REWARD_WEIGHTS["heal"],
+                }
+            )
+
         self._print_configuration()
 
     def run(self) -> None:
@@ -104,6 +142,8 @@ class MainV:
             self._run_step(step)
         self._print_summary()
         self.logger.plot_progress(show=False)
+        if constants.USE_WANDB and wandb_setup is not None:
+            wandb_setup.finish_wandb()
 
     # ------------------------------------------------------------
     # Ejecución de un paso individual
@@ -233,6 +273,10 @@ class MainV:
         for step in self.steps:
             print(f"  - {step.name}: {step.action}, {step.episodes} lotes")
         print(f"Logs en:  {self.log_dir}")
+        if constants.USE_WANDB:
+            print(f"Wandb:    Activo (revisa el dashboard)")
+        else:
+            print(f"Wandb:    Desactivado")
         print("=" * 65)
 
     def _print_summary(self) -> None:
@@ -242,6 +286,8 @@ class MainV:
         print("=" * 65)
         print(f"Modelos guardados en: {self.config.base_path}")
         print(f"Logs (loss/progreso/config): {self.log_dir}")
+        if constants.USE_WANDB:
+            print(f"Wandb:    Revisa el dashboard para gráficas en tiempo real")
 
     @staticmethod
     def _format_time(seconds: float) -> str:
@@ -274,6 +320,14 @@ class RunSpec:
     constants_overrides: dict = field(default_factory=dict)
     player_class: Optional[Callable] = None
 
+
+def load_config_yaml(path: str = "config.yaml") -> dict:
+    if not os.path.exists(path):
+        print(f"Advertencia: {path} no encontrado. Usando valores por defecto.")
+        return {}
+    with open(path, "r") as f:
+        config = yaml.safe_load(f)
+    return config
 
 def run_single(
     config: RunConfig,
@@ -350,6 +404,7 @@ def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
 # CONFIGURACIÓN DEL RUN PRINCIPAL
 # ================================================================
 
+<<<<<<< HEAD
 # Parámetros globales del run
 VERSION = 1
 N_BATCH = 2048
@@ -371,9 +426,11 @@ PLAY_EPSILON = 0.0
 RUN_COMPARISON = True
 
 
+=======
+>>>>>>> 1916c5678c7439c8d89da0764ebb06c6b852ef5d
 def build_steps(config: RunConfig) -> List[TrainingStep]:
     """
-    Construye la lista de pasos según las flags de configuración.
+    Construye la lista de pasos según las flags de configuración (de constants).
 
     Args:
         config: Configuración del run (versión, número de episodios).
@@ -384,7 +441,7 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
     steps = []
 
     # Self-play
-    if RUN_SELF_PLAY:
+    if constants.RUN_SELF_PLAY:
         steps.append(TrainingStep(
             name="Entrenamiento self-play",
             action="train",
@@ -393,7 +450,7 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         ))
 
     # Evaluación final
-    if RUN_EVALUATION:
+    if constants.RUN_EVALUATION:
         steps.append(TrainingStep(
             name="Evaluación final",
             action="evaluate",
@@ -403,37 +460,37 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         ))
 
     # Fine-tuning contra humano
-    if HUMAN_OPPONENT != "none":
+    if constants.HUMAN_OPPONENT != "none":
         player1_checkpoint = None
-        if HUMAN_OPPONENT == "ia2":
+        if constants.HUMAN_OPPONENT == "ia2":
             player1_checkpoint = (config.path_p2_sel, config.path_p2_turn)
-        elif HUMAN_OPPONENT != "ia1":
+        elif constants.HUMAN_OPPONENT != "ia1":
             raise ValueError(
-                f"HUMAN_OPPONENT debe ser 'none', 'ia1' o 'ia2', no {HUMAN_OPPONENT!r}"
+                f"HUMAN_OPPONENT debe ser 'none', 'ia1' o 'ia2', no {constants.HUMAN_OPPONENT!r}"
             )
 
         steps.append(TrainingStep(
-            name=f"Fine-tuning contra humano ({HUMAN_OPPONENT.upper()})",
+            name=f"Fine-tuning contra humano ({constants.HUMAN_OPPONENT.upper()})",
             action="train",
-            episodes=HUMAN_EPISODES,
+            episodes=constants.HUMAN_EPISODES,
             opponent_factory=PlayerNoAIV,
             player1_checkpoint=player1_checkpoint,
             learn_p1=True,
             learn_p2=False,
-            epsilon_turn=HUMAN_EPSILON,
+            epsilon_turn=constants.HUMAN_EPSILON,
         ))
 
     # Jugar contra IA (modo humano vs IA)
-    if PLAY_AGAINST_AI:
+    if constants.PLAY_AGAINST_AI:
         steps.append(TrainingStep(
             name="Jugar contra IA",
             action="evaluate",
-            episodes=PLAY_EPISODES,
+            episodes=constants.PLAY_EPISODES,
             opponent_factory=PlayerNoAIV,
             player1_checkpoint=(config.path_p1_sel, config.path_p1_turn),
             learn_p1=False,
             learn_p2=False,
-            epsilon_turn=PLAY_EPSILON,
+            epsilon_turn=constants.PLAY_EPSILON,
         ))
 
     return steps
@@ -444,31 +501,40 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
 # ================================================================
 
 if __name__ == "__main__":
+    # 1. Cargar configuración desde YAML
+    yaml_config = load_config_yaml()
+
+    # 2. Sobrescribir constants con los valores del YAML
+    NON_CONSTANT_YAML_KEYS = {"comparisons"}
+
+    for key, value in yaml_config.items():
+        if key in NON_CONSTANT_YAML_KEYS:
+            continue
+        if hasattr(constants, key):
+            setattr(constants, key, value)
+        else:
+            print(f"Advertencia: {key} no existe en constants, se omite")
+    # 3. Crear configuración del run
     config = RunConfig(
-        version=VERSION,
-        train_episodes=TRAIN_EPISODES,
-        eval_episodes=EVAL_EPISODES,
+        version=constants.VERSION,
+        train_episodes=constants.TRAIN_EPISODES,
+        eval_episodes=constants.EVAL_EPISODES,
     )
 
-    if RUN_COMPARISON:
-        # Definir runs a comparar
-        run_specs = [
-            RunSpec(
-                run_name="baseline",
-                N=N_BATCH,
-                train_batches=TRAIN_EPISODES,
-                eval_batches=EVAL_EPISODES,
-            ),
-            RunSpec(
-                run_name="NOMG",
-                N=N_BATCH,
-                train_batches=TRAIN_EPISODES,
-                eval_batches=EVAL_EPISODES,
-                constants_overrides={"USE_META_GAME": False},
-            )
-        ]
+    # 4. Ejecutar comparación o run simple
+    if constants.RUN_COMPARISON and "comparisons" in yaml_config:
+        run_specs = []
+        for comp in yaml_config["comparisons"]:
+            run_specs.append(RunSpec(
+                run_name=comp.get("run_name", "unnamed"),
+                N=comp.get("N", constants.N_BATCH),
+                train_batches=comp.get("train_batches", constants.TRAIN_EPISODES),
+                eval_batches=comp.get("eval_batches", constants.EVAL_EPISODES),
+                constants_overrides=comp.get("overrides", {}),
+                # player_class se puede añadir si se quiere, pero por ahora no
+            ))
         run_comparison(config, run_specs)
     else:
         steps = build_steps(config)
-        n_efectivo = 1 if HUMAN_OPPONENT != "none" or PLAY_AGAINST_AI else N_BATCH
+        n_efectivo = 1 if constants.HUMAN_OPPONENT != "none" or constants.PLAY_AGAINST_AI else constants.N_BATCH
         MainV(config, steps, N=n_efectivo).run()

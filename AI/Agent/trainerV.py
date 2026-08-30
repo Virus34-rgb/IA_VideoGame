@@ -6,6 +6,7 @@ import time
 from typing import Optional, Any, Tuple, Dict
 
 import torch
+import wandb
 from AI.Meta.castle_v import CastleV
 from AI.Meta.shop_heuristics import decidir_compra_batch
 import constants
@@ -128,6 +129,24 @@ class TrainerV:
                         self.opponent_pool.update_elo(cp_id, new_elo2)
 
             if self.logger and (learn_p1 or learn_p2) and snapshot_every and batch_idx % snapshot_every == 0:
+                if constants.USE_WANDB:
+                    partidas = max(self.environment.stats.partidas, 1)
+                    wandb.log({
+                        "winrate/p1": self.environment.stats.p1_victories / partidas * 100,
+                        "winrate/p2": self.environment.stats.p2_victories / partidas * 100,
+                        "winrate/draw": self.environment.stats.empates / partidas * 100,
+                        "turns/avg": self.environment.stats.total_turns / partidas,
+                        "reward/p1_avg": self.environment.stats.total_reward_p1 / partidas,
+                        "reward/p2_avg": self.environment.stats.total_reward_p2 / partidas,
+                        "elo/p1": self.player1.elo,
+                        "elo/p2": p2_training_player.elo,
+                    }, step=batch_idx)
+                    if self.opponent_pool.elos:
+                        pool_elos = list(self.opponent_pool.elos.values())
+                        wandb.log({
+                            "elo/pool_mean": sum(pool_elos) / len(pool_elos),
+                            "elo/pool_max": max(pool_elos),
+                        }, step=batch_idx)
                 self.logger.log_snapshot(
                     batch_idx, self.player1, p2_training_player, self.environment.stats,
                     elo_p1=self.player1.elo, elo_p2=p2_training_player.elo, pool_elos=self.opponent_pool.elos,
@@ -413,6 +432,11 @@ class TrainerV:
 
         if self.logger and loss_turn is not None:
             self.logger.log_loss(batch_idx, player.replayed_turn, player_name, "turn", loss_turn)
+            if constants.USE_WANDB and loss_turn is not None:
+                wandb.log({
+                    f"loss/{player_name}_turn": loss_turn,
+                    "replayed_turn": player.replayed_turn
+                }, step=batch_idx)
 
         self._remember_and_replay_selection_batch(selection_states, selection_actions, reward_acum, player, player_name, batch_idx, skip_mask)
 

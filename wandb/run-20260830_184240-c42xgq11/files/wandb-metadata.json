@@ -1,0 +1,26 @@
+{
+  "os":  "Windows-11-10.0.26200-SP0",
+  "python":  "CPython 3.14.0",
+  "startedAt":  "2026-08-30T16:42:40.600120Z",
+  "program":  "-m __main__",
+  "git":  {
+    "remote":  "https://github.com/Virus34-rgb/IA_VideoGame.git",
+    "commit":  "966365c7439e3df3e7062aea680f32eaa267a610"
+  },
+  "email":  "mendezprietoangel@gmail.com",
+  "root":  "C:\\Users\\mende\\Universidad\\AI-Adaptive-Game\\CastleGame",
+  "host":  "LAPTOP-CJ78K9IF",
+  "executable":  "C:\\Users\\mende\\Universidad\\AI-Adaptive-Game\\CastleGame\\.venv\\Scripts\\python.exe",
+  "cpu_count":  10,
+  "cpu_count_logical":  12,
+  "disk":  {
+    "/":  {
+      "total":  "510697402368",
+      "used":  "421524283392"
+    }
+  },
+  "memory":  {
+    "total":  "16806252544"
+  },
+  "writerId":  "hk2vj8w0m9gtdmdizcjzf2kz5a8z8a61"
+}
