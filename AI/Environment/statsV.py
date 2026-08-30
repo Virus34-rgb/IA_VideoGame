@@ -203,7 +203,7 @@ class StatsV:
             es_p1: (N,) bool, True si el actor es P1.
             activa: (N,) bool, True para partidas no terminadas antes de este turno.
         """
-        es_habilidad = (accion_actor >= 0) & (accion_actor <= 3)
+        es_habilidad = (accion_actor >= 0) & (accion_actor < constants.MAX_POOL_SIZE)
         mask = es_habilidad & activa
         mask_p1 = mask & es_p1
         mask_p2 = mask & ~es_p1
@@ -497,14 +497,20 @@ class StatsV:
         attacks: Dict[int, List[int]],
         warriors_classes: Dict[int, Any],
     ) -> List[str]:
-        """Genera líneas de texto para el uso de habilidades por guerrero."""
-        total = sum(sum(a) for a in attacks.values())
+        """Genera líneas de texto para el uso de habilidades por guerrero.
+        Muestra el porcentaje de uso dentro del guerrero y el porcentaje global.
+        """
+        total_global = sum(sum(a) for a in attacks.values())
         lines = []
         for warrior_id, counts in attacks.items():
             warrior = warriors_classes[warrior_id]
-            lines.append(f"  Guerrero {warrior_id}:")
+            warrior_total = sum(counts)
+            # Línea de encabezado del guerrero con total y porcentaje global
+            pct_global_warrior = (warrior_total / total_global * 100) if total_global > 0 else 0.0
+            lines.append(f"  Guerrero {warrior_id} (total: {warrior_total}, {pct_global_warrior:6.2f}% global):")
             for ability_idx, count in enumerate(counts):
                 ability_name = warrior.ability_pool[ability_idx].name
-                pct = count / total * 100 if total > 0 else 0.0
-                lines.append(f"    {ability_name:15s} {int(count):4d} ({pct:6.2f}%)")
+                pct_warrior = (count / warrior_total * 100) if warrior_total > 0 else 0.0
+                pct_global = (count / total_global * 100) if total_global > 0 else 0.0
+                lines.append(f"    {ability_name:15s} {int(count):4d} ({pct_warrior:6.2f}% del guerrero, {pct_global:6.2f}% global)")
         return lines

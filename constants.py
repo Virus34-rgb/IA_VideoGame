@@ -30,9 +30,16 @@ COPY_DQN = 50                     # Frecuencia de copia a target network (en pas
 # Juego - Reglas básicas
 # ============================================================
 WARRIOR_QUANTITY = 5              # Número de tipos de guerreros
-ABILITIES = [1, 2, 3, 4, "movPos", "movNeg"]  # Acciones posibles (índices 0-3 habilidades, 4=movPos, 5=movNeg)
 # ============================================================
-# Pool de habilidades por instancia (NUEVO)
+# Juego - Meta Juego
+# ============================================================
+MAX_CASTLE_SIZE = 10
+MAX_BATALLAS = 15
+COST_COMPRA = 30
+MAX_ABILITY_LEVEL = 5
+USE_META = True
+# ============================================================
+# Pool de habilidades por instancia
 # ============================================================
 MAX_POOL_SIZE = 6          # Tamaño de la pool de habilidades por tipo de guerrero
 ABILITIES_PER_WARRIOR = 4  # Habilidades equipadas simultáneamente (no cambia)
