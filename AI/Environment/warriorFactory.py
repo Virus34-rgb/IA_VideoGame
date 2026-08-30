@@ -23,13 +23,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     knight = WarriorData(
         id=1,
         name="Knight",
-        max_health=27,
+        max_health=24,
         speed=10,
         abilities=[
-            AbilityData("Smite", 1, 12, [0], False),      # Golpe fuerte al frente
+            AbilityData("Smite", 1, 14, [0], False),      # Golpe fuerte al frente
             AbilityData("Guard Up", 2, 0, [], False),    # Bloquea todo daño este turno
-            AbilityData("Slice", 3, 6, [0, 1, 2], True), # Ataque en área (repetible)
-            AbilityData("Throw", 4, 8, [2], True),       # Ataque a distancia (repetible)
+            AbilityData("Slice", 3, 7, [0, 1, 2], True), # Ataque en área (repetible)
+            AbilityData("Throw", 4, 10, [2], True),       # Ataque a distancia (repetible)
         ]
     )
 
@@ -42,10 +42,10 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         max_health=17,
         speed=18,
         abilities=[
-            AbilityData("Arrow", 1, 10, [1], True),       # Ataque al centro
+            AbilityData("Arrow", 1, 11, [1], True),       # Ataque al centro
             AbilityData("Heal", 2, 8, [], False),        # Curación personal (6 de vida)
-            AbilityData("Arrow2", 3, 8, [2], True),      # Ataque a la retaguardia
-            AbilityData("Rain", 4, 8, [0, 1, 2], False), # Lluvia de flechas (todas las posiciones)
+            AbilityData("Arrow2", 3, 9, [2], True),      # Ataque a la retaguardia
+            AbilityData("Rain", 4, 13, [0, 1, 2], False), # Lluvia de flechas (todas las posiciones)
         ]
     )
 
@@ -58,10 +58,10 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         max_health=14,
         speed=20,
         abilities=[
-            AbilityData("BackAttack", 1, 14, [2], False), # Ataque crítico a la retaguardia
+            AbilityData("BackAttack", 1, 15, [2], False), # Ataque crítico a la retaguardia
             AbilityData("Hide", 2, 0, [], False),        # Se oculta (bloquea daño)
-            AbilityData("PoisonGas", 3, 9, [0, 1, 2], False), # Veneno en área
-            AbilityData("Knife", 4, 9, [0], True),       # Ataque repetible al frente
+            AbilityData("PoisonGas", 3, 11, [0, 1, 2], False), # Veneno en área
+            AbilityData("Knife", 4, 10, [0], True),       # Ataque repetible al frente
         ]
     )
 
@@ -74,10 +74,10 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
         max_health=15,
         speed=12,
         abilities=[
-            AbilityData("Magic Missile", 1, 6, [0, 1, 2], True), # Daño bajo pero seguro
-            AbilityData("Zap", 2, 8, [1, 2], False),       # Rayo a centro/retaguardia
-            AbilityData("FireBall", 3, 8, [0, 1, 2], False), # Bola de fuego en área
-            AbilityData("StaffAttack", 4, 6, [0], True),   # Ataque físico repetible
+            AbilityData("Magic Missile", 1, 7, [0, 1, 2], True), # Daño bajo pero seguro
+            AbilityData("Zap", 2, 9, [1, 2], False),       # Rayo a centro/retaguardia
+            AbilityData("FireBall", 3, 10, [0, 1, 2], False), # Bola de fuego en área
+            AbilityData("StaffAttack", 4, 8, [0], True),   # Ataque físico repetible
         ]
     )
 
@@ -87,13 +87,13 @@ def get_warriors_classes() -> Dict[int, WarriorData]:
     cleric = WarriorData(
         id=5,
         name="Cleric",
-        max_health=20,
+        max_health=18,
         speed=14,
         abilities=[
-            AbilityData("Charge", 1, 3, [0, 1], True),    # Ataque modesto al frente/centro
-            AbilityData("HealAll", 2, 10, [], False),     # Cura a todos los aliados
+            AbilityData("Charge", 1, 7, [0, 1], True),    # Ataque modesto al frente/centro
+            AbilityData("HealAll", 2, 7, [], False),     # Cura a todos los aliados
             AbilityData("Defend", 3, 0, [], False),      # Reduce daño recibido 50% este turno
-            AbilityData("Light", 4, 9, [0, 1, 2], False), # Ataque de luz en área
+            AbilityData("Light", 4, 6, [0, 1, 2], False), # Ataque de luz en área
         ]
     )
 
