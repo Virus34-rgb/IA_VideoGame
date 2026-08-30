@@ -26,12 +26,12 @@ class PlayerAIV:
         self.selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT,input_size=selection_state_dim)
         self.target_selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT,input_size=selection_state_dim)
         self.target_selection_network.load_state_dict(self.selection_network.state_dict())
-        self.optimizer_sel = torch.optim.Adam(self.selection_network.parameters(), lr=constants.SELECTION_LEARNING_RATE)
+        self.optimizer_sel = torch.optim.Adam(self.selection_network.parameters(), lr=constants.SELECTION_LEARNING_RATE,foreach=True)
 
         self.turn_network: TurnNetwork = TurnNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
         self.target_turn_network: TurnNetwork = TurnNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
         self.target_turn_network.load_state_dict(self.turn_network.state_dict())
-        self.optimizer_turn = torch.optim.Adam(self.turn_network.parameters(), lr=constants.TURN_LEARNING_RATE)
+        self.optimizer_turn = torch.optim.Adam(self.turn_network.parameters(), lr=constants.TURN_LEARNING_RATE,foreach=True)
 
         if use_replay:
             self.replay_memory_sel = ReplayMemoryPM(

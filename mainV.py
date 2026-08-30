@@ -75,6 +75,7 @@ class MainV:
         """
         Prepara el entorno, el jugador, el logger y la pool de oponentes.
         """
+        self.run_timestamp = time.strftime("%Y%m%d_%H%M%S")
         # Limpiar directorios antiguos si está configurado
         if constants.DELETE_DIRECTORIES:
             shutil.rmtree(self.config.p1_path, ignore_errors=True)
@@ -92,7 +93,7 @@ class MainV:
         # Inicializar logger (CSV)
         self.logger = MetricsLogger(
             output_dir=self.log_dir,
-            run_name=f"v{self.config.version}",
+            run_name=f"v{self.config.version}_{self.run_timestamp}",
         )
         self.logger.dump_config(
             constants,
@@ -109,7 +110,7 @@ class MainV:
         if constants.USE_WANDB and wandb_setup is not None:
             wandb_setup.init_wandb(
                 project_name="castle-game-rl",
-                run_name=f"v{self.config.version}",
+                run_name=f"v{self.config.version}_{self.run_timestamp}",
                 config={
                     "N": self.N,
                     "learning_rate_selection": constants.SELECTION_LEARNING_RATE,
