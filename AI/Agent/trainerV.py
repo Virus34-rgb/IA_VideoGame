@@ -140,15 +140,13 @@ class TrainerV:
                         "reward/p2_avg": self.environment.stats.total_reward_p2 / partidas,
                         "elo/p1": self.player1.elo,
                         "elo/p2": p2_training_player.elo,
-                        "global_step": batch_idx,
-                    })
+                    }, step=batch_idx)
                     if self.opponent_pool.elos:
                         pool_elos = list(self.opponent_pool.elos.values())
                         wandb.log({
                             "elo/pool_mean": sum(pool_elos) / len(pool_elos),
                             "elo/pool_max": max(pool_elos),
-                            "global_step": batch_idx,
-                        })
+                        }, step=batch_idx)
                 self.logger.log_snapshot(
                     batch_idx, self.player1, p2_training_player, self.environment.stats,
                     elo_p1=self.player1.elo, elo_p2=p2_training_player.elo, pool_elos=self.opponent_pool.elos,
@@ -437,9 +435,8 @@ class TrainerV:
             if constants.USE_WANDB and loss_turn is not None:
                 wandb.log({
                     f"loss/{player_name}_turn": loss_turn,
-                    "global_step": batch_idx,
                     "replayed_turn": player.replayed_turn
-                })
+                }, step=batch_idx)
 
         self._remember_and_replay_selection_batch(selection_states, selection_actions, reward_acum, player, player_name, batch_idx, skip_mask)
 
