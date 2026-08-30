@@ -8,7 +8,6 @@ import torch
 from dataclasses import dataclass
 from typing import Dict, List, Any
 
-from constants import MAX_POOL_SIZE, WARRIOR_QUANTITY
 import constants
 
 
@@ -108,10 +107,10 @@ class StatsV:
         self.p2_movements: float = 0.0
 
         # Tensores acumuladores por tipo de guerrero y habilidad
-        self._p1_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
-        self._p2_attacks_tensor = torch.zeros(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE)
-        self._p1_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
-        self._p2_warrior_use_tensor = torch.zeros(WARRIOR_QUANTITY)
+        self._p1_attacks_tensor = torch.zeros(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE)
+        self._p2_attacks_tensor = torch.zeros(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE)
+        self._p1_warrior_use_tensor = torch.zeros(constants.WARRIOR_QUANTITY)
+        self._p2_warrior_use_tensor = torch.zeros(constants.WARRIOR_QUANTITY)
 
         # Buffers por batch (se reinician en start_batch)
         self._p1_damage_batch: torch.Tensor | None = None
@@ -210,13 +209,13 @@ class StatsV:
 
         if mask_p1.any():
             idx = tipo_actor[mask_p1] * constants.MAX_POOL_SIZE + accion_actor[mask_p1]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
-            self._p1_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
+            counts = torch.bincount(idx, minlength=(constants.WARRIOR_QUANTITY + 1) * constants.MAX_POOL_SIZE)
+            self._p1_attacks_tensor += counts.view(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE).float()
 
         if mask_p2.any():
             idx = tipo_actor[mask_p2] * constants.MAX_POOL_SIZE + accion_actor[mask_p2]
-            counts = torch.bincount(idx, minlength=(WARRIOR_QUANTITY + 1) * MAX_POOL_SIZE)
-            self._p2_attacks_tensor += counts.view(WARRIOR_QUANTITY + 1, MAX_POOL_SIZE).float()
+            counts = torch.bincount(idx, minlength=(constants.WARRIOR_QUANTITY + 1) * constants.MAX_POOL_SIZE)
+            self._p2_attacks_tensor += counts.view(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE).float()
 
     def accumulate_warrior_use(self, warrior1: torch.Tensor, warrior2: torch.Tensor) -> None:
         """
@@ -303,8 +302,8 @@ class StatsV:
         summary = self._build_summary()
         p1_warrior_use = self._p1_warrior_use_tensor.tolist()
         p2_warrior_use = self._p2_warrior_use_tensor.tolist()
-        p1_attacks = {i: self._p1_attacks_tensor[i].tolist() for i in range(1, WARRIOR_QUANTITY + 1)}
-        p2_attacks = {i: self._p2_attacks_tensor[i].tolist() for i in range(1, WARRIOR_QUANTITY + 1)}
+        p1_attacks = {i: self._p1_attacks_tensor[i].tolist() for i in range(1, constants.WARRIOR_QUANTITY + 1)}
+        p2_attacks = {i: self._p2_attacks_tensor[i].tolist() for i in range(1, constants.WARRIOR_QUANTITY + 1)}
 
         sections = [
             self._section_resultados(summary),

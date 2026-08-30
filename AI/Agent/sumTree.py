@@ -16,25 +16,19 @@ class SumTree:
     def _propagate_batch(self, idxs: numpy.ndarray, changes: numpy.ndarray) -> None:
         """
         Propaga los cambios hacia arriba en el árbol para un conjunto de hojas.
-        Vectorizado: en cada nivel, agrupa por nodo padre y acumula los cambios
-        con un bincount restringido al rango local de índices (evita allocar
-        arrays del tamaño completo del árbol y evita una llamada extra a unique).
+        Usa np.add.at directamente, sin deduplicar índices por nivel: add.at ya
+        acumula correctamente sobre índices repetidos, evitando las llamadas
+        extra a unique/bincount/flatnonzero que dominaban el coste con lotes
+        pequeños (overhead de NumPy por llamada, no por volumen de datos).
         """
         idxs = numpy.asarray(idxs, dtype=numpy.int64)
         changes = numpy.asarray(changes, dtype=numpy.float32)
-        while len(idxs) > 0:
+        while len(idxs) > 0 and not (len(idxs) == 1 and idxs[0] == 0):
             parents = (idxs - 1) // 2
-            offset = int(parents.min())
-            span = int(parents.max()) - offset + 1
-            local_changes = numpy.bincount(parents - offset, weights=changes, minlength=span)
-            nonzero_local = numpy.flatnonzero(local_changes)
-            unique_parents = nonzero_local + offset
-            parent_changes = local_changes[nonzero_local]
-            self.tree[unique_parents] += parent_changes
-            # Subir al siguiente nivel (nodos que no son raíz)
-            mask = unique_parents > 0
-            idxs = unique_parents[mask]
-            changes = parent_changes[mask]
+            numpy.add.at(self.tree, parents, changes)
+            mask = parents > 0
+            idxs = parents[mask]
+            changes = changes[mask]
 
     def total(self) -> float:
         """Suma total de prioridades (raíz del árbol)."""
@@ -78,6 +72,11 @@ class SumTree:
         """
         Dado un conjunto de valores uniformes en [0, total), devuelve los índices de
         las hojas correspondientes y sus prioridades.
+
+        Vectorizado sin flatnonzero/máscaras dinámicas: la profundidad del árbol es
+        estructural (depende solo de self.capacity, no de los datos), así que se itera
+        un número fijo de pasos y se usa numpy.where para "congelar" los índices que
+        ya llegaron a una hoja, evitando el overhead de filtrar activos en cada nivel.
         """
         values = numpy.asarray(values, dtype=numpy.float32)
         if len(values) == 0:
@@ -85,31 +84,21 @@ class SumTree:
 
         indices = numpy.zeros(len(values), dtype=numpy.int64)
         remaining = values.copy()
-        active = numpy.ones(len(values), dtype=bool)
+        tree_len = len(self.tree)
+        depth = int(numpy.ceil(numpy.log2(max(self.capacity, 1)))) + 1
 
-        while active.any():
-            active_indices = numpy.flatnonzero(active)
-            current = indices[active_indices]
-            left = 2 * current + 1
+        for _ in range(depth):
+            left = 2 * indices + 1
+            is_leaf = left >= tree_len
 
-            is_leaf = left >= len(self.tree)
-            leaf_indices = active_indices[is_leaf]
-            active[leaf_indices] = False
+            left_safe = numpy.where(is_leaf, 0, left)
+            left_values = self.tree[left_safe]
 
-            non_leaf_indices = active_indices[~is_leaf]
-            if len(non_leaf_indices) == 0:
-                continue
+            go_left = remaining <= left_values
+            next_indices = numpy.where(go_left, left, left + 1)
 
-            non_leaf_left = left[~is_leaf]
-            left_values = self.tree[non_leaf_left]
-
-            go_left = remaining[non_leaf_indices] <= left_values
-            go_right = ~go_left
-
-            indices[non_leaf_indices[go_left]] = non_leaf_left[go_left]
-            right = non_leaf_left[go_right] + 1
-            indices[non_leaf_indices[go_right]] = right
-            remaining[non_leaf_indices[go_right]] -= left_values[go_right]
+            indices = numpy.where(is_leaf, indices, next_indices)
+            remaining = numpy.where(is_leaf | go_left, remaining, remaining - left_values)
 
         priorities = self.tree[indices]
         return indices, priorities

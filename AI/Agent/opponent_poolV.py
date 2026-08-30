@@ -13,7 +13,6 @@ from typing import Any, Dict, Optional, Tuple, List
 
 import torch
 
-from constants import MAX_MODELS
 import constants
 
 
@@ -83,7 +82,7 @@ class OpponentPoolV:
             player: Instancia de PlayerAIV (o cualquier objeto con save_model_inference_only).
         """
         cantidad, first_index, last_index = self.list_models()
-        if cantidad >= MAX_MODELS:
+        if cantidad >= constants.MAX_MODELS:
             self.delete_first(first_index)
             cantidad, first_index, last_index = self.list_models()
 

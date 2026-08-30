@@ -215,7 +215,8 @@ class TrainerV:
                 p2_training_player.update_beta()
 
         self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
-        self.environment.stats.total_reward_p2 += reward2_acum.sum().item()
+        reward2_valid = reward2_acum[~self._opponent_from_pool_mask]
+        self.environment.stats.total_reward_p2 += reward2_valid.sum().item()
 
     def _run_turn(self, obs1_tensor, obs2_tensor, n_steps_buffer_p1, n_steps_buffer_p2, p2_training_player, learn_p1, learn_p2) -> None:
         p1_alive_now = self.environment.p1_alive

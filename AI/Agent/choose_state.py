@@ -6,7 +6,6 @@ Soporta dos modos, elegidos por constants.USE_META_GAME:
 """
 import torch
 
-from constants import WARRIOR_QUANTITY, MAX_POOL_SIZE
 import constants
 
 
@@ -29,22 +28,22 @@ class ChooseStateV:
         catalog_abilities: torch.Tensor,   # (N, WARRIOR_QUANTITY, 4)
     ) -> torch.Tensor:
         idx_disp = (pl_disposition - 1).clamp(min=0)
-        one_hot_disp = torch.nn.functional.one_hot(idx_disp, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_disp = torch.nn.functional.one_hot(idx_disp, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_disp = one_hot_disp * (pl_disposition > 0).unsqueeze(-1).float()
         one_hot_disp = one_hot_disp.flatten(start_dim=1)
 
         idx_w = (pl_warriors_ids - 1).clamp(min=0)
-        one_hot_w = torch.nn.functional.one_hot(idx_w, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_w = torch.nn.functional.one_hot(idx_w, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_w = one_hot_w * (pl_warriors_ids > 0).unsqueeze(-1).float()
         one_hot_w = one_hot_w.flatten(start_dim=1)
 
         idx_opp = (opp_initial_warrior - 1).clamp(min=0)
-        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_opp = one_hot_opp * (opp_initial_warrior > 0).unsqueeze(-1).float()
 
         pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)
 
-        catalog_onehot = torch.nn.functional.one_hot(catalog_abilities, num_classes=MAX_POOL_SIZE).float()
+        catalog_onehot = torch.nn.functional.one_hot(catalog_abilities, num_classes=constants.MAX_POOL_SIZE).float()
         catalog_onehot = catalog_onehot.flatten(start_dim=1)
 
         return torch.cat([one_hot_disp, one_hot_w, one_hot_opp, pos_norm, catalog_onehot], dim=-1)
@@ -66,11 +65,11 @@ class ChooseStateV:
         N = castle_types.shape[0]
 
         idx = (castle_types - 1).clamp(min=0)
-        one_hot_types = torch.nn.functional.one_hot(idx, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_types = torch.nn.functional.one_hot(idx, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_types = one_hot_types * castle_alive.unsqueeze(-1).float()
         one_hot_types_flat = one_hot_types.flatten(start_dim=1)
 
-        abilities_onehot = torch.nn.functional.one_hot(castle_abilities, num_classes=MAX_POOL_SIZE).float()
+        abilities_onehot = torch.nn.functional.one_hot(castle_abilities, num_classes=constants.MAX_POOL_SIZE).float()
         abilities_onehot = abilities_onehot * castle_alive.view(N, constants.MAX_CASTLE_SIZE, 1, 1).float()
         abilities_flat = abilities_onehot.flatten(start_dim=1)
 
@@ -83,7 +82,7 @@ class ChooseStateV:
         gold_norm = (gold.float() / constants.GOLD_NORM_REF).unsqueeze(-1)
 
         idx_opp = (opp_initial_warrior - 1).clamp(min=0)
-        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_opp = one_hot_opp * (opp_initial_warrior > 0).unsqueeze(-1).float()
         pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)
 

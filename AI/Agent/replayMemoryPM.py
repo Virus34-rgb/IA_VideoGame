@@ -10,7 +10,7 @@ import torch
 
 from AI.Agent.replayStorage import ReplayStorage
 from AI.Agent.sumTree import SumTree
-from constants import ALPHA, BETA_DECAY_RATE, BETA_END, BETA_START, PER_EPSILON
+import constants
 
 
 class ReplayMemoryPM:
@@ -28,10 +28,10 @@ class ReplayMemoryPM:
         self.memory = SumTree(capacity)
         self.storage = ReplayStorage(capacity, state_dim, action_shape=(), is_turn_storage=False)
 
-        self.alpha = ALPHA
-        self.beta = BETA_START
-        self.beta_end = BETA_END
-        self.epsilon = PER_EPSILON
+        self.alpha = constants.ALPHA
+        self.beta = constants.BETA_START
+        self.beta_end = constants.BETA_END
+        self.epsilon = constants.PER_EPSILON
         self.max_priority = 1.0
 
     def push_batch(
@@ -95,7 +95,7 @@ class ReplayMemoryPM:
         self.max_priority = max(self.max_priority, np.max(priorities))
 
     def update_beta(self, replayed_count: int) -> None:
-        self.beta = BETA_END - (BETA_END - BETA_START) * (BETA_DECAY_RATE ** replayed_count)
+        self.beta = constants.BETA_END - (constants.BETA_END - constants.BETA_START) * (constants.BETA_DECAY_RATE ** replayed_count)
 
     def __len__(self) -> int:
         return len(self.memory)
