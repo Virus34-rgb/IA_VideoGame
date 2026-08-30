@@ -21,9 +21,10 @@ class PlayerAIV:
         self.epsilon_sel: float = constants.EPSILON_SELECTION
         self.epsilon_turn: float = constants.EPSILON_TURN
         self.epsilon_residual: float = constants.EPSILON_RESIDUAL
-
-        self.selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
-        self.target_selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
+        
+        selection_state_dim = constants.get_selection_state_dim()
+        self.selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT,input_size=selection_state_dim)
+        self.target_selection_network: SelectionNetwork = SelectionNetwork(sigma_init=constants.NOISY_SIGMA_INIT,input_size=selection_state_dim)
         self.target_selection_network.load_state_dict(self.selection_network.state_dict())
         self.optimizer_sel = torch.optim.Adam(self.selection_network.parameters(), lr=constants.SELECTION_LEARNING_RATE)
 
@@ -34,7 +35,7 @@ class PlayerAIV:
 
         if use_replay:
             self.replay_memory_sel = ReplayMemoryPM(
-                constants.SELECTION_REPLAY_DATA, state_dim=constants.SELECTION_STATE_DIM,  
+                constants.SELECTION_REPLAY_DATA, state_dim=selection_state_dim,  
             )
             self.replay_memory_turn = ReplayMemoryAN(
                 constants.TURN_REPLAY_DATA, state_dim=constants.TURN_STATE_DIM,             

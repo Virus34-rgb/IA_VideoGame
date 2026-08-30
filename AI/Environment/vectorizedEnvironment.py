@@ -160,16 +160,21 @@ class VectorizedEnvironment:
             enemy_instance_abilities = torch.where(player_mask_3, self.p2_instance_abilities, self.p1_instance_abilities)
             actor_type = own_disp.gather(1, pos.unsqueeze(1)).squeeze(1)
 
+            # Obtener castle_slots del actor y enemigo
+            own_castle_slots = torch.where(player_mask, self.p1_castle_slots, self.p2_castle_slots)
+            enemy_castle_slots = torch.where(player_mask, self.p2_castle_slots, self.p1_castle_slots)
+
             (
                 dmg, avoided, blocked, moved, healed,
                 new_own_disp, new_enemy_disp, new_own_health, new_enemy_health,
                 new_own_cd, new_own_alive, new_enemy_alive,
-                new_own_abilities,
-                ability_pool_idx,
+                new_own_abilities, ability_pool_idx,
+                new_own_castle,
             ) = self._resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
                 own_instance_abilities, enemy_instance_abilities,
+                own_castle_slots, enemy_castle_slots,
             )
 
             self.p1_disposition = torch.where(player_mask, new_own_disp, new_enemy_disp)
@@ -182,6 +187,8 @@ class VectorizedEnvironment:
             self.p2_cooldowns = torch.where(~player_mask_3, new_own_cd, self.p2_cooldowns)
             self.p1_instance_abilities = torch.where(player_mask_3, new_own_abilities, self.p1_instance_abilities)
             self.p2_instance_abilities = torch.where(~player_mask_3, new_own_abilities, self.p2_instance_abilities)
+            self.p1_castle_slots = torch.where(player_mask, new_own_castle, self.p1_castle_slots)
+            self.p2_castle_slots = torch.where(~player_mask, new_own_castle, self.p2_castle_slots)
 
             damage_p1 += torch.where(es_p1, dmg, torch.zeros_like(dmg))
             damage_p2 += torch.where(es_p1, torch.zeros_like(dmg), dmg)
@@ -221,36 +228,36 @@ class VectorizedEnvironment:
     def _resolve_action(
         self, pos, actors, own_disposition, enemy_disposition, own_health, enemy_health,
         own_cooldowns, own_alive, enemy_alive, actions_actor, enemy_actions,
-        own_instance_abilities, enemy_instance_abilities,   # NUEVO
+        own_instance_abilities, enemy_instance_abilities,
+        own_castle_slots, enemy_castle_slots,
     ):
         actor_alive_now = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
 
-        own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1)  # (N,4)
-        ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0, 3).unsqueeze(1)).squeeze(1)     # (N,)
-        effect_type = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx]                            # (N,)
+        own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1)
+        ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0, 3).unsqueeze(1)).squeeze(1)
+        effect_type = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx]
 
-        es_habilidad = (actions_actor >= 0) & (actions_actor <= 3)   # NUEVO: excluye movimiento(5,6) y muerto(-1)
+        es_habilidad = (actions_actor >= 0) & (actions_actor <= 3)
 
         mask_movPos = (actions_actor == 5) & (pos != 2) & actor_alive_now
         mask_movNeg = (actions_actor == 6) & (pos != 0) & actor_alive_now
         mask_self_heal = es_habilidad & (effect_type == EffectType.SELF_HEAL) & actor_alive_now
         mask_team_heal = es_habilidad & (effect_type == EffectType.TEAM_HEAL) & actor_alive_now
-        mask_defend = es_habilidad & (
-            (effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)
-        ) & actor_alive_now
+        mask_defend = es_habilidad & ((effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)) & actor_alive_now
         mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
 
         moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov = self._resolve_action_movement(
             actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, own_castle_slots, actions_actor, pos
         )
+
         own_new_disp = own_disposition.clone()
         own_new_disp = torch.where(mask_movPos.unsqueeze(1), new_disp_mov, own_new_disp)
         own_new_disp = torch.where(mask_movNeg.unsqueeze(1), new_disp_mov, own_new_disp)
-        
+
         own_new_castle = own_castle_slots.clone()
         own_new_castle = torch.where(mask_movPos.unsqueeze(1), new_castle_mov, own_new_castle)
         own_new_castle = torch.where(mask_movNeg.unsqueeze(1), new_castle_mov, own_new_castle)
-        
+
         damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack = self._resolve_action_attack(
             actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
         )
@@ -290,13 +297,13 @@ class VectorizedEnvironment:
             damage, damage_avoided, blocked, moved, heal,
             own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
             own_cd_new, own_alive, enemy_alive_final,
-            own_abilities_new,
-            ability_pool_idx,
+            own_abilities_new, ability_pool_idx,
+            own_new_castle,
         )
 
     def _resolve_action_movement(
-    self, actors, own_disposition, own_health, own_cooldowns,
-    own_instance_abilities, own_castle_slots, actions_actor, pos,
+        self, actors, own_disposition, own_health, own_cooldowns,
+        own_instance_abilities, own_castle_slots, actions_actor, pos,
     ):
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
@@ -305,7 +312,7 @@ class VectorizedEnvironment:
         pos_destino_pos = (pos + 1).clamp(max=2)
         pos_destino_neg = (pos - 1).clamp(min=0)
 
-        # ---------- INTERCAMBIAR DISPOSICIÓN ----------
+        # Intercambiar disposición
         own_new_disp = own_disposition.clone()
         origen = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
         destino = own_disposition.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
@@ -318,7 +325,7 @@ class VectorizedEnvironment:
         own_new_disp_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino2, origen2).unsqueeze(1))
         own_new_disp_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen2, destino2).unsqueeze(1))
 
-        # ---------- INTERCAMBIAR SALUD ----------
+        # Intercambiar salud
         own_new_health = own_health.clone()
         origen_h = own_health.gather(1, pos.unsqueeze(1)).squeeze(1)
         destino_h = own_health.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
@@ -331,7 +338,7 @@ class VectorizedEnvironment:
         own_new_health_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_h2, origen_h2).unsqueeze(1))
         own_new_health_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_h2, destino_h2).unsqueeze(1))
 
-        # ---------- INTERCAMBIAR COOLDOWNS ----------
+        # Intercambiar cooldowns
         pos_e = pos.view(-1, 1, 1).expand(-1, 1, 4)
         pos_destino_pos_e = pos_destino_pos.view(-1, 1, 1).expand(-1, 1, 4)
         pos_destino_neg_e = pos_destino_neg.view(-1, 1, 1).expand(-1, 1, 4)
@@ -350,7 +357,7 @@ class VectorizedEnvironment:
         own_new_cd_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_cd2, origen_cd2))
         own_new_cd_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_cd2, destino_cd2))
 
-        # ---------- INTERCAMBIAR HABILIDADES DE LA INSTANCIA ----------
+        # Intercambiar habilidades de instancia
         own_new_abilities = own_instance_abilities.clone()
         origen_ab = own_instance_abilities.gather(1, pos_e)
         destino_ab = own_instance_abilities.gather(1, pos_destino_pos_e)
@@ -363,6 +370,7 @@ class VectorizedEnvironment:
         own_new_abilities_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_ab2, origen_ab2))
         own_new_abilities_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_ab2, destino_ab2))
 
+        # Intercambiar castle_slots
         own_new_castle = own_castle_slots.clone()
         origen_c = own_castle_slots.gather(1, pos.unsqueeze(1)).squeeze(1)
         destino_c = own_castle_slots.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
@@ -381,12 +389,12 @@ class VectorizedEnvironment:
             own_new_health_final,
             own_new_cd_final,
             own_new_abilities_final,
-            own_new_castle_final,  
+            own_new_castle_final,
         )
 
     def _resolve_action_attack(
-    self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
-    enemy_instance_abilities,
+        self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
+        enemy_instance_abilities,
     ):
         would_be_damage = self.damage_por_tipo_habilidad[actors, ability_pool_idx]
         target_mask = self.target_mask_por_tipo_habilidad[actors, ability_pool_idx]
@@ -451,11 +459,7 @@ class VectorizedEnvironment:
         return total_healed, own_new_health
 
     def _update_own_cooldowns(self, actors, accion_actor, ability_pool_idx, pos, own_cooldowns, mask_usa_habilidad):
-        """
-        Fija el cooldown del botón usado a turn_cd de la habilidad real (vía ability_pool_idx).
-        El decremento por turno ya se aplicó de forma centralizada en turn().
-        """
-        turns_cd = self.turn_cd_por_tipo_habilidad[actors, ability_pool_idx] 
+        turns_cd = self.turn_cd_por_tipo_habilidad[actors, ability_pool_idx]
 
         slot_expand = pos.view(-1, 1, 1).expand(-1, 1, 4)
         actor_cd = own_cooldowns.gather(1, slot_expand).squeeze(1)
@@ -577,7 +581,7 @@ class VectorizedEnvironment:
         damage_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.float)
         turn_cd_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)
         target_mask_por_tipo_habilidad = torch.zeros(num_types, num_abilities, num_slots, dtype=torch.bool)
-        effect_type_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)  # NUEVO
+        effect_type_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)
 
         for warrior_id, warrior_data in self.warriors_classes.items():
             max_health_por_tipo[warrior_id] = warrior_data.max_health
@@ -585,7 +589,7 @@ class VectorizedEnvironment:
             for ability_idx, ability in enumerate(warrior_data.ability_pool):
                 damage_por_tipo_habilidad[warrior_id, ability_idx] = ability.damage
                 turn_cd_por_tipo_habilidad[warrior_id, ability_idx] = ability.turn_cd
-                effect_type_por_tipo_habilidad[warrior_id, ability_idx] = int(ability.effect_type)  # NUEVO
+                effect_type_por_tipo_habilidad[warrior_id, ability_idx] = int(ability.effect_type)
                 for target_pos in ability.target_positions:
                     target_mask_por_tipo_habilidad[warrior_id, ability_idx, target_pos] = True
 
