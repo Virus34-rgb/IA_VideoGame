@@ -20,13 +20,8 @@ EPSILON_RESIDUAL = 0.01
 # ============================================================
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
-<<<<<<< HEAD
-SELECTION_REPLAY_DATA = 1_000_000 # Capacidad del buffer de selección
-TURN_REPLAY_DATA = 1_000_000      # Capacidad del buffer de turno
-=======
 SELECTION_REPLAY_DATA = 150_000 # Capacidad del buffer de selección
 TURN_REPLAY_DATA = 150_000      # Capacidad del buffer de turno
->>>>>>> 1916c5678c7439c8d89da0764ebb06c6b852ef5d
 BATCH_SIZE = 64                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
@@ -133,8 +128,6 @@ ELO_INITIAL = 1000.0
 ESTANDAR_ELO = 150
 K_FACTOR_ELO = 32
 ELO_TEMPERATURE = 15
-<<<<<<< HEAD
-=======
 
 # Variables que se cargarán desde YAML (con valores por defecto)
 VERSION = 1
@@ -152,4 +145,3 @@ HUMAN_EPSILON = 0.1
 PLAY_AGAINST_AI = False
 PLAY_EPISODES = 20
 PLAY_EPSILON = 0.0
->>>>>>> 1916c5678c7439c8d89da0764ebb06c6b852ef5d

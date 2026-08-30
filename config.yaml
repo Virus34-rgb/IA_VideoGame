@@ -3,15 +3,15 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 1
+VERSION: 2
 N_BATCH: 2048
-TRAIN_EPISODES: 5
-EVAL_EPISODES: 1
+TRAIN_EPISODES: 50
+EVAL_EPISODES: 10
 
 # Flags del juego
 USE_META_GAME: true
 USE_WANDB: true
-RUN_COMPARISON: false
+RUN_COMPARISON: true
 DELETE_DIRECTORIES: true
 
 # Flags de ejecución
@@ -30,27 +30,13 @@ PLAY_EPSILON: 0.0
 comparisons:
   - run_name: "baseline"
     N: 2048
-    train_batches: 5
-    eval_batches: 1
+    train_batches: 50
+    eval_batches: 10
     overrides: {}
 
   - run_name: "NOMG"
     N: 2048
-    train_batches: 5
-    eval_batches: 1
+    train_batches: 50
+    eval_batches: 10
     overrides:
       USE_META_GAME: false
-
-  - run_name: "Noisy_off"
-    N: 1024
-    train_batches: 10
-    eval_batches: 2
-    overrides:
-      NOISY_SIGMA_INIT: 0.0
-
-  - run_name: "Gamma_099"
-    N: 2048
-    train_batches: 5
-    eval_batches: 1
-    overrides:
-      DISCOUNT_FACTOR: 0.99
