@@ -480,12 +480,15 @@ if __name__ == "__main__":
     yaml_config = load_config_yaml()
 
     # 2. Sobrescribir constants con los valores del YAML
+    NON_CONSTANT_YAML_KEYS = {"comparisons"}
+
     for key, value in yaml_config.items():
+        if key in NON_CONSTANT_YAML_KEYS:
+            continue
         if hasattr(constants, key):
             setattr(constants, key, value)
         else:
             print(f"Advertencia: {key} no existe en constants, se omite")
-
     # 3. Crear configuración del run
     config = RunConfig(
         version=constants.VERSION,

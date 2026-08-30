@@ -20,8 +20,8 @@ EPSILON_RESIDUAL = 0.01
 # ============================================================
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
-SELECTION_REPLAY_DATA = 500_000 # Capacidad del buffer de selección
-TURN_REPLAY_DATA = 500_000      # Capacidad del buffer de turno
+SELECTION_REPLAY_DATA = 150_000 # Capacidad del buffer de selección
+TURN_REPLAY_DATA = 150_000      # Capacidad del buffer de turno
 BATCH_SIZE = 64                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)

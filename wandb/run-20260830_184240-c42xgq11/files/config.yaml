@@ -1,0 +1,79 @@
+_wandb:
+    value:
+        cli_version: 0.29.0
+        e:
+            hk2vj8w0m9gtdmdizcjzf2kz5a8z8a61:
+                cpu_count: 10
+                cpu_count_logical: 12
+                disk:
+                    /:
+                        total: "510697402368"
+                        used: "421524283392"
+                email: mendezprietoangel@gmail.com
+                executable: C:\Users\mende\Universidad\AI-Adaptive-Game\CastleGame\.venv\Scripts\python.exe
+                git:
+                    commit: 966365c7439e3df3e7062aea680f32eaa267a610
+                    remote: https://github.com/Virus34-rgb/IA_VideoGame.git
+                host: LAPTOP-CJ78K9IF
+                memory:
+                    total: "16806252544"
+                os: Windows-11-10.0.26200-SP0
+                program: -m __main__
+                python: CPython 3.14.0
+                root: C:\Users\mende\Universidad\AI-Adaptive-Game\CastleGame
+                startedAt: "2026-08-30T16:42:40.600120Z"
+                writerId: hk2vj8w0m9gtdmdizcjzf2kz5a8z8a61
+        m: []
+        python_version: 3.14.0
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "3":
+                - 13
+                - 16
+            "4": 3.14.0
+            "5": 0.29.0
+            "8":
+                - 3
+            "10":
+                - 20
+            "12": 0.29.0
+            "13": windows-amd64
+"N":
+    value: 2048
+batch_size:
+    value: 64
+blocks_weight:
+    value: 0.6
+deaths_weight:
+    value: 50
+discount_factor:
+    value: 0.95
+epsilon_sel:
+    value: 0.5
+epsilon_turn:
+    value: 0.5
+heal_weight:
+    value: 0.6
+learning_rate_selection:
+    value: 0.0001
+learning_rate_turn:
+    value: 0.0001
+max_turns:
+    value: 20
+n_step:
+    value: 3
+shaping_weight:
+    value: 2
+turn_penalty_base:
+    value: 8
+turn_penalty_max:
+    value: 35
+use_dueling:
+    value: true
+use_meta:
+    value: true
+win_reward:
+    value: 1500

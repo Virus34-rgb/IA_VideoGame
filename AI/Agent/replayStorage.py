@@ -28,10 +28,10 @@ class ReplayStorage:
         self.is_turn_storage = is_turn_storage
 
         # Campos comunes
-        self.states = torch.zeros(capacity, state_dim)
+        self.states = torch.zeros(capacity, state_dim,dtype= torch.float16)
         self.actions = torch.zeros(capacity, *action_shape, dtype=torch.long)
         self.rewards = torch.zeros(capacity)
-        self.next_states = torch.zeros(capacity, state_dim)
+        self.next_states = torch.zeros(capacity, state_dim, dtype=torch.float16)
         self.dones = torch.zeros(capacity, dtype=torch.bool)
 
         # Campos específicos de turno

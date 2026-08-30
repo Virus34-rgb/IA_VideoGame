@@ -46,10 +46,10 @@ class ReplayMemoryAN:
             priorities = np.full(n, self.max_priority, dtype=np.float32)
             indices = self.memory.add_batch(priorities)
 
-            self.storage.states[indices] = states
+            self.storage.states[indices] = states.half()
             self.storage.actions[indices] = actions
             self.storage.rewards[indices] = rewards
-            self.storage.next_states[indices] = next_states
+            self.storage.next_states[indices] = next_states.half()
             self.storage.dones[indices] = dones
 
             self.storage.alive[indices] = alive
