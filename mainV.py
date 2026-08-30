@@ -77,8 +77,8 @@ class MainV:
         """
         # Limpiar directorios antiguos si está configurado
         if constants.DELETE_DIRECTORIES:
-            shutil.rmtree(self.config.p2_path, ignore_errors=True)
-            shutil.rmtree(self.config.p2_path, ignore_errors=True)  # Nota: podría ser p1_path? Revisar.
+            shutil.rmtree(self.config.p1_path, ignore_errors=True)
+            shutil.rmtree(self.config.p2_path, ignore_errors=True) 
 
         # Crear directorios necesarios
         os.makedirs(self.config.p1_path, exist_ok=True)
