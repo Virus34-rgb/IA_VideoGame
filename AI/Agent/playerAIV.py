@@ -73,10 +73,10 @@ class PlayerAIV:
         batch, tree_indices, weights = self.replay_memory_sel.sample(constants.BATCH_SIZE)
         weights = torch.tensor(weights, dtype=torch.float32)
 
-        states = batch.states
+        states = batch.states.float()
         actions = batch.actions
         rewards = batch.rewards
-        next_states = batch.next_states
+        next_states = batch.next_states.float()
         dones = batch.dones
 
         qvalues = self.selection_network(states)
@@ -104,9 +104,9 @@ class PlayerAIV:
         batch, tree_indices, weights = self.replay_memory_turn.sample(constants.BATCH_SIZE)
         weights = torch.tensor(weights, dtype=torch.float32)
 
-        states = batch.states
+        states =  batch.states.float()
         warrior_mask = batch.alive
-        next_states = batch.next_states
+        next_states = batch.next_states.float()
         rewards = batch.rewards
         dones = batch.dones
 

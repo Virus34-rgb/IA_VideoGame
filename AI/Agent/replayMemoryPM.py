@@ -56,13 +56,13 @@ class ReplayMemoryPM:
         priorities = np.full(n, self.max_priority, dtype=np.float32)
         indices = self.memory.add_batch(priorities)
 
-        self.storage.states[indices] = states
+        self.storage.states[indices] = states.half()
         self.storage.actions[indices] = actions
         self.storage.rewards[indices] = rewards
         if next_states is not None:
-            self.storage.next_states[indices] = next_states
+            self.storage.next_states[indices] = next_states.half()
         else:
-            self.storage.next_states[indices] = torch.zeros_like(states)
+            self.storage.next_states[indices] = torch.zeros(states.shape, dtype=torch.float16)
         self.storage.dones[indices] = dones
 
     def sample(self, batch_size: int) -> Tuple[Any, np.ndarray, np.ndarray]:

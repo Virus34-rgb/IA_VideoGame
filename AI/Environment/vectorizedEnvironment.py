@@ -246,8 +246,8 @@ class VectorizedEnvironment:
         mask_defend = es_habilidad & ((effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)) & actor_alive_now
         mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
 
-        moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov = self._resolve_action_movement(
-            actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, own_castle_slots, actions_actor, pos
+        moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov, new_alive_mov = self._resolve_action_movement(
+            actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos
         )
 
         own_new_disp = own_disposition.clone()
@@ -257,6 +257,10 @@ class VectorizedEnvironment:
         own_new_castle = own_castle_slots.clone()
         own_new_castle = torch.where(mask_movPos.unsqueeze(1), new_castle_mov, own_new_castle)
         own_new_castle = torch.where(mask_movNeg.unsqueeze(1), new_castle_mov, own_new_castle)
+        
+        own_new_alive = own_alive.clone()
+        own_new_alive = torch.where(mask_movPos.unsqueeze(1), new_alive_mov, own_new_alive)
+        own_new_alive = torch.where(mask_movNeg.unsqueeze(1), new_alive_mov, own_new_alive)
 
         damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack = self._resolve_action_attack(
             actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
@@ -296,14 +300,14 @@ class VectorizedEnvironment:
         return (
             damage, damage_avoided, blocked, moved, heal,
             own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
-            own_cd_new, own_alive, enemy_alive_final,
+            own_cd_new, own_new_alive, enemy_alive_final,
             own_abilities_new, ability_pool_idx,
             own_new_castle,
         )
 
     def _resolve_action_movement(
         self, actors, own_disposition, own_health, own_cooldowns,
-        own_instance_abilities, own_castle_slots, actions_actor, pos,
+        own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos,
     ):
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
@@ -337,6 +341,19 @@ class VectorizedEnvironment:
         own_new_health_final = own_new_health.clone()
         own_new_health_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_h2, origen_h2).unsqueeze(1))
         own_new_health_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_h2, destino_h2).unsqueeze(1))
+
+        # NUEVO: Intercambiar alive (mismo patrón que salud, pero con own_alive)
+        own_new_alive = own_alive.clone()
+        origen_a = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
+        destino_a = own_alive.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
+        own_new_alive.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_a, origen_a).unsqueeze(1))
+        own_new_alive.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_a, destino_a).unsqueeze(1))
+
+        origen_a2 = own_new_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
+        destino_a2 = own_new_alive.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
+        own_new_alive_final = own_new_alive.clone()
+        own_new_alive_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_a2, origen_a2).unsqueeze(1))
+        own_new_alive_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_a2, destino_a2).unsqueeze(1))
 
         # Intercambiar cooldowns
         pos_e = pos.view(-1, 1, 1).expand(-1, 1, 4)
@@ -390,6 +407,7 @@ class VectorizedEnvironment:
             own_new_cd_final,
             own_new_abilities_final,
             own_new_castle_final,
+            own_new_alive_final,   # NUEVO
         )
 
     def _resolve_action_attack(
