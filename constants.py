@@ -20,8 +20,8 @@ EPSILON_RESIDUAL = 0.01
 # ============================================================
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
-SELECTION_REPLAY_DATA = 150_000 # Capacidad del buffer de selección
-TURN_REPLAY_DATA = 150_000      # Capacidad del buffer de turno
+SELECTION_REPLAY_DATA = 80_000 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
+TURN_REPLAY_DATA = 40_000      # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 64                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
@@ -81,9 +81,9 @@ TURN_PENALTY_BASE = 8             # Penalización de turno en fase inicial (turn
 TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización empieza a crecer
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
 TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
-WIN_REWARD = 1500                  # Recompensa base por ganar la partida
+WIN_REWARD = 300                # Recompensa base por ganar la partida
 # AÑADIR, junto a WIN_REWARD
-DRAW_PENALTY = 300                # Penalización por resultado en empate (20% de WIN_REWARD)
+DRAW_PENALTY = 60                # Penalización por resultado en empate (20% de WIN_REWARD)
 MAX_TURNS = 20                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
 
@@ -119,7 +119,7 @@ N_STEP = 3                       # Número de pasos para N-step returns (1 = est
 USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
 NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma
-RESET_IN_DECISIONS = True
+RESET_IN_DECISIONS = False
 
 # ============================================================
 # ELO

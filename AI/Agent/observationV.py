@@ -2,7 +2,7 @@
 Módulo para normalizar observaciones del entorno.
 """
 import torch
-from constants import MAX_TURNS, WARRIOR_QUANTITY, MAX_POOL_SIZE  # AÑADIDO MAX_POOL_SIZE
+import constants
 
 
 class ObservationV:
@@ -46,7 +46,7 @@ class ObservationV:
         N = pl_types.shape[0]
 
         idx = (pl_types - 1).clamp(min=0)
-        one_hot_own = torch.nn.functional.one_hot(idx, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_own = torch.nn.functional.one_hot(idx, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_own = one_hot_own * pl_alive.unsqueeze(-1).float()
 
         speed = torch.where(pl_alive, pl_speed_norm, torch.zeros_like(pl_speed_norm)).unsqueeze(-1)
@@ -60,11 +60,11 @@ class ObservationV:
         propio = propio.flatten(start_dim=1)
 
         idx_opp = (opp_disposition - 1).clamp(min=0)
-        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=WARRIOR_QUANTITY).float()
+        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=constants.WARRIOR_QUANTITY).float()
         one_hot_opp = one_hot_opp * (opp_disposition > 0).unsqueeze(-1).float()
         one_hot_opp = one_hot_opp.flatten(start_dim=1)
 
-        pool_onehot = torch.nn.functional.one_hot(own_instance_abilities, num_classes=MAX_POOL_SIZE).float()  # (N,3,4,POOL)
+        pool_onehot = torch.nn.functional.one_hot(own_instance_abilities, num_classes=constants.MAX_POOL_SIZE).float()  # (N,3,4,POOL)
         pool_onehot = pool_onehot * pl_alive.view(N, 3, 1, 1).float()   # a 0 si el slot está muerto
         pool_onehot_flat = pool_onehot.flatten(start_dim=1)             # (N, 3*4*POOL)
 

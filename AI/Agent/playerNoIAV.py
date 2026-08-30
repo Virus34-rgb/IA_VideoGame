@@ -8,7 +8,6 @@ from Antiguos.observation import Observation
 from AI.Agent.selectionNetwork import SelectionNetwork
 from AI.Agent.replayMemoryAN import ReplayMemoryAN
 from AI.Agent.replayMemoryPM import ReplayMemoryPM
-from constants import  BATCH_SIZE, COPY_DQN, DISCOUNT_FACTOR, EPSILON_SEL_DECAY, EPSILON_SEL_MIN, EPSILON_SELECTION, EPSILON_TURN, EPSILON_TURN_DECAY, EPSILON_TURN_MIN, SELECTION_LEARNING_RATE, SELECTION_REPLAY_DATA, TURN_LEARNING_RATE, TURN_REPLAY_DATA, WARRIOR_QUANTITY
 
 class PlayerNoAIV:
     def __init__(self):
