@@ -13,6 +13,8 @@ class SelectionNetwork(nn.Module):
         super().__init__()
         if output_size is None:
             output_size = constants.MAX_CASTLE_SIZE * 3 if constants.USE_META_GAME else constants.WARRIOR_QUANTITY * 3
+        if output_size is None:
+            output_size = constants.MAX_CASTLE_SIZE * 3 if constants.USE_META_GAME else constants.WARRIOR_QUANTITY * 3
         self.fc1 = nn.Linear(input_size, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 32)
