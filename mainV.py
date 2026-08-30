@@ -353,8 +353,8 @@ def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
 # Parámetros globales del run
 VERSION = 1
 N_BATCH = 2048
-TRAIN_EPISODES = math.ceil(10_000 / N_BATCH)
-EVAL_EPISODES = math.ceil(1_000 / N_BATCH)
+TRAIN_EPISODES = math.ceil(500_000 / N_BATCH)
+EVAL_EPISODES = math.ceil(50_000 / N_BATCH)
 
 # Flags para activar/desactivar partes del pipeline
 RUN_SELF_PLAY = True
