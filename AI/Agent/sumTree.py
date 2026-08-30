@@ -16,15 +16,20 @@ class SumTree:
     def _propagate_batch(self, idxs: numpy.ndarray, changes: numpy.ndarray) -> None:
         """
         Propaga los cambios hacia arriba en el árbol para un conjunto de hojas.
-        Vectorizado: en cada nivel, agrupa por nodo padre y acumula los cambios.
+        Vectorizado: en cada nivel, agrupa por nodo padre y acumula los cambios
+        con un bincount restringido al rango local de índices (evita allocar
+        arrays del tamaño completo del árbol y evita una llamada extra a unique).
         """
         idxs = numpy.asarray(idxs, dtype=numpy.int64)
         changes = numpy.asarray(changes, dtype=numpy.float32)
         while len(idxs) > 0:
             parents = (idxs - 1) // 2
-            unique_parents, inverse = numpy.unique(parents, return_inverse=True)
-            parent_changes = numpy.zeros(len(unique_parents), dtype=numpy.float32)
-            numpy.add.at(parent_changes, inverse, changes)
+            offset = int(parents.min())
+            span = int(parents.max()) - offset + 1
+            local_changes = numpy.bincount(parents - offset, weights=changes, minlength=span)
+            nonzero_local = numpy.flatnonzero(local_changes)
+            unique_parents = nonzero_local + offset
+            parent_changes = local_changes[nonzero_local]
             self.tree[unique_parents] += parent_changes
             # Subir al siguiente nivel (nodos que no son raíz)
             mask = unique_parents > 0
