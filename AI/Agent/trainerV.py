@@ -45,14 +45,12 @@ class TrainerV:
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._grouped_opponents: Dict[int, Tuple[Any, torch.Tensor]] = {}
         self._current_catalog_abilities: torch.Tensor = torch.zeros(
-            constants.WARRIOR_QUANTITY, constants.ABILITIES_PER_WARRIOR, dtype=torch.long,
-        )   
-        
+            self.N, constants.WARRIOR_QUANTITY, constants.ABILITIES_PER_WARRIOR, dtype=torch.long,
+        )
+
+        # NUEVO: se crean siempre (coste despreciable); solo se usan si USE_META_GAME=True
         self.p1_castle = CastleV(self.N)
-        self.p2_castle= CastleV(self.N)
-        self.castle_p1_path = os.path.join(os.path.dirname(self.pathp1_1), "castle.pt")
-        self.castle_p2_path = os.path.join(os.path.dirname(self.pathp2_1), "castle.pt")
-        
+        self.p2_castle = CastleV(self.N)
 
     def train(self) -> None:
         self._load_if_exists()
@@ -62,7 +60,6 @@ class TrainerV:
         )
         self._save_if_supported(self.player1, self.pathp1_1, self.pathp1_2)
         self._save_if_supported(self.player2, self.pathp2_1, self.pathp2_2)
-        self._save_castle()
 
     def evaluate(self) -> None:
         self.environment.stats.reset()
@@ -147,9 +144,11 @@ class TrainerV:
         )
 
     def _run_batch(self, batch_idx: int, learn_p1: bool, learn_p2: bool, p2_training_player) -> None:
-        self._current_catalog_abilities = sample_abilities_batch_all_types(
-            self.environment.warriors_classes, self.N, constants.ABILITIES_PER_WARRIOR
-        )
+        if not constants.USE_META_GAME:
+            # CAMBIADO: el sorteo de catálogo solo hace falta en modo sin meta-juego
+            self._current_catalog_abilities = sample_abilities_batch_all_types(
+                self.environment.warriors_classes, self.N, constants.ABILITIES_PER_WARRIOR
+            )
 
         self.environment.reset()
         self.player1.reset_noise()
@@ -168,9 +167,13 @@ class TrainerV:
             obs1_tensor, obs2_tensor = self._build_observations()
             reward1_acum += self._last_reward1
             reward2_acum += self._last_reward2
-        
-        self._run_meta_step(self.environment.p1_castle_slots,self.environment.p1_castle_slots
-                            ,self.environment.p1_alive,self.environment.p2_alive)
+
+        if constants.USE_META_GAME:
+            # CORREGIDO: antes se pasaba p1_castle_slots dos veces
+            self._run_meta_step(
+                self.environment.p1_castle_slots, self.environment.p2_castle_slots,
+                self.environment.p1_alive, self.environment.p2_alive,
+            )
 
         if learn_p1:
             for experience in n_steps_buffer_p1.flush():
@@ -204,13 +207,13 @@ class TrainerV:
         p2_cd_now = self.environment.p2_cooldowns
         p1_opp_types_now = self.environment.p2_disposition
         p2_opp_types_now = self.environment.p1_disposition
-        p1_abilities_now = self.environment.p1_instance_abilities  
-        p2_abilities_now = self.environment.p2_instance_abilities   
+        p1_abilities_now = self.environment.p1_instance_abilities
+        p2_abilities_now = self.environment.p2_instance_abilities
 
         action_p1 = self.player1.turn(
             obs1_tensor, self.environment.p1_disposition, self.environment.p1_cooldowns,
             self.environment.p1_alive, self.environment.p2_disposition,
-            self.environment.p1_instance_abilities,   # NUEVO
+            self.environment.p1_instance_abilities,
         )
         action_p2 = self._turn_mixed_opponent(obs2_tensor, self._opponent_from_pool_mask, self._grouped_opponents, p2_training_player)
 
@@ -222,7 +225,7 @@ class TrainerV:
         if learn_p1:
             exp_p1 = n_steps_buffer_p1.push(
                 obs1_tensor, action_p1, reward1, ended, p1_alive_now, p1_types_now, p1_cd_now, p1_opp_types_now,
-                p1_abilities_now,   
+                p1_abilities_now,
             )
             if exp_p1 is not None:
                 self._remember_turn_batch(self.player1, exp_p1)
@@ -230,11 +233,11 @@ class TrainerV:
         if learn_p2:
             exp_p2 = n_steps_buffer_p2.push(
                 obs2_tensor, action_p2, reward2, ended, p2_alive_now, p2_types_now, p2_cd_now, p2_opp_types_now,
-                p2_abilities_now,   
+                p2_abilities_now,
             )
             if exp_p2 is not None:
                 self._remember_turn_batch(p2_training_player, exp_p2, skip_mask=self._opponent_from_pool_mask)
-                
+
     def _run_meta_step(self, castle_slots_p1, castle_slots_p2, p1_alive_final, p2_alive_final):
         self.p1_castle.envejecer_heroes(castle_slots_p1)
         self.p2_castle.envejecer_heroes(castle_slots_p2)
@@ -243,110 +246,94 @@ class TrainerV:
         self.p1_castle.gold += constants.GOLD_POR_BATALLA
         self.p2_castle.gold += constants.GOLD_POR_BATALLA
 
-        warrior_most_use_p1,warrior_most_use_p2 = self._tipo_mas_repetido()
-        for i in range(constants.MAX_DEATHS_PER_TEAM):
+        warrior_most_use_p1, warrior_most_use_p2 = self._tipo_mas_repetido()
+        for _ in range(constants.MAX_DEATHS_PER_TEAM):
             mask_compra_p1, tipo_p1 = decidir_compra_batch(self.p1_castle, warrior_most_use_p1)
             mask_compra_p2, tipo_p2 = decidir_compra_batch(self.p2_castle, warrior_most_use_p2)
             self.p1_castle.comprar_heroes(mask_compra_p1, tipo_p1)
             self.p2_castle.comprar_heroes(mask_compra_p2, tipo_p2)
-    
-    #Utiliza el más repetido globalmente porque en la partida el más repetido va a ser igual, y no voy a usar el más repetido en el castillo
-    #porque sería contraproducente, la IA es común a todos, asi que realmente garantizando que se compren siempre 3 heroes y se repongan los 3
-    #muertos, con la heurística es suficiente    
+
     def _tipo_mas_repetido(self):
-        # Obtener el tipo más usado globalmente a partir de las estadísticas acumuladas
-        # self.stats._p1_warrior_use_tensor es de tamaño (WARRIOR_QUANTITY)
-        # y self.stats._p2_warrior_use_tensor similar
-        tipo_p1 = torch.argmax(self.stats._p1_warrior_use_tensor).item() + 1  # 1..WARRIOR_QUANTITY
-        tipo_p2 = torch.argmax(self.stats._p2_warrior_use_tensor).item() + 1
-        # Repetir para todas las partidas
+        # CORREGIDO: self.stats -> self.environment.stats (TrainerV no tiene atributo stats propio)
+        tipo_p1 = torch.argmax(self.environment.stats._p1_warrior_use_tensor).item() + 1
+        tipo_p2 = torch.argmax(self.environment.stats._p2_warrior_use_tensor).item() + 1
         return torch.full((self.N,), tipo_p1, dtype=torch.long), torch.full((self.N,), tipo_p2, dtype=torch.long)
-    
+
     def _traducir_muertes_combate(self, castle_slots, alive_final):
-        # castle_slots: (N, 3) con índices de slot
-        # alive_final: (N, 3) booleano (True = vivo)
         N = castle_slots.shape[0]
         max_size = constants.MAX_CASTLE_SIZE
         mask_muertes = torch.zeros((N, max_size), dtype=torch.bool)
-        # Para cada slot (0,1,2), marcar los héroes que murieron (alive_final == False)
         for slot in range(3):
-            # Índices de los héroes que murieron en esa posición
             muertos = ~alive_final[:, slot]
-            # Obtenemos los ids de castillo de esos héroes
-            ids = castle_slots[muertos, slot]  # (K,)
-            # Asignamos True en la máscara de muertes en esas posiciones
+            ids = castle_slots[muertos, slot]
             mask_muertes[muertos, ids] = True
         return mask_muertes
-        
-    
+
     def _select_teams(self, p2_training_player):
-        cstate1_1 = self._encode_choose_batch(torch.zeros(self.N, dtype=torch.long)
-                                              , torch.zeros(self.N, dtype=torch.long),self.p1_castle)
-        cstate2_1 = self._encode_choose_batch(torch.zeros(self.N, dtype=torch.long)
-                                              , torch.zeros(self.N, dtype=torch.long),self.p2_castle)
+        if constants.USE_META_GAME:
+            return self._select_teams_castle(p2_training_player)
+        return self._select_teams_catalog(p2_training_player)
 
-        warr1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1, self.environment.p1_castle_slots, torch.zeros(self.N, dtype=torch.long),
-                                                            self.p1_castle.castle_alive,self.p1_castle.castle_types)
-        warr2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1, self.environment.p2_castle_slots, torch.zeros(self.N, dtype=torch.long),
-                                                                  self.p2_castle.castle_alive,self.p2_castle.castle_types)
-        #warr1_1 y warr 2_1 son ids de castillo (0-10 hay que convertirlos a tipos)
+    # ------------------------------------------------------------
+    # Draft — modo castillo
+    # ------------------------------------------------------------
+    def _select_teams_castle(self, p2_training_player):
         indices = torch.arange(self.N)
-        warr1_1_type = self.p1_castle.castle_types[indices,warr1_1]
-        warr2_1_type = self.p2_castle.castle_types[indices,warr2_1]
-        
+        used_p1 = torch.zeros(self.N, constants.MAX_CASTLE_SIZE, dtype=torch.bool)
+        used_p2 = torch.zeros(self.N, constants.MAX_CASTLE_SIZE, dtype=torch.bool)
+
+        cstate1_1 = self._encode_choose_batch_castle(torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long), self.p1_castle)
+        cstate2_1 = self._encode_choose_batch_castle(torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long), self.p2_castle)
+
+        slot1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1, self.environment.p1_disposition, torch.zeros(self.N, dtype=torch.long), self.p1_castle.castle_alive, used_p1)
+        slot2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), self.p2_castle.castle_alive, used_p2)
+        used_p1[indices, slot1_1] = True
+        used_p2[indices, slot2_1] = True
+
+        warr1_1_type = self.p1_castle.castle_types[indices, slot1_1]
+        warr2_1_type = self.p2_castle.castle_types[indices, slot2_1]
         health1 = self.environment.max_health_por_tipo[warr1_1_type]
-        health2 = self.environment.max_health_por_tipo[warr1_1_type]
-        #abilities1 = self._current_catalog_abilities[
-        #    self.environment.indices, warr1_1_type - 1
-        #]  Ejemplo por si acaso
-        abilities1 = self.p1_castle.castle_abilities[indices,warr1_1]
-        abilities2 = self.p2_castle.castle_abilities[indices,warr2_1]
-        self.environment.team_selection(warr1_1_type, pos1_1, warr2_1_type, pos2_1, selected=0, health1=health1
-                                        , health2=health2, abilities1=abilities1, abilities2=abilities2)
+        health2 = self.environment.max_health_por_tipo[warr2_1_type]   
+        abilities1 = self.p1_castle.castle_abilities[indices, slot1_1]
+        abilities2 = self.p2_castle.castle_abilities[indices, slot2_1]  
+        self.environment.team_selection(warr1_1_type, pos1_1, warr2_1_type, pos2_1, selected=0, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
-        cstate1_2 = self._encode_choose_batch(warr2_1, pos2_1 + 1,self.p1_castle)
-        cstate2_2 = self._encode_choose_batch(warr1_1, pos1_1 + 1,self.p2_castle)
+        cstate1_2 = self._encode_choose_batch_castle(warr2_1_type, pos2_1 + 1, self.p1_castle)
+        cstate2_2 = self._encode_choose_batch_castle(warr1_1_type, pos1_1 + 1, self.p2_castle)
 
-        warr1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_castle_slots, warr1_1_type,
-                                                            self.p1_castle.castle_alive,self.p1_castle.castle_types)
-        warr2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_castle_slots, warr2_1_type,
-                                                                  self.p2_castle.castle_alive,self.p2_castle.castle_types)
-        
-        warr1_2_type = self.p1_castle.castle_types[indices,warr1_2]
-        warr2_2_type = self.p2_castle.castle_types[indices,warr2_2]
-                
+        slot1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1)
+        slot2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2)
+        used_p1[indices, slot1_2] = True
+        used_p2[indices, slot2_2] = True
+
+        warr1_2_type = self.p1_castle.castle_types[indices, slot1_2]
+        warr2_2_type = self.p2_castle.castle_types[indices, slot2_2]
         health1 = self.environment.max_health_por_tipo[warr1_2_type]
         health2 = self.environment.max_health_por_tipo[warr2_2_type]
-        abilities1 = self.p1_castle.castle_abilities[indices,warr1_2]
-        abilities2 = self.p2_castle.castle_abilities[indices,warr2_2]
-        
-        self.environment.team_selection(warr1_2_type, pos1_2, warr2_2_type, pos2_2, selected=1, health1=health1
-                                        , health2=health2, abilities1=abilities1, abilities2=abilities2)
+        abilities1 = self.p1_castle.castle_abilities[indices, slot1_2]
+        abilities2 = self.p2_castle.castle_abilities[indices, slot2_2]  
+        self.environment.team_selection(warr1_2_type, pos1_2, warr2_2_type, pos2_2, selected=1, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
-        cstate1_3 = self._encode_choose_batch(warr2_1, pos2_1 + 1,self.p1_castle)
-        cstate2_3 = self._encode_choose_batch(warr1_1, pos1_1 + 1,self.p2_castle)
+        cstate1_3 = self._encode_choose_batch_castle(warr2_1_type, pos2_1 + 1, self.p1_castle)
+        cstate2_3 = self._encode_choose_batch_castle(warr1_1_type, pos1_1 + 1, self.p2_castle)
 
-        warr1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_castle_slots, warr2_1_type,
-                                                            self.p1_castle.castle_alive,self.p1_castle.castle_types)
-        warr2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_castle_slots, warr1_1_type,
-                                                                  self.p2_castle.castle_alive,self.p2_castle.castle_types)
-                
-        warr1_3_type = self.p1_castle.castle_types[indices,warr1_3]
-        warr2_3_type = self.p2_castle.castle_types[indices,warr2_3]
-       
+        slot1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1)
+        slot2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2)
+
+        warr1_3_type = self.p1_castle.castle_types[indices, slot1_3]
+        warr2_3_type = self.p2_castle.castle_types[indices, slot2_3]
         health1 = self.environment.max_health_por_tipo[warr1_3_type]
         health2 = self.environment.max_health_por_tipo[warr2_3_type]
-        abilities1 = self.p1_castle.castle_abilities[indices,warr1_3]
-        abilities2 = self.p2_castle.castle_abilities[indices,warr2_3]
-        
-        self.environment.p1_castle_slots[:, 0] = warr1_1
-        self.environment.p1_castle_slots[:, 1] = warr1_2
-        self.environment.p1_castle_slots[:, 2] = warr1_3
-        
-        self.environment.p2_castle_slots[:, 0] = warr2_1
-        self.environment.p2_castle_slots[:, 1] = warr2_2
-        self.environment.p2_castle_slots[:, 2] = warr2_3
-        
+        abilities1 = self.p1_castle.castle_abilities[indices, slot1_3]
+        abilities2 = self.p2_castle.castle_abilities[indices, slot2_3]  
+
+        self.environment.p1_castle_slots[:, 0] = slot1_1
+        self.environment.p1_castle_slots[:, 1] = slot1_2
+        self.environment.p1_castle_slots[:, 2] = slot1_3
+        self.environment.p2_castle_slots[:, 0] = slot2_1
+        self.environment.p2_castle_slots[:, 1] = slot2_2
+        self.environment.p2_castle_slots[:, 2] = slot2_3
+
         self.environment.team_selection(warr1_3_type, pos1_3, warr2_3_type, pos2_3, selected=2, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
 
         selection_states_p1 = (cstate1_1, cstate1_2, cstate1_3)
@@ -356,11 +343,67 @@ class TrainerV:
 
         return selection_states_p1, selection_actions_p1, selection_states_p2, selection_actions_p2
 
-    def _encode_choose_batch(self, opp_initial_warrior, opp_initial_position, castle):
-        return ChooseStateV.encode_choose_state_batch(
+    def _encode_choose_batch_castle(self, opp_initial_warrior, opp_initial_position, castle):
+        return ChooseStateV.encode_choose_state_batch_castle(
             castle.castle_types, castle.castle_abilities, castle.castle_abilities_levels,
             castle.battle_fought, castle.castle_alive, castle.gold,
             opp_initial_warrior, opp_initial_position,
+        )
+
+    # ------------------------------------------------------------
+    # Draft — modo catálogo (histórico)
+    # ------------------------------------------------------------
+    def _select_teams_catalog(self, p2_training_player):
+        indices = torch.arange(self.N)
+
+        cstate1_1 = self._encode_choose_batch_catalog(self.environment.p1_disposition, torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long))
+        cstate2_1 = self._encode_choose_batch_catalog(self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long))
+
+        warr1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1, self.environment.p1_disposition, torch.zeros(self.N, dtype=torch.long))
+        warr2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long))
+
+        health1 = self.environment.max_health_por_tipo[warr1_1]
+        health2 = self.environment.max_health_por_tipo[warr2_1]
+        abilities1 = self._current_catalog_abilities[indices, warr1_1 - 1]
+        abilities2 = self._current_catalog_abilities[indices, warr2_1 - 1]
+        self.environment.team_selection(warr1_1, pos1_1, warr2_1, pos2_1, selected=0, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
+
+        cstate1_2 = self._encode_choose_batch_catalog(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
+        cstate2_2 = self._encode_choose_batch_catalog(self.environment.p2_disposition, warr1_1, pos1_1 + 1)
+
+        warr1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_disposition, warr2_1)
+        warr2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_disposition, warr1_1)
+
+        health1 = self.environment.max_health_por_tipo[warr1_2]
+        health2 = self.environment.max_health_por_tipo[warr2_2]
+        abilities1 = self._current_catalog_abilities[indices, warr1_2 - 1]
+        abilities2 = self._current_catalog_abilities[indices, warr2_2 - 1]
+        self.environment.team_selection(warr1_2, pos1_2, warr2_2, pos2_2, selected=1, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
+
+        cstate1_3 = self._encode_choose_batch_catalog(self.environment.p1_disposition, warr2_1, pos2_1 + 1)
+        cstate2_3 = self._encode_choose_batch_catalog(self.environment.p2_disposition, warr1_1, pos1_1 + 1)
+
+        warr1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_disposition, warr2_1)
+        warr2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_disposition, warr1_1)
+
+        health1 = self.environment.max_health_por_tipo[warr1_3]
+        health2 = self.environment.max_health_por_tipo[warr2_3]
+        abilities1 = self._current_catalog_abilities[indices, warr1_3 - 1]
+        abilities2 = self._current_catalog_abilities[indices, warr2_3 - 1]
+        self.environment.team_selection(warr1_3, pos1_3, warr2_3, pos2_3, selected=2, health1=health1, health2=health2, abilities1=abilities1, abilities2=abilities2)
+
+        selection_states_p1 = (cstate1_1, cstate1_2, cstate1_3)
+        selection_actions_p1 = (action1_1, action1_2, action1_3)
+        selection_states_p2 = (cstate2_1, cstate2_2, cstate2_3)
+        selection_actions_p2 = (action2_1, action2_2, action2_3)
+
+        return selection_states_p1, selection_actions_p1, selection_states_p2, selection_actions_p2
+
+    def _encode_choose_batch_catalog(self, disposition, opp_initial_warrior, opp_initial_position):
+        catalog_batch = self._catalog_ids.unsqueeze(0).expand(self.N, -1)
+        return ChooseStateV.encode_choose_state_batch_catalog(
+            disposition, catalog_batch, opp_initial_warrior, opp_initial_position,
+            self._current_catalog_abilities,
         )
 
     def _replay_turn_and_selection(self, player, selection_states, selection_actions, reward_acum, player_name, batch_idx, skip_mask=None) -> None:
@@ -410,8 +453,8 @@ class TrainerV:
             next_alive = experience.next_alive[valid]
             next_cooldowns = experience.next_cooldowns[valid]
             next_opp_types = experience.next_opp_types[valid]
-            instance_abilities = experience.instance_abilities[valid]                # NUEVO
-            next_instance_abilities = experience.next_instance_abilities[valid]      # NUEVO
+            instance_abilities = experience.instance_abilities[valid]
+            next_instance_abilities = experience.next_instance_abilities[valid]
         else:
             states = experience.states
             actions = experience.actions
@@ -426,8 +469,8 @@ class TrainerV:
             next_alive = experience.next_alive
             next_cooldowns = experience.next_cooldowns
             next_opp_types = experience.next_opp_types
-            instance_abilities = experience.instance_abilities              # NUEVO
-            next_instance_abilities = experience.next_instance_abilities    # NUEVO
+            instance_abilities = experience.instance_abilities
+            next_instance_abilities = experience.next_instance_abilities
 
         if states.shape[0] == 0:
             return
@@ -435,7 +478,7 @@ class TrainerV:
         player.remember_turn_batch(
             states, actions, rewards, next_states, dones,
             alive, types, cooldowns, opp_types, next_types, next_alive, next_cooldowns, next_opp_types,
-            instance_abilities, next_instance_abilities,   # NUEVO
+            instance_abilities, next_instance_abilities,
         )
 
     def _build_observations(self):
@@ -456,12 +499,12 @@ class TrainerV:
         obs1 = ObservationV.normalize_batch(
             self.environment.p1_disposition, self.environment.p1_alive, speed_p1, health_norm_p1,
             self.environment.p1_cooldowns, life_p2, self.environment.p2_disposition, turn_norm,
-            self.environment.p1_instance_abilities,   # NUEVO
+            self.environment.p1_instance_abilities,
         )
         obs2 = ObservationV.normalize_batch(
             self.environment.p2_disposition, self.environment.p2_alive, speed_p2, health_norm_p2,
             self.environment.p2_cooldowns, life_p1, self.environment.p1_disposition, turn_norm,
-            self.environment.p2_instance_abilities,   # NUEVO
+            self.environment.p2_instance_abilities,
         )
         return obs1, obs2
 
@@ -469,14 +512,14 @@ class TrainerV:
         actions = p2_training_player.turn(
             obs2_tensor, self.environment.p2_disposition, self.environment.p2_cooldowns,
             self.environment.p2_alive, self.environment.p1_disposition,
-            self.environment.p2_instance_abilities,   # NUEVO
+            self.environment.p2_instance_abilities,
         )
 
         for cp_id, (opponent, indices) in grouped_opponents.items():
             pool_actions = opponent.turn(
                 obs2_tensor, self.environment.p2_disposition, self.environment.p2_cooldowns,
                 self.environment.p2_alive, self.environment.p1_disposition,
-                self.environment.p2_instance_abilities,   # NUEVO
+                self.environment.p2_instance_abilities,
             )
             actions[indices] = pool_actions[indices]
 
@@ -505,26 +548,11 @@ class TrainerV:
             self.player1.load_model(self.pathp1_1, self.pathp1_2)
         if hasattr(self.player2, "load_model") and os.path.exists(self.pathp2_1) and os.path.exists(self.pathp2_2):
             self.player2.load_model(self.pathp2_1, self.pathp2_2)
-        self._load_castle()
 
     @staticmethod
     def _save_if_supported(player, path1, path2):
         if hasattr(player, "save_model"):
             player.save_model(path1, path2)
-    
-    def _save_castle(self) -> None:
-        """Guarda los castillos de P1 y P2 en archivos separados."""
-        torch.save(self.p1_castle.state_dict(), self.castle_p1_path)
-        torch.save(self.p2_castle.state_dict(), self.castle_p2_path)
-
-    def _load_castle(self) -> None:
-        """Carga los castillos de P1 y P2 si los archivos existen."""
-        if os.path.exists(self.castle_p1_path):
-            state = torch.load(self.castle_p1_path, weights_only=False)
-            self.p1_castle.load_state_dict(state)
-        if os.path.exists(self.castle_p2_path):
-            state = torch.load(self.castle_p2_path, weights_only=False)
-            self.p2_castle.load_state_dict(state)
 
     def _print_progress(self, episode, total_episodes, start_time):
         if total_episodes == 0:

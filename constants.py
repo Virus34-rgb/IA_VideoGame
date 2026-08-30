@@ -31,23 +31,37 @@ COPY_DQN = 50                     # Frecuencia de copia a target network (en pas
 # ============================================================
 WARRIOR_QUANTITY = 5              # Número de tipos de guerreros
 # ============================================================
-# Juego - Meta Juego
-# ============================================================
-MAX_CASTLE_SIZE = 10
-MAX_BATALLAS = 15
-COST_COMPRA = 30
-MAX_ABILITY_LEVEL = 5
-USE_META = True
-# ============================================================
 # Pool de habilidades por instancia
 # ============================================================
 MAX_POOL_SIZE = 6          # Tamaño de la pool de habilidades por tipo de guerrero
 ABILITIES_PER_WARRIOR = 4  # Habilidades equipadas simultáneamente (no cambia)
 NUM_SLOTS = 3              # Nº de slots de combate por equipo (sustituye el uso indebido de MAX_DEATHS_PER_TEAM)
+# ============================================================
+# Meta-juego (Castillo)
+# ============================================================
+USE_META_GAME = True   # Flag: True = draft desde castillo (10 slots), False = catálogo de 5 tipos
 
-# Dimensiones de estado derivadas (NUEVO) — usarlas como default en las redes
+MAX_CASTLE_SIZE = 10
+MAX_BATALLAS = 10
+GOLD_INICIAL = 250
+COST_COMPRA = 40
+GOLD_POR_BATALLA = 100
+MAX_ABILITY_LEVEL = 5
+GOLD_NORM_REF = 500  # referencia para normalizar el oro en la observación (ajustable)
+
+# Dimensión de estado de selección, calculada según el modo activo
+if USE_META_GAME:
+    SELECTION_STATE_DIM = (
+        MAX_CASTLE_SIZE * (WARRIOR_QUANTITY + ABILITIES_PER_WARRIOR * MAX_POOL_SIZE + ABILITIES_PER_WARRIOR)
+        + MAX_CASTLE_SIZE   # edad por instancia
+        + 1                 # oro
+        + WARRIOR_QUANTITY  # one-hot del guerrero inicial del rival
+        + 1                 # posición inicial del rival
+    )
+else:
+    SELECTION_STATE_DIM = 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
+
 TURN_STATE_DIM = 58 + 3 * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
-SELECTION_STATE_DIM = 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
 # ============================================================
 # Juego - Recompensas
 # ============================================================
