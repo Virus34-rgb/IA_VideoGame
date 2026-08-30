@@ -376,13 +376,6 @@ def run_single(
 
 
 def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
-    """
-    Ejecuta una comparación de varios runs y genera gráficos comparativos.
-
-    Args:
-        config: Configuración base (usada para la carpeta compartida).
-        run_specs: Lista de especificaciones de runs a comparar.
-    """
     shared_log_dir = config.base_path
     run_names = []
 
@@ -404,30 +397,6 @@ def run_comparison(config: RunConfig, run_specs: List[RunSpec]) -> None:
 # CONFIGURACIÓN DEL RUN PRINCIPAL
 # ================================================================
 
-<<<<<<< HEAD
-# Parámetros globales del run
-VERSION = 1
-N_BATCH = 2048
-TRAIN_EPISODES = math.ceil(500_000 / N_BATCH)
-EVAL_EPISODES = math.ceil(50_000 / N_BATCH)
-
-# Flags para activar/desactivar partes del pipeline
-RUN_SELF_PLAY = True
-RUN_EVALUATION = True
-
-HUMAN_OPPONENT = "none"  # "none", "ia1", "ia2"
-HUMAN_EPISODES = 20
-HUMAN_EPSILON = 0.1
-
-PLAY_AGAINST_AI = False
-PLAY_EPISODES = 20
-PLAY_EPSILON = 0.0
-
-RUN_COMPARISON = True
-
-
-=======
->>>>>>> 1916c5678c7439c8d89da0764ebb06c6b852ef5d
 def build_steps(config: RunConfig) -> List[TrainingStep]:
     """
     Construye la lista de pasos según las flags de configuración (de constants).
