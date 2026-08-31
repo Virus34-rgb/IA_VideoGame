@@ -471,8 +471,8 @@ class StatsV:
             f"Bloqueos exitosos P2:      {s.p2_succes_blocks:.2f} -> {d['p2_success_blocks_avg']:.2f}/partida",
             f"Daño evitado P1:           {s.p1_tot_damage_evaded:.2f} -> {d['p1_damage_evaded_avg']:.2f}/partida",
             f"Daño evitado P2:           {s.p2_tot_damage_evaded:.2f} -> {d['p2_damage_evaded_avg']:.2f}/partida",
-            f"Defensas desperdiciadas P1:{s.wasted_defense_p1:.2f}",
-            f"Defensas desperdiciadas P2:{s.wasted_defense_p2:.2f}",
+            f"Defensas desperdiciadas P1:{self.wasted_defense_p1:.2f}",
+            f"Defensas desperdiciadas P2:{self.wasted_defense_p2:.2f}",
         ])
         
     def _section_elo(self, p1_elo: float, p2_elo: float, pool_elos: Dict[int, float]) -> str:
