@@ -4,7 +4,7 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_WRhealthdef_rew0"
+RUN_NAME_SUFFIX: "evaluacion_NO_DUPLICATES"
 N_BATCH: 2048
 TRAIN_EPISODES: 50
 EVAL_EPISODES: 10

@@ -321,13 +321,14 @@ class StatsV:
             self._section_resultados(summary),
             self._section_elo(p1_elo, p2_elo, pool_elos or {}),
             self._section_recompensa(summary),
-            self._section_seleccion(p1_warrior_use, p2_warrior_use),
+            
             self._section_dano(summary),
             self._section_healing(summary),
             self._section_bajas(summary),
-            self._section_ataques(p1_attacks, p2_attacks, warriors_classes),
             self._section_movimientos(),
             self._section_bloqueos(summary),
+            self._section_seleccion(p1_warrior_use, p2_warrior_use),
+            self._section_ataques(p1_attacks, p2_attacks, warriors_classes),
         ]
 
         header = "=" * 65 + "\n                    ESTADÍSTICAS IA\n" + "=" * 65 + "\n"
@@ -471,8 +472,8 @@ class StatsV:
             f"Bloqueos exitosos P2:      {s.p2_succes_blocks:.2f} -> {d['p2_success_blocks_avg']:.2f}/partida",
             f"Daño evitado P1:           {s.p1_tot_damage_evaded:.2f} -> {d['p1_damage_evaded_avg']:.2f}/partida",
             f"Daño evitado P2:           {s.p2_tot_damage_evaded:.2f} -> {d['p2_damage_evaded_avg']:.2f}/partida",
-            f"Defensas desperdiciadas P1:{s.wasted_defense_p1:.2f}",
-            f"Defensas desperdiciadas P2:{s.wasted_defense_p2:.2f}",
+            f"Defensas desperdiciadas P1:{self.wasted_defense_p1 / self.partidas:.2f}",
+            f"Defensas desperdiciadas P2:{self.wasted_defense_p2 / self.partidas:.2f}",
         ])
         
     def _section_elo(self, p1_elo: float, p2_elo: float, pool_elos: Dict[int, float]) -> str:
@@ -517,6 +518,7 @@ class StatsV:
         """
         total_global = sum(sum(a) for a in attacks.values())
         lines = []
+        names = {1: "Knight", 2: "Archer", 3: "Rogue", 4: "Wizard", 5: "Cleric"}
         for warrior_id, counts in attacks.items():
             warrior = warriors_classes[warrior_id]
             warrior_total = sum(counts)
