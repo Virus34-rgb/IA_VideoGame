@@ -3,10 +3,10 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 5
+VERSION: 6
 N_BATCH: 2048
-TRAIN_EPISODES: 50
-EVAL_EPISODES: 10
+TRAIN_EPISODES: 250
+EVAL_EPISODES: 100
 
 # Flags del juego
 USE_META_GAME: true
