@@ -3,7 +3,7 @@ import pstats
 #python .\proffileAnalysis 
 #python -m cProfile -o profile_replay_optimizedv3.prof mainV.py
 print("========== CUMULATIVE ==========")
-pstats.Stats("profile_replay_optimizedRunLarga.prof").sort_stats("cumulative").print_stats(40)
+pstats.Stats("profile_replay_optimizedRunLarga2.prof").sort_stats("cumulative").print_stats(40)
 
 print("\n========== TOTTIME ==========")
-pstats.Stats("profile_replay_optimizedRunLarga.prof").sort_stats("tottime").print_stats(40)
+pstats.Stats("profile_replay_optimizedRunLarga2.prof").sort_stats("tottime").print_stats(40)

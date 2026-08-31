@@ -5,6 +5,7 @@ import torch
 from typing import Tuple, Dict, Any, Optional
 
 from AI.Environment.gameState import GameState
+from AI.Environment.resolve_actions import resolveAction
 from AI.Environment.statsV import StatsV
 from AI.Environment.warriorFactory import get_warriors_classes
 from AI.Environment.abilityData import EffectType
@@ -25,6 +26,13 @@ class VectorizedEnvironment:
         self.target_mask_por_tipo_habilidad: torch.Tensor
         self.effect_type_por_tipo_habilidad: torch.Tensor
         self._build_static_tables()
+        self.resolver = resolveAction(
+            self.max_health_por_tipo,
+            self.damage_por_tipo_habilidad,
+            self.turn_cd_por_tipo_habilidad,
+            self.target_mask_por_tipo_habilidad,
+            self.effect_type_por_tipo_habilidad
+        )
 
         self.p1_disposition: torch.Tensor
         self.p2_disposition: torch.Tensor
@@ -133,7 +141,11 @@ class VectorizedEnvironment:
         blocks_p2 = torch.zeros(self.N)
         heal_p1 = torch.zeros(self.N)
         heal_p2 = torch.zeros(self.N)
-
+        wasted_heal_p1 = torch.zeros(self.N)
+        wasted_heal_p2 = torch.zeros(self.N)
+        wasted_defense_p1 = torch.zeros(self.N)
+        wasted_defense_p2 = torch.zeros(self.N)
+        
         p1_health_before = self._normalized_team_health(self.p1_healths, self.p1_disposition)
         p2_health_before = self._normalized_team_health(self.p2_healths, self.p2_disposition)
 
@@ -169,8 +181,8 @@ class VectorizedEnvironment:
                 new_own_disp, new_enemy_disp, new_own_health, new_enemy_health,
                 new_own_cd, new_own_alive, new_enemy_alive,
                 new_own_abilities, ability_pool_idx,
-                new_own_castle,
-            ) = self._resolve_action(
+                new_own_castle,wasted_heal,defense_wasted
+            ) = self.resolver.resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
                 own_instance_abilities, enemy_instance_abilities,
@@ -198,7 +210,13 @@ class VectorizedEnvironment:
             blocks_p2 += torch.where(~es_p1, torch.zeros_like(blocked), blocked)
             heal_p1 += torch.where(es_p1, healed, torch.zeros_like(healed))
             heal_p2 += torch.where(~es_p1, healed, torch.zeros_like(healed))
-
+            heal_p1 += torch.where(es_p1, healed, torch.zeros_like(healed))
+            heal_p2 += torch.where(~es_p1, healed, torch.zeros_like(healed))
+            wasted_heal_p1 += torch.where(es_p1, wasted_heal, torch.zeros_like(healed))
+            wasted_heal_p2 += torch.where(~es_p1, wasted_heal, torch.zeros_like(healed))
+            wasted_defense_p1 += torch.where(es_p1, defense_wasted, torch.zeros_like(healed))
+            wasted_defense_p2 += torch.where(~es_p1, defense_wasted, torch.zeros_like(healed))
+            
             self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)
             self.stats.accumulate_attacks(actor_type, ability_pool_idx, es_p1, ~ya_terminadas_antes)
 
@@ -212,12 +230,16 @@ class VectorizedEnvironment:
 
         self.stats.accumulate_turn(
             damage_p1, damage_p2, blocks_p1, blocks_p2,
-            damage_avoided_p1, damage_avoided_p2, heal_p1, heal_p2, ya_terminadas_antes,
+            damage_avoided_p1, damage_avoided_p2, heal_p1, heal_p2,
+            wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2,
+            ya_terminadas_antes,
         )
 
         rewardP1, rewardP2 = self._calculate_rewards(
             damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
-            heal_p1, heal_p2, health_diff_before, health_diff_after, p1_new_deaths, p2_new_deaths,
+            heal_p1, heal_p2, health_diff_before, health_diff_after,
+            p1_new_deaths, p2_new_deaths,wasted_heal_p1,wasted_heal_p2,
+            wasted_defense_p1,wasted_defense_p2,
         )
 
         rewardP1 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP1), rewardP1)
@@ -225,269 +247,6 @@ class VectorizedEnvironment:
 
         return self.get_state(), rewardP1, rewardP2, self.ended
 
-    def _resolve_action(
-        self, pos, actors, own_disposition, enemy_disposition, own_health, enemy_health,
-        own_cooldowns, own_alive, enemy_alive, actions_actor, enemy_actions,
-        own_instance_abilities, enemy_instance_abilities,
-        own_castle_slots, enemy_castle_slots,
-    ):
-        actor_alive_now = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-
-        own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1)
-        ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0, 3).unsqueeze(1)).squeeze(1)
-        effect_type = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx]
-
-        es_habilidad = (actions_actor >= 0) & (actions_actor <= 3)
-
-        mask_movPos = (actions_actor == 5) & (pos != 2) & actor_alive_now
-        mask_movNeg = (actions_actor == 6) & (pos != 0) & actor_alive_now
-        mask_self_heal = es_habilidad & (effect_type == EffectType.SELF_HEAL) & actor_alive_now
-        mask_team_heal = es_habilidad & (effect_type == EffectType.TEAM_HEAL) & actor_alive_now
-        mask_defend = es_habilidad & ((effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)) & actor_alive_now
-        mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
-
-        moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov, new_alive_mov = self._resolve_action_movement(
-            actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos
-        )
-
-        own_new_disp = own_disposition.clone()
-        own_new_disp = torch.where(mask_movPos.unsqueeze(1), new_disp_mov, own_new_disp)
-        own_new_disp = torch.where(mask_movNeg.unsqueeze(1), new_disp_mov, own_new_disp)
-
-        own_new_castle = own_castle_slots.clone()
-        own_new_castle = torch.where(mask_movPos.unsqueeze(1), new_castle_mov, own_new_castle)
-        own_new_castle = torch.where(mask_movNeg.unsqueeze(1), new_castle_mov, own_new_castle)
-        
-        own_new_alive = own_alive.clone()
-        own_new_alive = torch.where(mask_movPos.unsqueeze(1), new_alive_mov, own_new_alive)
-        own_new_alive = torch.where(mask_movNeg.unsqueeze(1), new_alive_mov, own_new_alive)
-
-        damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack = self._resolve_action_attack(
-            actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
-        )
-        damage = torch.where(mask_ataque, damage_raw, torch.zeros_like(damage_raw))
-        blocked = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
-
-        healed_self, own_health_self = self._resolve_action_self_heal(actors, ability_pool_idx, pos, own_health)
-        healed_team, own_health_team = self._resolve_action_team_heal(actors, ability_pool_idx, own_disposition, own_health, own_alive)
-
-        own_new_health = own_health.clone()
-        own_new_health = torch.where(mask_movPos.unsqueeze(1), new_health_mov, own_new_health)
-        own_new_health = torch.where(mask_movNeg.unsqueeze(1), new_health_mov, own_new_health)
-        own_new_health = torch.where(mask_self_heal.unsqueeze(1), own_health_self, own_new_health)
-        own_new_health = torch.where(mask_team_heal.unsqueeze(1), own_health_team, own_new_health)
-        enemy_new_health = torch.where(mask_ataque.unsqueeze(1), enemy_health_after_attack, enemy_health)
-
-        mask_usa_habilidad = (mask_ataque | mask_self_heal | mask_team_heal | mask_defend)
-        own_cd_new = self._update_own_cooldowns(actors, actions_actor, ability_pool_idx, pos, own_cooldowns, mask_usa_habilidad)
-
-        mask_movPos_4 = mask_movPos.view(-1, 1, 1)
-        mask_movNeg_4 = mask_movNeg.view(-1, 1, 1)
-        own_cd_new = torch.where(mask_movNeg_4, new_cd_mov, own_cd_new)
-        own_cd_new = torch.where(mask_movPos_4, new_cd_mov, own_cd_new)
-
-        own_abilities_new = torch.where(mask_movNeg_4, new_abilities_mov, own_instance_abilities)
-        own_abilities_new = torch.where(mask_movPos_4, new_abilities_mov, own_abilities_new)
-
-        enemy_alive_final = torch.where(mask_ataque.unsqueeze(1), enemy_alive_after_attack, enemy_alive)
-
-        heal = torch.zeros_like(own_health[:, 0])
-        heal = torch.where(mask_self_heal, healed_self, heal)
-        heal = torch.where(mask_team_heal, healed_team, heal)
-
-        damage_avoided = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
-
-        return (
-            damage, damage_avoided, blocked, moved, heal,
-            own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
-            own_cd_new, own_new_alive, enemy_alive_final,
-            own_abilities_new, ability_pool_idx,
-            own_new_castle,
-        )
-
-    def _resolve_action_movement(
-        self, actors, own_disposition, own_health, own_cooldowns,
-        own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos,
-    ):
-        mask_movPos = (actions_actor == 5) & (pos != 2)
-        mask_movNeg = (actions_actor == 6) & (pos != 0)
-        moved = (mask_movPos | mask_movNeg).float()
-
-        pos_destino_pos = (pos + 1).clamp(max=2)
-        pos_destino_neg = (pos - 1).clamp(min=0)
-
-        # Intercambiar disposición
-        own_new_disp = own_disposition.clone()
-        origen = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino = own_disposition.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_disp.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino, origen).unsqueeze(1))
-        own_new_disp.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen, destino).unsqueeze(1))
-
-        origen2 = own_new_disp.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino2 = own_new_disp.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_disp_final = own_new_disp.clone()
-        own_new_disp_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino2, origen2).unsqueeze(1))
-        own_new_disp_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen2, destino2).unsqueeze(1))
-
-        # Intercambiar salud
-        own_new_health = own_health.clone()
-        origen_h = own_health.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_h = own_health.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_health.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_h, origen_h).unsqueeze(1))
-        own_new_health.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_h, destino_h).unsqueeze(1))
-
-        origen_h2 = own_new_health.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_h2 = own_new_health.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_health_final = own_new_health.clone()
-        own_new_health_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_h2, origen_h2).unsqueeze(1))
-        own_new_health_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_h2, destino_h2).unsqueeze(1))
-
-        # NUEVO: Intercambiar alive (mismo patrón que salud, pero con own_alive)
-        own_new_alive = own_alive.clone()
-        origen_a = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_a = own_alive.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_alive.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_a, origen_a).unsqueeze(1))
-        own_new_alive.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_a, destino_a).unsqueeze(1))
-
-        origen_a2 = own_new_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_a2 = own_new_alive.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_alive_final = own_new_alive.clone()
-        own_new_alive_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_a2, origen_a2).unsqueeze(1))
-        own_new_alive_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_a2, destino_a2).unsqueeze(1))
-
-        # Intercambiar cooldowns
-        pos_e = pos.view(-1, 1, 1).expand(-1, 1, 4)
-        pos_destino_pos_e = pos_destino_pos.view(-1, 1, 1).expand(-1, 1, 4)
-        pos_destino_neg_e = pos_destino_neg.view(-1, 1, 1).expand(-1, 1, 4)
-        mask_movPos_4 = mask_movPos.view(-1, 1, 1).expand(-1, 1, 4)
-        mask_movNeg_4 = mask_movNeg.view(-1, 1, 1).expand(-1, 1, 4)
-
-        own_new_cd = own_cooldowns.clone()
-        origen_cd = own_cooldowns.gather(1, pos_e)
-        destino_cd = own_cooldowns.gather(1, pos_destino_pos_e)
-        own_new_cd.scatter_(1, pos_e, torch.where(mask_movPos_4, destino_cd, origen_cd))
-        own_new_cd.scatter_(1, pos_destino_pos_e, torch.where(mask_movPos_4, origen_cd, destino_cd))
-
-        origen_cd2 = own_new_cd.gather(1, pos_e)
-        destino_cd2 = own_new_cd.gather(1, pos_destino_neg_e)
-        own_new_cd_final = own_new_cd.clone()
-        own_new_cd_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_cd2, origen_cd2))
-        own_new_cd_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_cd2, destino_cd2))
-
-        # Intercambiar habilidades de instancia
-        own_new_abilities = own_instance_abilities.clone()
-        origen_ab = own_instance_abilities.gather(1, pos_e)
-        destino_ab = own_instance_abilities.gather(1, pos_destino_pos_e)
-        own_new_abilities.scatter_(1, pos_e, torch.where(mask_movPos_4, destino_ab, origen_ab))
-        own_new_abilities.scatter_(1, pos_destino_pos_e, torch.where(mask_movPos_4, origen_ab, destino_ab))
-
-        origen_ab2 = own_new_abilities.gather(1, pos_e)
-        destino_ab2 = own_new_abilities.gather(1, pos_destino_neg_e)
-        own_new_abilities_final = own_new_abilities.clone()
-        own_new_abilities_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_ab2, origen_ab2))
-        own_new_abilities_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_ab2, destino_ab2))
-
-        # Intercambiar castle_slots
-        own_new_castle = own_castle_slots.clone()
-        origen_c = own_castle_slots.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_c = own_castle_slots.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_castle.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_c, origen_c).unsqueeze(1))
-        own_new_castle.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_c, destino_c).unsqueeze(1))
-
-        origen_c2 = own_new_castle.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_c2 = own_new_castle.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_castle_final = own_new_castle.clone()
-        own_new_castle_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_c2, origen_c2).unsqueeze(1))
-        own_new_castle_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_c2, destino_c2).unsqueeze(1))
-
-        return (
-            moved,
-            own_new_disp_final,
-            own_new_health_final,
-            own_new_cd_final,
-            own_new_abilities_final,
-            own_new_castle_final,
-            own_new_alive_final,   # NUEVO
-        )
-
-    def _resolve_action_attack(
-        self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
-        enemy_instance_abilities,
-    ):
-        would_be_damage = self.damage_por_tipo_habilidad[actors, ability_pool_idx]
-        target_mask = self.target_mask_por_tipo_habilidad[actors, ability_pool_idx]
-
-        enemy_ability_pool_idx = enemy_instance_abilities.gather(
-            2, enemy_actions.clamp(0, 3).unsqueeze(-1)
-        ).squeeze(-1)
-        enemy_effect_type = self.effect_type_por_tipo_habilidad[enemy_disposition, enemy_ability_pool_idx]
-        enemy_es_habilidad = (enemy_actions >= 0) & (enemy_actions <= 3)
-
-        enemy_new_health = enemy_health.clone()
-        damage_total = torch.zeros_like(would_be_damage)
-        avoided_total = torch.zeros_like(would_be_damage)
-        blocks_total = torch.zeros_like(would_be_damage)
-
-        for slot in range(3):
-            es_target = target_mask[:, slot] & enemy_alive[:, slot]
-
-            full_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_FULL) & enemy_es_habilidad[:, slot]
-            half_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_HALF) & enemy_es_habilidad[:, slot]
-
-            hit_damage = torch.where(
-                full_block, torch.zeros_like(would_be_damage),
-                torch.where(half_block, would_be_damage / 2, would_be_damage),
-            )
-            avoided = torch.where(
-                full_block, would_be_damage,
-                torch.where(half_block, would_be_damage / 2, torch.zeros_like(would_be_damage)),
-            )
-            blocked_flag = (full_block | half_block).float()
-
-            hit_damage = torch.where(es_target, hit_damage, torch.zeros_like(hit_damage))
-            avoided = torch.where(es_target, avoided, torch.zeros_like(avoided))
-            blocked_flag = torch.where(es_target, blocked_flag, torch.zeros_like(blocked_flag))
-
-            health_slot_actual = enemy_new_health[:, slot]
-            enemy_new_health[:, slot] = torch.where(es_target, health_slot_actual - hit_damage, health_slot_actual)
-
-            damage_total += hit_damage
-            avoided_total += avoided
-            blocks_total += blocked_flag
-
-        enemy_new_alive = enemy_alive & (enemy_new_health > 0)
-        return damage_total, blocks_total, enemy_new_health, enemy_new_alive
-
-    def _resolve_action_self_heal(self, actors, ability_pool_idx, pos, own_health):
-        heal_amount = self.damage_por_tipo_habilidad[actors, ability_pool_idx]
-        max_health_actor = self.max_health_por_tipo[actors]
-        current = own_health.gather(1, pos.unsqueeze(1)).squeeze(1)
-        new_value = torch.min(max_health_actor, current + heal_amount)
-        healed = new_value - current
-        own_new_health = own_health.scatter(1, pos.unsqueeze(1), new_value.unsqueeze(1))
-        return healed, own_new_health
-
-    def _resolve_action_team_heal(self, actors, ability_pool_idx, own_disposition, own_health, own_alive):
-        heal_amount = self.damage_por_tipo_habilidad[actors, ability_pool_idx].unsqueeze(1)
-        max_health_slot = self.max_health_por_tipo[own_disposition]
-        new_value = torch.min(max_health_slot, own_health + heal_amount)
-        healed_per_slot = torch.where(own_alive, new_value - own_health, torch.zeros_like(own_health))
-        own_new_health = own_health + healed_per_slot
-        total_healed = healed_per_slot.sum(dim=1)
-        return total_healed, own_new_health
-
-    def _update_own_cooldowns(self, actors, accion_actor, ability_pool_idx, pos, own_cooldowns, mask_usa_habilidad):
-        turns_cd = self.turn_cd_por_tipo_habilidad[actors, ability_pool_idx]
-
-        slot_expand = pos.view(-1, 1, 1).expand(-1, 1, 4)
-        actor_cd = own_cooldowns.gather(1, slot_expand).squeeze(1)
-        button_onehot = torch.nn.functional.one_hot(accion_actor.clamp(0, 3), num_classes=4).bool()
-
-        turns_cd_expand = turns_cd.unsqueeze(1).expand(-1, 4)
-        marked = torch.where(button_onehot, turns_cd_expand, actor_cd)
-        new_actor_cd = torch.where(mask_usa_habilidad.unsqueeze(1), marked, actor_cd)
-
-        return own_cooldowns.scatter(1, slot_expand, new_actor_cd.unsqueeze(1))
 
     def _get_turn_order(self):
         actor_types = torch.cat([self.p1_disposition, self.p2_disposition], dim=1)
@@ -565,6 +324,7 @@ class VectorizedEnvironment:
     def _calculate_rewards(
         self, damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
         healed_p1, healed_p2, health_diff_before, health_diff_after, newDeaths_p1, newDeaths_p2,
+        wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2
     ):
         self.p1_deaths += newDeaths_p1
         self.p2_deaths += newDeaths_p2
@@ -590,10 +350,12 @@ class VectorizedEnvironment:
         rewardP1 = self._reward(
             damage=damage_p1 - damage_p2, deaths=newDeaths_p2 - newDeaths_p1, win=win_p1,
             blocks=damage_avoided_p1, heal=healed_p1, shaping_weight=shaping_term_p1,
+            wasted_heal = wasted_heal_p1,wasted_defense = wasted_defense_p1,
         )
         rewardP2 = self._reward(
             damage=damage_p2 - damage_p1, deaths=newDeaths_p1 - newDeaths_p2, win=win_p2,
             blocks=damage_avoided_p2, heal=healed_p2, shaping_weight=shaping_term_p2,
+            wasted_heal = wasted_heal_p2,wasted_defense = wasted_defense_p2,
         )
         return rewardP1, rewardP2
 
