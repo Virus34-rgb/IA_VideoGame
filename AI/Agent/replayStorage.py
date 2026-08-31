@@ -12,6 +12,7 @@ ReplayBatch = namedtuple(
         "alive", "types", "cooldowns", "opp_types",
         "next_types", "next_alive", "next_cooldowns", "next_opp_types",
         "instance_abilities", "next_instance_abilities",
+        "action_mask", "next_action_mask",
     ],
 )
 
@@ -46,6 +47,8 @@ class ReplayStorage:
             self.next_opp_types = torch.zeros(capacity, 3, dtype=torch.long)
             self.instance_abilities = torch.zeros(capacity, 3, 4, dtype=torch.long)
             self.next_instance_abilities = torch.zeros(capacity, 3, 4, dtype=torch.long)
+            self.action_mask = torch.zeros(capacity, 3, 6, dtype=torch.bool)
+            self.next_action_mask = torch.zeros(capacity, 3, 6, dtype=torch.bool)
         else:
             self.alive = None
             self.types = None
@@ -56,7 +59,9 @@ class ReplayStorage:
             self.next_cooldowns = None
             self.next_opp_types = None
             self.instance_abilities = None  
-            self.next_instance_abilities = None  
+            self.next_instance_abilities = None
+            self.action_mask = None
+            self.next_action_mask = None
 
     def get_batch(self, indices: torch.Tensor) -> ReplayBatch:
         if self.is_turn_storage:
@@ -65,13 +70,14 @@ class ReplayStorage:
                 self.next_states[indices], self.dones[indices],
                 self.alive[indices], self.types[indices], self.cooldowns[indices], self.opp_types[indices],
                 self.next_types[indices], self.next_alive[indices], self.next_cooldowns[indices], self.next_opp_types[indices],
-                self.instance_abilities[indices], self.next_instance_abilities[indices],  
+                self.instance_abilities[indices], self.next_instance_abilities[indices],
+                self.action_mask[indices], self.next_action_mask[indices],
             )
         else:
             return ReplayBatch(
                 self.states[indices], self.actions[indices], self.rewards[indices],
                 self.next_states[indices], self.dones[indices],
-                None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None,
             )
 
     def state_dict(self) -> dict:
@@ -84,8 +90,10 @@ class ReplayStorage:
                 "alive": self.alive, "types": self.types, "cooldowns": self.cooldowns, "opp_types": self.opp_types,
                 "next_types": self.next_types, "next_alive": self.next_alive,
                 "next_cooldowns": self.next_cooldowns, "next_opp_types": self.next_opp_types,
-                "instance_abilities": self.instance_abilities,                
-                "next_instance_abilities": self.next_instance_abilities,      
+                "instance_abilities": self.instance_abilities,
+                "next_instance_abilities": self.next_instance_abilities,
+                "action_mask": self.action_mask,
+                "next_action_mask": self.next_action_mask,
             })
         return state
 
@@ -104,5 +112,7 @@ class ReplayStorage:
             self.next_alive.copy_(state["next_alive"])
             self.next_cooldowns.copy_(state["next_cooldowns"])
             self.next_opp_types.copy_(state["next_opp_types"])
-            self.instance_abilities.copy_(state["instance_abilities"])             
-            self.next_instance_abilities.copy_(state["next_instance_abilities"])    
+            self.instance_abilities.copy_(state["instance_abilities"])
+            self.next_instance_abilities.copy_(state["next_instance_abilities"])
+            self.action_mask.copy_(state["action_mask"])
+            self.next_action_mask.copy_(state["next_action_mask"]) 

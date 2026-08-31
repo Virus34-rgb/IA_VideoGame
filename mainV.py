@@ -140,10 +140,9 @@ class MainV:
         self.setup()
         for step in self.steps:
             self._run_step(step)
+        self.logger.flush_loss_buffer()
         self._print_summary()
         self.logger.plot_progress(show=False)
-        if constants.USE_WANDB and wandb_setup is not None:
-            wandb_setup.finish_wandb()
 
     # ------------------------------------------------------------
     # Ejecución de un paso individual

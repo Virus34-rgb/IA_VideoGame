@@ -230,6 +230,13 @@ class TrainerV:
         p1_abilities_now = self.environment.p1_instance_abilities
         p2_abilities_now = self.environment.p2_instance_abilities
 
+        p1_action_mask_now = self.player1.compute_action_mask(
+            p1_types_now, p1_cd_now, p1_alive_now, p1_opp_types_now, p1_abilities_now,
+        )
+        p2_action_mask_now = p2_training_player.compute_action_mask(
+            p2_types_now, p2_cd_now, p2_alive_now, p2_opp_types_now, p2_abilities_now,
+        )
+
         action_p1 = self.player1.turn(
             obs1_tensor, self.environment.p1_disposition, self.environment.p1_cooldowns,
             self.environment.p1_alive, self.environment.p2_disposition,
@@ -245,7 +252,7 @@ class TrainerV:
         if learn_p1:
             exp_p1 = n_steps_buffer_p1.push(
                 obs1_tensor, action_p1, reward1, ended, p1_alive_now, p1_types_now, p1_cd_now, p1_opp_types_now,
-                p1_abilities_now,
+                p1_abilities_now, p1_action_mask_now,
             )
             if exp_p1 is not None:
                 self._remember_turn_batch(self.player1, exp_p1)
@@ -253,7 +260,7 @@ class TrainerV:
         if learn_p2:
             exp_p2 = n_steps_buffer_p2.push(
                 obs2_tensor, action_p2, reward2, ended, p2_alive_now, p2_types_now, p2_cd_now, p2_opp_types_now,
-                p2_abilities_now,
+                p2_abilities_now, p2_action_mask_now,
             )
             if exp_p2 is not None:
                 self._remember_turn_batch(p2_training_player, exp_p2, skip_mask=self._opponent_from_pool_mask)
@@ -480,6 +487,8 @@ class TrainerV:
             next_opp_types = experience.next_opp_types[valid]
             instance_abilities = experience.instance_abilities[valid]
             next_instance_abilities = experience.next_instance_abilities[valid]
+            action_mask = experience.action_mask[valid]
+            next_action_mask = experience.next_action_mask[valid]
         else:
             states = experience.states
             actions = experience.actions
@@ -496,6 +505,8 @@ class TrainerV:
             next_opp_types = experience.next_opp_types
             instance_abilities = experience.instance_abilities
             next_instance_abilities = experience.next_instance_abilities
+            action_mask = experience.action_mask
+            next_action_mask = experience.next_action_mask
 
         if states.shape[0] == 0:
             return
@@ -504,6 +515,7 @@ class TrainerV:
             states, actions, rewards, next_states, dones,
             alive, types, cooldowns, opp_types, next_types, next_alive, next_cooldowns, next_opp_types,
             instance_abilities, next_instance_abilities,
+            action_mask, next_action_mask,
         )
 
     def _build_observations(self):

@@ -10,7 +10,8 @@ BufferBatch = namedtuple(
         "states", "actions", "rewards", "next_states", "dones",
         "alive", "types", "cooldowns", "opp_types",
         "next_types", "next_alive", "next_cooldowns", "next_opp_types",
-        "instance_abilities", "next_instance_abilities",   # NUEVO
+        "instance_abilities", "next_instance_abilities",
+        "action_mask","next_action_mask"
     ],
 )
 
@@ -30,8 +31,9 @@ class NStepBuffer:
         self.cooldowns = deque()
         self.opp_types = deque()
         self.instance_abilities = deque()
+        self.action_mask = deque()
 
-    def push(self, states, actions, rewards, dones, alive, types, cooldowns, opp_types, instance_abilities):
+    def push(self, states, actions, rewards, dones, alive, types, cooldowns, opp_types, instance_abilities, action_mask):
         self.states.append(states)
         self.actions.append(actions)
         self.rewards.append(rewards)
@@ -40,7 +42,8 @@ class NStepBuffer:
         self.types.append(types)
         self.cooldowns.append(cooldowns)
         self.opp_types.append(opp_types)
-        self.instance_abilities.append(instance_abilities) 
+        self.instance_abilities.append(instance_abilities)
+        self.action_mask.append(action_mask)
 
         if len(self.states) < self.n_step + 1:
             return None
@@ -51,7 +54,8 @@ class NStepBuffer:
         types_0 = self.types.popleft()
         cooldowns_0 = self.cooldowns.popleft()
         opp_types_0 = self.opp_types.popleft()
-        instance_abilities_0 = self.instance_abilities.popleft() 
+        instance_abilities_0 = self.instance_abilities.popleft()
+        action_mask_0 = self.action_mask.popleft()
 
         rewards_window = [self.rewards[i] for i in range(self.n_step)]
         done_flag = self.dones[self.n_step - 1]
@@ -67,13 +71,15 @@ class NStepBuffer:
         next_alive = self.alive[-1]
         next_cooldowns = self.cooldowns[-1]
         next_opp_types = self.opp_types[-1]
-        next_instance_abilities = self.instance_abilities[-1]   
+        next_instance_abilities = self.instance_abilities[-1]
+        next_action_mask = self.action_mask[-1]
 
         return BufferBatch(
             states=state_0, actions=action_0, rewards=n_step_reward, next_states=next_state, dones=done_flag,
             alive=alive_0, types=types_0, cooldowns=cooldowns_0, opp_types=opp_types_0,
             next_types=next_types, next_alive=next_alive, next_cooldowns=next_cooldowns, next_opp_types=next_opp_types,
-            instance_abilities=instance_abilities_0, next_instance_abilities=next_instance_abilities,  
+            instance_abilities=instance_abilities_0, next_instance_abilities=next_instance_abilities,
+            action_mask=action_mask_0, next_action_mask=next_action_mask,
         )
 
     def flush(self):
@@ -84,7 +90,8 @@ class NStepBuffer:
             types_0 = self.types.popleft()
             cooldowns_0 = self.cooldowns.popleft()
             opp_types_0 = self.opp_types.popleft()
-            instance_abilities_0 = self.instance_abilities.popleft()  
+            instance_abilities_0 = self.instance_abilities.popleft()
+            action_mask_0 = self.action_mask.popleft()
 
             rewards_window = list(self.rewards)
             num_steps = len(rewards_window)
@@ -102,14 +109,16 @@ class NStepBuffer:
                 next_alive = self.alive[-1]
                 next_cooldowns = self.cooldowns[-1]
                 next_opp_types = self.opp_types[-1]
-                next_instance_abilities = self.instance_abilities[-1]   # NUEVO
+                next_instance_abilities = self.instance_abilities[-1]
+                next_action_mask = self.action_mask[-1]
             else:
                 next_state = state_0
                 next_types = types_0
                 next_alive = alive_0
                 next_cooldowns = cooldowns_0
                 next_opp_types = opp_types_0
-                next_instance_abilities = instance_abilities_0   # NUEVO
+                next_instance_abilities = instance_abilities_0
+                next_action_mask = action_mask_0
 
             done = torch.ones_like(alive_0[:, 0], dtype=torch.bool)
 
@@ -117,13 +126,15 @@ class NStepBuffer:
                 states=state_0, actions=action_0, rewards=n_step_reward, next_states=next_state, dones=done,
                 alive=alive_0, types=types_0, cooldowns=cooldowns_0, opp_types=opp_types_0,
                 next_types=next_types, next_alive=next_alive, next_cooldowns=next_cooldowns, next_opp_types=next_opp_types,
-                instance_abilities=instance_abilities_0, next_instance_abilities=next_instance_abilities,   # NUEVO
+                instance_abilities=instance_abilities_0, next_instance_abilities=next_instance_abilities,
+                action_mask=action_mask_0, next_action_mask=next_action_mask,
             )
 
     def reset(self) -> None:
         self.states.clear(); self.actions.clear(); self.rewards.clear(); self.dones.clear()
         self.alive.clear(); self.types.clear(); self.cooldowns.clear(); self.opp_types.clear()
-        self.instance_abilities.clear()   # NUEVO
+        self.instance_abilities.clear()
+        self.action_mask.clear()
 
     def __len__(self) -> int:
         return len(self.states)
