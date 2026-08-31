@@ -312,8 +312,8 @@ class TrainerV:
         cstate1_1 = self._encode_choose_batch_castle(torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long), self.p1_castle)
         cstate2_1 = self._encode_choose_batch_castle(torch.zeros(self.N, dtype=torch.long), torch.zeros(self.N, dtype=torch.long), self.p2_castle)
 
-        slot1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1, self.environment.p1_disposition, torch.zeros(self.N, dtype=torch.long), self.p1_castle.castle_alive, used_p1)
-        slot2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), self.p2_castle.castle_alive, used_p2)
+        slot1_1, pos1_1, action1_1 = self.player1.selection(cstate1_1, self.environment.p1_disposition, torch.zeros(self.N, dtype=torch.long), self.p1_castle.castle_alive, used_p1,self.p1_castle.castle_types)
+        slot2_1, pos2_1, action2_1 = p2_training_player.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
         used_p1[indices, slot1_1] = True
         used_p2[indices, slot2_1] = True
 
@@ -328,8 +328,8 @@ class TrainerV:
         cstate1_2 = self._encode_choose_batch_castle(warr2_1_type, pos2_1 + 1, self.p1_castle)
         cstate2_2 = self._encode_choose_batch_castle(warr1_1_type, pos1_1 + 1, self.p2_castle)
 
-        slot1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1)
-        slot2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2)
+        slot1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1,self.p1_castle.castle_types)
+        slot2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
         used_p1[indices, slot1_2] = True
         used_p2[indices, slot2_2] = True
 
@@ -344,8 +344,8 @@ class TrainerV:
         cstate1_3 = self._encode_choose_batch_castle(warr2_1_type, pos2_1 + 1, self.p1_castle)
         cstate2_3 = self._encode_choose_batch_castle(warr1_1_type, pos1_1 + 1, self.p2_castle)
 
-        slot1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1)
-        slot2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2)
+        slot1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1,self.p1_castle.castle_types)
+        slot2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
 
         warr1_3_type = self.p1_castle.castle_types[indices, slot1_3]
         warr2_3_type = self.p2_castle.castle_types[indices, slot2_3]

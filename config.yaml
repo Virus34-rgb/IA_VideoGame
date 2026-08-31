@@ -3,15 +3,15 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 7
-RUN_NAME_SUFFIX: "evaluacion_500K_HEALTHDEFENSE"
+VERSION: 1
+RUN_NAME_SUFFIX: "evaluacion_NO_DUPLICATES_1000T"
 N_BATCH: 2048
-TRAIN_EPISODES: 250
-EVAL_EPISODES: 100
+TRAIN_EPISODES: 1000
+EVAL_EPISODES: 200
 
 # Flags del juego
 USE_META_GAME: true
-USE_WANDB: true
+USE_WANDB: false
 RUN_COMPARISON: false
 DELETE_DIRECTORIES: true
 

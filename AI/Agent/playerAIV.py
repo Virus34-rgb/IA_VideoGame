@@ -141,7 +141,7 @@ class PlayerAIV:
         loss = nn.SmoothL1Loss(reduction="none")(input, target)
         return (loss * weights).mean()
 
-    def selection(self, batch_encoded_states, disposition, opp_initial_warrior, castle_alive=None, already_used=None):
+    def selection(self, batch_encoded_states, disposition, opp_initial_warrior, castle_alive=None, already_used=None,castle_types = None):
         """
         Modo catálogo (USE_META_GAME=False): elige (tipo 1..5, posición 0-2) libremente.
         Modo castillo (USE_META_GAME=True): elige (slot de castillo 0..MAX_CASTLE_SIZE-1, posición 0-2)
@@ -152,7 +152,7 @@ class PlayerAIV:
 
         states = batch_encoded_states.float()
         logits = self.selection_network(states)
-        masked_logits = self._mask_selection(logits, disposition, castle_alive, already_used)
+        masked_logits = self._mask_selection(logits, disposition, castle_alive, already_used,castle_types)
 
         greedy = torch.argmax(masked_logits, dim=1)
         random_action = self._random_valid_action(masked_logits)
@@ -169,19 +169,38 @@ class PlayerAIV:
 
         return item_index, position, action
 
-    def _mask_selection(self, logits, disposition, castle_alive=None, already_used=None):
-        """
-        Máscara genérica de selección libre: para cada (item, posición), es válida si
-        el item está disponible Y la posición de combate está libre. Ni el item ni la
-        posición se emparejan de forma fija — cualquier combinación válida es elegible.
-        """
+    def _mask_selection(self, logits, disposition, castle_alive=None, already_used=None,castle_types = None):
         N = disposition.shape[0]
-        ocupado_pos = disposition > 0   # (N,3) posiciones de combate ya colocadas
+        ocupado_pos = disposition > 0   # (N,3)
 
         if constants.USE_META_GAME:
             num_items = constants.MAX_CASTLE_SIZE
-            item_disponible = castle_alive & ~already_used   # (N, MAX_CASTLE_SIZE)
+
+            # 1. Slots vivos y no usados
+            item_disponible_base = castle_alive & ~already_used   # (N, MAX_CASTLE_SIZE)
+
+            # 2. Tipos ya seleccionados en la disposición actual
+            tipo_usado = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool, device=disposition.device)
+            for slot in range(3):
+                tipo = disposition[:, slot]
+                mask = (tipo > 0)
+                idx = (tipo - 1).clamp(min=0)
+                tipo_usado[mask, idx[mask]] = True
+
+            # 3. Para cada slot del castillo, comprobar si su tipo ya está usado
+            #    Extraemos los tipos de cada slot (los muertos tienen tipo 0)
+            tipos_slot = castle_alive * castle_types  # (N, MAX_CASTLE_SIZE)  0 para muertos
+            #    Índices para gather: (tipos_slot - 1) pero clamp para evitar -1
+            idx_tipo = (tipos_slot - 1).clamp(min=0)  # (N, MAX_CASTLE_SIZE)
+            #    Obtenemos un booleano (N, MAX_CASTLE_SIZE) indicando si ese tipo ya está usado
+            tipo_disponible = ~tipo_usado.gather(1, idx_tipo)
+            #    Los slots muertos (tipo 0) quedarán como ~tipo_usado[0], que es True, pero luego se filtran con castle_alive
+
+            # 4. Combinar: vivos, no usados, y tipo no repetido
+            item_disponible = item_disponible_base & tipo_disponible
+
         else:
+            # Modo catálogo (histórico): sin repetición de tipos
             num_items = constants.WARRIOR_QUANTITY
             usados_tipo = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool)
             for slot in range(3):
@@ -193,6 +212,7 @@ class PlayerAIV:
                     usados_tipo[rows, idx[hay_tipo]] = True
             item_disponible = ~usados_tipo
 
+        # Luego, la lógica de expansión de posiciones es la misma para ambos modos
         item_expand = item_disponible.unsqueeze(-1).expand(N, num_items, 3)
         pos_libre = (~ocupado_pos).unsqueeze(1).expand(N, num_items, 3)
 
