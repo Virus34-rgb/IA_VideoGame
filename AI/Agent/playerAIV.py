@@ -54,12 +54,14 @@ class PlayerAIV:
     def remember_turn_batch(
         self, observation, action, reward, next_observation, done,
         alive, types, cooldowns, opp_types, next_types, next_alive, next_cooldowns, next_opp_types,
-        instance_abilities, next_instance_abilities,   # NUEVO
+        instance_abilities, next_instance_abilities,
+        action_mask, next_action_mask,
     ) -> None:
         self.replay_memory_turn.push_batch(
             observation, action, reward, next_observation, done,
             alive, types, cooldowns, opp_types, next_types, next_alive, next_cooldowns, next_opp_types,
-            instance_abilities, next_instance_abilities,   # NUEVO
+            instance_abilities, next_instance_abilities,
+            action_mask, next_action_mask,
         )
 
     def replay_selection(self) -> Optional[float]:
@@ -113,12 +115,7 @@ class PlayerAIV:
 
         actions_b = self._environment_action_to_network(batch.actions)
 
-        current_mask_flat = self.mask_turn(
-            batch.types, batch.cooldowns, batch.alive, batch.opp_types,
-            batch.instance_abilities,   # NUEVO
-            torch.ones(len(states), 18, dtype=torch.bool),
-        )
-        current_action_mask = (current_mask_flat != float("-inf")).view(-1, 3, 6)
+        current_action_mask = batch.action_mask
 
         qvalues = self.turn_network(states, action_mask=current_action_mask)
 
@@ -226,15 +223,18 @@ class PlayerAIV:
         actions = torch.where(hay_valida, codigo, torch.full_like(codigo, -1))
         return actions
 
-    def mask_turn(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities, logits):
-        # NUEVO parámetro own_instance_abilities
+    def compute_action_mask(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities):
+        """
+        Calcula la máscara booleana de acciones válidas (N, 3, 6), sin aplicarla a
+        ningún logit. Separado de mask_turn para poder calcularla una única vez en
+        el momento de recolección y reutilizarla desde el replay buffer, en vez de
+        recalcularla en cada sample de replay_turn/_multi_agent_double_dqn_target.
+        """
         N = own_disposition.shape[0]
         mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
 
-        mask[:, :, :4] &= (own_cooldowns == 0)   # CAMBIADO: antes ~own_cooldowns (bool inválido con dtype long)
+        mask[:, :, :4] &= (own_cooldowns == 0)
 
-        # NUEVO: la tabla de target ahora tiene tamaño de POOL (no 4). Hay que seleccionar,
-        # de las MAX_POOL_SIZE columnas, solo las 4 que están realmente equipadas por slot.
         table = self.environment.target_mask_por_tipo_habilidad          # (num_types, POOL, 3)
         target_mask_pool = table[own_disposition]                        # (N, 3, POOL, 3)
         idx = own_instance_abilities.unsqueeze(-1).expand(-1, -1, -1, 3)  # (N, 3, 4, 3)
@@ -249,6 +249,12 @@ class PlayerAIV:
         mask[:, 0, 5] = False
         mask[:, 2, 4] = False
 
+        return mask   # (N, 3, 6) bool
+
+    def mask_turn(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities, logits):
+        """Wrapper de compatibilidad: calcula la máscara y la aplica a logits."""
+        N = own_disposition.shape[0]
+        mask = self.compute_action_mask(own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities)
         mask_flat = mask.reshape(N, 18)
         return logits.masked_fill(~mask_flat, float("-inf"))
 
@@ -309,15 +315,11 @@ class PlayerAIV:
             next_cooldowns = batch.next_cooldowns
             next_opp_disp = batch.next_opp_types
 
-            next_masks = self.mask_turn(
-                next_disposition, next_cooldowns, next_alive, next_opp_disp,
-                batch.next_instance_abilities,   # NUEVO
-                torch.ones(len(next_states), 18, dtype=torch.bool),
-            )
-            next_action_mask = (next_masks != float("-inf")).view(-1, 3, 6)
+            next_action_mask = batch.next_action_mask
+            next_masks_flat = next_action_mask.reshape(-1, 18)
 
             next_qvalues_main = self.turn_network(next_states, action_mask=next_action_mask)
-            next_qvalues_main = next_qvalues_main.masked_fill(~next_masks, float("-inf"))
+            next_qvalues_main = next_qvalues_main.masked_fill(~next_masks_flat, float("-inf"))
 
             next_q1 = next_qvalues_main[:, 0:6]
             next_q2 = next_qvalues_main[:, 6:12]

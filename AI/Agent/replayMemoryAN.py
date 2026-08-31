@@ -40,7 +40,8 @@ class ReplayMemoryAN:
             self, states, actions, rewards, next_states, dones,
             alive, types, cooldowns, opp_types,
             next_types, next_alive, next_cooldowns, next_opp_types,
-            instance_abilities, next_instance_abilities,   # NUEVO
+            instance_abilities, next_instance_abilities,
+            action_mask, next_action_mask,
         ) -> None:
             n = len(states)
             priorities = np.full(n, self.max_priority, dtype=np.float32)
@@ -62,8 +63,10 @@ class ReplayMemoryAN:
             self.storage.next_cooldowns[indices] = next_cooldowns
             self.storage.next_opp_types[indices] = next_opp_types
 
-            self.storage.instance_abilities[indices] = instance_abilities             
-            self.storage.next_instance_abilities[indices] = next_instance_abilities   
+            self.storage.instance_abilities[indices] = instance_abilities
+            self.storage.next_instance_abilities[indices] = next_instance_abilities
+            self.storage.action_mask[indices] = action_mask
+            self.storage.next_action_mask[indices] = next_action_mask  
 
     def sample(self, batch_size: int) -> Tuple[Any, np.ndarray, np.ndarray]:
         """

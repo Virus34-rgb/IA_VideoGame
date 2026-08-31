@@ -74,16 +74,16 @@ REWARD_WEIGHTS = {
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
     "blocks": 0.6,                  # Daño bloqueado/evadido
     "heal": 0.6,                    # Curación realizada
-    "shaping_weight": 2,          # Peso para la diferencia de vida (shaping)
+    "shaping_weight": 8,          # Peso para la diferencia de vida (shaping)
 }
 # DESPUÉS
-TURN_PENALTY_BASE = 8             # Penalización de turno en fase inicial (turnos <= RAMP_START)
+TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
 TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización empieza a crecer
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
 TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
-WIN_REWARD = 300                # Recompensa base por ganar la partida
+WIN_REWARD = 1000               # Recompensa base por ganar la partida
 # AÑADIR, junto a WIN_REWARD
-DRAW_PENALTY = 60                # Penalización por resultado en empate (20% de WIN_REWARD)
+DRAW_PENALTY = 200                # Penalización por resultado en empate (20% de WIN_REWARD)
 MAX_TURNS = 20                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
 

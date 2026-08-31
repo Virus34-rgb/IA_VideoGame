@@ -75,6 +75,8 @@ class MetricsLogger:
 
         self._loss_header_written = os.path.exists(self.loss_path)
         self._snapshot_header_written = os.path.exists(self.snapshot_path)
+        self._loss_buffer: list = []
+        self._loss_buffer_max = 500
 
     def dump_config(self, config_module, extra=None) -> None:
         """
@@ -101,21 +103,26 @@ class MetricsLogger:
             json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
 
     def log_loss(self, episode: int, replayed_count: int, player: str, network: str, loss_value: float) -> None:
-        """
-        Registra una pérdida (loss) en el archivo CSV.
-
-        Args:
-            episode: Número de lote (episodio).
-            replayed_count: Número de replays realizados hasta el momento.
-            player: "p1" o "p2".
-            network: "turn" o "selection".
-            loss_value: Valor de la pérdida.
-        """
         if loss_value is None:
             return
         record = LossRecord(episode, replayed_count, player, network, float(loss_value))
-        self._append_csv(self.loss_path, record, self._loss_header_written)
+        self._loss_buffer.append(record)
+        if len(self._loss_buffer) >= self._loss_buffer_max:
+            self.flush_loss_buffer()
+
+    def flush_loss_buffer(self) -> None:
+        """Vuelca el buffer de loss acumulado a disco en una sola apertura de archivo."""
+        if not self._loss_buffer:
+            return
+        write_header = not self._loss_header_written
+        with open(self.loss_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=asdict(self._loss_buffer[0]).keys())
+            if write_header:
+                writer.writeheader()
+            for record in self._loss_buffer:
+                writer.writerow(asdict(record))
         self._loss_header_written = True
+        self._loss_buffer.clear()
 
     def log_snapshot(
         self,

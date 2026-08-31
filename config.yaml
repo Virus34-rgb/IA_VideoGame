@@ -3,7 +3,7 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 3
+VERSION: 5
 N_BATCH: 2048
 TRAIN_EPISODES: 50
 EVAL_EPISODES: 10
