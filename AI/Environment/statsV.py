@@ -97,6 +97,10 @@ class StatsV:
         self.p2_tot_damage_evaded: float = 0.0
         self.p1_tot_heal: float = 0.0
         self.p2_tot_heal: float = 0.0
+        self.wasted_heal_p1 = 0.0
+        self.wasted_heal_p2 = 0.0
+        self.wasted_defense_p1 = 0.0
+        self.wasted_defense_p2 = 0.0
         self.p1_total_deaths: int = 0
         self.p2_total_deaths: int = 0
         self.total_turns: int = 0
@@ -150,6 +154,10 @@ class StatsV:
         avoided_p2: torch.Tensor,
         heal_p1: torch.Tensor,
         heal_p2: torch.Tensor,
+        wasted_heal_p1,
+        wasted_heal_p2,
+        wasted_defense_p1,
+        wasted_defense_p2,
         ya_terminadas_antes: torch.Tensor,
     ) -> None:
         """
@@ -172,6 +180,10 @@ class StatsV:
         self._p2_evaded_batch += torch.where(activa, avoided_p2, torch.zeros_like(avoided_p2))
         self._p1_heal_batch += torch.where(activa, heal_p1, torch.zeros_like(heal_p1))
         self._p2_heal_batch += torch.where(activa, heal_p2, torch.zeros_like(heal_p2))
+        self.wasted_heal_p1 += torch.where(activa, wasted_heal_p1, torch.zeros_like(wasted_heal_p1)).sum().item()
+        self.wasted_heal_p2 += torch.where(activa, wasted_heal_p2, torch.zeros_like(wasted_heal_p2)).sum().item()
+        self.wasted_defense_p1 += torch.where(activa, wasted_defense_p1, torch.zeros_like(wasted_defense_p1)).sum().item()
+        self.wasted_defense_p2 += torch.where(activa, wasted_defense_p2, torch.zeros_like(wasted_defense_p2)).sum().item()
 
     def accumulate_movements(self, moved: torch.Tensor, es_p1: torch.Tensor, activa: torch.Tensor) -> None:
         """
@@ -413,6 +425,8 @@ class StatsV:
             f"Heal total P2:             {s.p2_tot_heal:.2f}",
             f"Heal medio P1:             {d['p1_tot_heal_avg']:.2f}",
             f"Heal medio P2:             {d['p2_tot_heal_avg']:.2f}",
+            f"Cura desperdiciada media P1:  {self.wasted_heal_p1 / self.partidas:.2f}",
+            f"Cura desperdiciada media P2:  {self.wasted_heal_p2 / self.partidas:.2f}",
         ])
 
     def _section_bajas(self, s: StatsSummary) -> str:
@@ -457,6 +471,8 @@ class StatsV:
             f"Bloqueos exitosos P2:      {s.p2_succes_blocks:.2f} -> {d['p2_success_blocks_avg']:.2f}/partida",
             f"Daño evitado P1:           {s.p1_tot_damage_evaded:.2f} -> {d['p1_damage_evaded_avg']:.2f}/partida",
             f"Daño evitado P2:           {s.p2_tot_damage_evaded:.2f} -> {d['p2_damage_evaded_avg']:.2f}/partida",
+            f"Defensas desperdiciadas P1:{s.wasted_defense_p1:.2f}",
+            f"Defensas desperdiciadas P2:{s.wasted_defense_p2:.2f}",
         ])
         
     def _section_elo(self, p1_elo: float, p2_elo: float, pool_elos: Dict[int, float]) -> str:

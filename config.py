@@ -1,6 +1,6 @@
-# config.py
 from dataclasses import dataclass, field
 import os
+import re
 
 
 @dataclass
@@ -8,11 +8,17 @@ class RunConfig:
     version: int
     train_episodes: int = 50000
     eval_episodes: int = 5000
+    suffix: str = ""   # <--- NUEVO
     base_dir: str = field(default_factory=lambda: os.path.dirname(os.path.abspath(__file__)))
 
     @property
     def base_path(self):
-        return os.path.join(self.base_dir, "models", f"IAV{self.version}")
+        if self.suffix:
+            clean_suffix = self.sanitize_filename(self.suffix)
+            folder = f"IAV{self.version}_{clean_suffix}"
+        else:
+            folder = f"IAV{self.version}"
+        return os.path.join(self.base_dir, "models", folder)
 
     @property
     def p1_path(self):
@@ -45,7 +51,11 @@ class RunConfig:
     @property
     def path_p2_turn(self):
         return os.path.join(self.p2_path, "Act.pth")
-    
+
     @property
     def path_opp_pool(self):
-        return os.path.join(self.base_path,"opponent_pool")
+        return os.path.join(self.base_path, "opponent_pool")
+    
+    def sanitize_filename(self,name: str) -> str:
+        """Reemplaza caracteres no válidos en nombres de archivo por '_'."""
+        return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)

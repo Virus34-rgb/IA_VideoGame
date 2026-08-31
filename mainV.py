@@ -7,11 +7,11 @@ hiperparámetros (usando RunSpec).
 """
 import math
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional, List
-
 import yaml
 
 from AI.Agent.opponent_poolV import OpponentPoolV
@@ -89,11 +89,17 @@ class MainV:
         # Inicializar entorno y jugador
         self.environment = VectorizedEnvironment(self.N)
         self.player1 = self.player_class(self.N, self.environment)
+        
+        clean_suffix = self.sanitize_filename(self.config.suffix) if self.config.suffix else ""
+        if clean_suffix:
+            run_nameA = f"v{self.config.version}_{clean_suffix}"
+        else:
+            run_nameA = f"v{self.config.version}"
 
         # Inicializar logger (CSV)
         self.logger = MetricsLogger(
             output_dir=self.log_dir,
-            run_name=f"v{self.config.version}_{self.run_timestamp}",
+            run_name = run_nameA,
         )
         self.logger.dump_config(
             constants,
@@ -110,7 +116,7 @@ class MainV:
         if constants.USE_WANDB and wandb_setup is not None:
             wandb_setup.init_wandb(
                 project_name="castle-game-rl",
-                run_name=f"v{self.config.version}_{self.run_timestamp}",
+                run_name=run_nameA,
                 config={
                     "N": self.N,
                     "learning_rate_selection": constants.SELECTION_LEARNING_RATE,
@@ -134,6 +140,10 @@ class MainV:
             )
 
         self._print_configuration()
+        
+    def sanitize_filename(self,name: str) -> str:
+        """Reemplaza caracteres no válidos en nombres de archivo por '_'."""
+        return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
     def run(self) -> None:
         """Ejecuta todos los pasos definidos y genera gráficos finales."""
@@ -487,6 +497,7 @@ if __name__ == "__main__":
         version=constants.VERSION,
         train_episodes=constants.TRAIN_EPISODES,
         eval_episodes=constants.EVAL_EPISODES,
+        suffix=constants.RUN_NAME_SUFFIX,   # <--- NUEVO
     )
 
     # 4. Ejecutar comparación o run simple

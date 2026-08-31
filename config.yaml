@@ -3,10 +3,11 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 6
+VERSION: 1
+RUN_NAME_SUFFIX: "evaluacion_WRhealthdef_rew0"
 N_BATCH: 2048
-TRAIN_EPISODES: 250
-EVAL_EPISODES: 100
+TRAIN_EPISODES: 50
+EVAL_EPISODES: 10
 
 # Flags del juego
 USE_META_GAME: true

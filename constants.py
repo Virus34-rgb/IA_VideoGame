@@ -75,6 +75,8 @@ REWARD_WEIGHTS = {
     "blocks": 0.6,                  # Daño bloqueado/evadido
     "heal": 0.6,                    # Curación realizada
     "shaping_weight": 8,          # Peso para la diferencia de vida (shaping)
+    "wasted_heal" : 0,
+    "wasted_defense": 0,
 }
 # DESPUÉS
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
@@ -131,6 +133,7 @@ ELO_TEMPERATURE = 15
 
 # Variables que se cargarán desde YAML (con valores por defecto)
 VERSION = 1
+RUN_NAME_SUFFIX = ""   # se puede sobrescribir desde config.yaml
 N_BATCH = 2048
 TRAIN_EPISODES = 20
 EVAL_EPISODES = 2
