@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_evaluacion_WRhealthdef_rew0",
-  "timestamp": 1788195685.8008645,
+  "run_name": "v1_evaluacion_NO_DUPLICATES",
+  "timestamp": 1788199991.2032368,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -56,12 +56,12 @@
       "blocks": 0.6,
       "heal": 0.6,
       "shaping_weight": 8,
-      "wasted_heal": 0,
-      "wasted_defense": 0
+      "wasted_heal": -5,
+      "wasted_defense": -10
     },
     "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "evaluacion_WRhealthdef_rew0",
+    "RUN_NAME_SUFFIX": "evaluacion_NO_DUPLICATES",
     "RUN_SELF_PLAY": true,
     "SAVE_MODEL_FRACTION": 0.05,
     "SELECTION_LEARNING_RATE": 0.0001,
