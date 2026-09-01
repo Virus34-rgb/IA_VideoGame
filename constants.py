@@ -22,7 +22,7 @@ SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
 SELECTION_REPLAY_DATA = 80_000 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
 TURN_REPLAY_DATA = 40_000      # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
-BATCH_SIZE = 64                   # Tamaño del batch de replay
+BATCH_SIZE = 128                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
 
@@ -100,13 +100,17 @@ POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de
 # ============================================================
 # Replay y priorización (PER)
 # ============================================================
-SELECTION_REPLAYS_PER_BATCH = 600  # Número de replays de selección por lote
-TURN_REPLAYS_PER_BATCH = 1200       # Número de replays de turno por lote
+SELECTION_REPLAYS_PER_BATCH = 144 # Número de replays de selección por lote
+TURN_REPLAYS_PER_BATCH = 480       # Número de replays de turno por lote
+
 """
 TURN_REPLAYS_PER_BATCH_nuevo ≈ TURN_REPLAYS_PER_BATCH_actual × (avg_turns_nuevo / avg_turns_actual)
-R_turn = (TURN_REPLAYS_PER_BATCH × BATCH_SIZE) / (N_BATCH × avg_turns)
+R_turn = (TURN_REPLAYS_PER_BATCH × BATCH_SIZE) / (N_BATCH × avg_turns) R estandar 3
+TURN_REPLAYS_PER_BATCH = (N_BATCH × avg_turns) * R_turn / BATCH_SIZE R estandar 3
 R_sel  = (SELECTION_REPLAYS_PER_BATCH × BATCH_SIZE) / (N_BATCH × 3)
+SELECTION_REPLAYS_PER_BATCH = (N_BATCH × avg_turns) * R_sel / BATCH_SIZE
 """
+
 # PER (Prioritized Experience Replay)
 ALPHA = 0.8                       # Factor de priorización (0=uniforme, 1=máxima prioridad)
 BETA_START = 0.4                  # Factor de importancia inicial (para IS weights)
