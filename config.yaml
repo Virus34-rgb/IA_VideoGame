@@ -4,15 +4,16 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_1000_250_2"
+RUN_NAME_SUFFIX: "evaluacion_seed"
 N_BATCH: 2048
 TRAIN_EPISODES: 1000
 EVAL_EPISODES: 250
+SEED: None
 
 # Flags del juego
 USE_META_GAME: true
-USE_WANDB: true
-RUN_COMPARISON: false
+USE_WANDB: false
+RUN_COMPARISON: true
 DELETE_DIRECTORIES: true
 
 # Flags de ejecución
@@ -33,12 +34,14 @@ comparisons:
     N: 2048
     train_batches: 50
     eval_batches: 10
+    seed: 42
     overrides: {}
 
   - run_name: "64"
     N: 2048
     train_batches: 50
     eval_batches: 10
+    seed: 42
     overrides:
       SELECTION_REPLAYS_PER_BATCH: 288 # Número de replays de selección por lote
       TURN_REPLAYS_PER_BATCH: 960       # Número de replays de turno por lote
