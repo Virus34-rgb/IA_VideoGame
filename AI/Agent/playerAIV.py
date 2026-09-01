@@ -88,7 +88,7 @@ class PlayerAIV:
         #Debido a esto, le añadimos una dimensión extra a acions para que coincida en forma a q_selected(N,1) y luego eliminamos esa dimensión extra con squeeze(1)
         q_selected = qvalues.gather(1, actions.unsqueeze(1)).squeeze(1)
 
-        with torch.no_grad():
+        with torch.no_grad(): # no necesitamos calcular gradientes para el target, ya que no se hace backward sobre él
             #calculas la siguiente accion teniendo en cuenta next_states y obtenemos los qbalues para la accion optima con la misma lógica
             next_actions = self.selection_network(next_states).argmax(dim=1)
             next_qvalues = self.target_selection_network(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
@@ -140,7 +140,7 @@ class PlayerAIV:
 
         target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
 
-        with torch.no_grad():
+        with torch.inference_mode(): # no necesitamos calcular gradientes para el target, ya que no se hace backward sobre él
             td_errors = torch.abs(q_selected - target)
             td_errors = torch.nan_to_num(td_errors, nan=1.0, posinf=10.0, neginf=10.0)
 
@@ -164,7 +164,10 @@ class PlayerAIV:
             self.selection_network.reset_noise()
 
         states = batch_encoded_states.float() # conviertes los estados a float32 (antes float16) para que la red los pueda procesar
-        logits = self.selection_network(states) # recibes los qvalues de la red para los estados actuales
+        #Siempre que no vayamos a llamar a backward, es mejor usar torch.inference_mode() para ahorrar memoria y tiempo de computo, 
+        # ya que no se guardan los gradientes ni se hace tracking de operaciones
+        with torch.inference_mode():
+            logits = self.selection_network(states) # recibes los qvalues de la red para los estados actuales
         masked_logits = self._mask_selection(logits, disposition, castle_alive, already_used,castle_types) #enmascaras las acciones invalidas (ya usadas o slots muertos) para que no sean seleccionadas
 
         greedy = torch.argmax(masked_logits, dim=1) # si no se explora, se elige la accion con mayor qvalue
@@ -249,7 +252,8 @@ class PlayerAIV:
             self.turn_network.reset_noise()
 
         obs = batch_encoded_obs.float() #conviertes el estado a float32 (antes float16) para que la red lo pueda procesar
-        logits = self.turn_network(obs) #obtenemos los qvalues de la red para los estados actuales
+        with torch.inference_mode():
+            logits = self.turn_network(obs) #obtenemos los qvalues de la red para los estados actuales
         #Enmascaras los q-values para seleccionar unicamente acciones validas
         masked_logits = self.mask_turn(own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities, logits)
         #conviertes los logits en una forma (N,3,6) para poder seleccionar la acción por guerrero y posición
@@ -359,6 +363,7 @@ class PlayerAIV:
     def _optimize_step(self, loss, optimizer, network, target_network, replayed_counter_attr):
         optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(network.parameters(), constants.GRAD_CLIP_MAX_NORM)
         optimizer.step()
         replayed = getattr(self, replayed_counter_attr)
         if replayed % constants.COPY_DQN == 0:

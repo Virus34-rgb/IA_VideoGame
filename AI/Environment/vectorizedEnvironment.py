@@ -337,7 +337,7 @@ class VectorizedEnvironment:
 
     def _reward(self, **components: torch.Tensor) -> torch.Tensor:
         weighted = sum(constants.REWARD_WEIGHTS[name] * value for name, value in components.items())
-        return weighted - self._turn_penalty()
+        return (weighted - self._turn_penalty()) / constants.REWARD_SCALE
 
     def _calculate_rewards(
         self, damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
