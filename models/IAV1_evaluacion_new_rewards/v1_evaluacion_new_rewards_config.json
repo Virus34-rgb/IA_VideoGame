@@ -1,6 +1,6 @@
 {
   "run_name": "v1_evaluacion_new_rewards",
-  "timestamp": 1788292782.7353978,
+  "timestamp": 1788295167.7032216,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -23,7 +23,7 @@
     "EPSILON_TURN_DECAY": 0.99998,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 1,
+    "EVAL_EPISODES": 100,
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
@@ -58,9 +58,9 @@
       "shaping_weight": 8,
       "wasted_heal": -5,
       "wasted_defense": -10,
-      "strategic_movement": 0,
-      "overkill_damage": 0,
-      "kill_confirmed": 0
+      "strategic_movement": 5,
+      "overkill_damage": -5,
+      "kill_confirmed": 2
     },
     "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
@@ -71,7 +71,7 @@
     "SELECTION_LEARNING_RATE": 0.0001,
     "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
-    "TRAIN_EPISODES": 1,
+    "TRAIN_EPISODES": 500,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
@@ -93,12 +93,12 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 1
+        "episodes": 500
       },
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 1
+        "episodes": 100
       }
     ]
   }

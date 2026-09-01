@@ -55,7 +55,7 @@ class resolveAction:
             own_new_alive = torch.where(mask_movPos.unsqueeze(1), new_alive_mov, own_new_alive)
             own_new_alive = torch.where(mask_movNeg.unsqueeze(1), new_alive_mov, own_new_alive)
     
-            damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack, kill_confirmed, overkill_damage = self._resolve_action_attack(
+            damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack, overkill_damage, kill_confirmed, = self._resolve_action_attack(
                 actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
             )
             damage = torch.where(mask_ataque, damage_raw, torch.zeros_like(damage_raw))
@@ -219,8 +219,6 @@ class resolveAction:
         own_new_castle_final = own_new_castle.clone()
         own_new_castle_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_c2, origen_c2).unsqueeze(1))
         own_new_castle_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_c2, destino_c2).unsqueeze(1))
-        
-        strategic_movement = targeted_by_enemy & ~targeted_by_enemy_post
 
         return (
             moved,
@@ -250,15 +248,12 @@ class resolveAction:
         damage_total = torch.zeros_like(would_be_damage)
         avoided_total = torch.zeros_like(would_be_damage)
         blocks_total = torch.zeros_like(would_be_damage)
-        
         overkill_damage = torch.zeros_like(would_be_damage)
+        kills_this_action = torch.zeros_like(would_be_damage)
 
         for slot in range(3):
             es_target = target_mask[:, slot] & enemy_alive[:, slot]
-            es_target_not_alive = (target_mask.sum(dim=1) == 1) & ~enemy_alive[:, slot]
-            
-            overkill_damage = torch.where(es_target_not_alive, would_be_damage, overkill_damage)
-            
+
             full_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_FULL) & enemy_es_habilidad[:, slot]
             half_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_HALF) & enemy_es_habilidad[:, slot]
 
@@ -276,16 +271,29 @@ class resolveAction:
             avoided = torch.where(es_target, avoided, torch.zeros_like(avoided))
             blocked_flag = torch.where(es_target, blocked_flag, torch.zeros_like(blocked_flag))
 
-            health_slot_actual = enemy_new_health[:, slot]
-            enemy_new_health[:, slot] = torch.where(es_target, health_slot_actual - hit_damage, health_slot_actual)
+            health_slot_before = enemy_new_health[:, slot]
+            overkill_this_slot = torch.where(
+                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
+                hit_damage - health_slot_before,
+                torch.zeros_like(hit_damage),
+            )
+            overkill_damage += overkill_this_slot
+            
+            kill_this_slot = torch.where(
+                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
+                torch.ones_like(hit_damage),
+                torch.zeros_like(hit_damage),
+            )
+            kills_this_action += kill_this_slot
+
+            enemy_new_health[:, slot] = torch.where(es_target, health_slot_before - hit_damage, health_slot_before)
 
             damage_total += hit_damage
             avoided_total += avoided
             blocks_total += blocked_flag
 
         enemy_new_alive = enemy_alive & (enemy_new_health > 0)
-        kill_mask = (enemy_alive & ~enemy_new_alive).sum(dim=1) 
-        return damage_total, blocks_total, enemy_new_health, enemy_new_alive, overkill_damage,kill_mask
+        return damage_total, blocks_total, enemy_new_health, enemy_new_alive, overkill_damage, kills_this_action
 
     def _resolve_action_self_heal(self, actors, ability_pool_idx, pos, own_health):
         heal_amount = self.damage_por_tipo_habilidad[actors, ability_pool_idx]

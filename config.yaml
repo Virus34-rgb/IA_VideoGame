@@ -4,16 +4,16 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_new_rewards"
+RUN_NAME_SUFFIX: "evaluacion_clipping"
 N_BATCH: 2048
-TRAIN_EPISODES: 1
-EVAL_EPISODES: 1
+TRAIN_EPISODES: 500
+EVAL_EPISODES: 100
 SEED: null
 
 # Flags del juego
 USE_META_GAME: true
-USE_WANDB: true
-RUN_COMPARISON: false
+USE_WANDB: false
+RUN_COMPARISON: true
 DELETE_DIRECTORIES: true
 
 # Flags de ejecución
@@ -30,19 +30,18 @@ PLAY_EPSILON: 0.0
 # Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
 # ============================================================
 comparisons:
-  - run_name: "baseline"
+  - run_name: "no_clip"
     N: 2048
-    train_batches: 50
-    eval_batches: 10
-    seed: 42
-    overrides: {}
-
-  - run_name: "64"
-    N: 2048
-    train_batches: 50
-    eval_batches: 10
+    train_batches: 150
+    eval_batches: 20
     seed: 42
     overrides:
-      SELECTION_REPLAYS_PER_BATCH: 288 # Número de replays de selección por lote
-      TURN_REPLAYS_PER_BATCH: 960       # Número de replays de turno por lote
-      BATCH_SIZE: 64
+      GRAD_CLIP_MAX_NORM: 1000000.0   # equivalente a "sin clip" en la práctica
+
+  - run_name: "clip_norm1"
+    N: 2048
+    train_batches: 150
+    eval_batches: 20
+    seed: 42
+    overrides:
+      GRAD_CLIP_MAX_NORM: 1.0
