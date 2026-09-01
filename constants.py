@@ -77,6 +77,9 @@ REWARD_WEIGHTS = {
     "shaping_weight": 8,          # Peso para la diferencia de vida (shaping)
     "wasted_heal" : -5,
     "wasted_defense": -10,
+    "strategic_movement": 0,
+    "overkill_damage": -5,
+    "kill_confirmed": 2,
 }
 # DESPUÉS
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)

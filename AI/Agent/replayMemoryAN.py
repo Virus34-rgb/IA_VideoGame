@@ -79,7 +79,6 @@ class ReplayMemoryAN:
         """
         total = self.memory.total()
         if not np.isfinite(total) or total == 0:
-            # Opción 1: resetear el árbol a prioridades uniformes
             self.memory.tree.fill(1.0)
             self.max_priority = 1.0
             total = self.memory.total()
