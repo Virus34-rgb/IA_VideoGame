@@ -367,7 +367,8 @@ def run_single(
         Tuple (log_dir, version_name) del run ejecutado.
     """
     # Guardar valores originales de constantes para restaurarlos después
-    set_seed(run_spec.seed)
+    if run_spec.seed is not None and constants.SEED != 'None':
+        set_seed(run_spec.seed)
     
     original_values = {}
     for key, value in run_spec.constants_overrides.items():
@@ -529,7 +530,8 @@ if __name__ == "__main__":
             ))
         run_comparison(config, run_specs)
     else:
-        set_seed(constants.SEED) 
+        if(constants.SEED is not None and constants.SEED != 'None'):
+            set_seed(constants.SEED) 
         steps = build_steps(config)
         n_efectivo = 1 if constants.HUMAN_OPPONENT != "none" or constants.PLAY_AGAINST_AI else constants.N_BATCH
         MainV(config, steps, N=n_efectivo).run()

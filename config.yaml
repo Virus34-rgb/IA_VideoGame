@@ -4,16 +4,16 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_seed"
+RUN_NAME_SUFFIX: "evaluacion_new_rewards"
 N_BATCH: 2048
-TRAIN_EPISODES: 1000
-EVAL_EPISODES: 250
-SEED: None
+TRAIN_EPISODES: 1
+EVAL_EPISODES: 1
+SEED: null
 
 # Flags del juego
 USE_META_GAME: true
-USE_WANDB: false
-RUN_COMPARISON: true
+USE_WANDB: true
+RUN_COMPARISON: false
 DELETE_DIRECTORIES: true
 
 # Flags de ejecución
