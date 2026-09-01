@@ -4,14 +4,14 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_NO_DUPLICATES_1000T"
+RUN_NAME_SUFFIX: "evaluacion_1000_250_2"
 N_BATCH: 2048
 TRAIN_EPISODES: 1000
-EVAL_EPISODES: 200
+EVAL_EPISODES: 250
 
 # Flags del juego
 USE_META_GAME: true
-USE_WANDB: false
+USE_WANDB: true
 RUN_COMPARISON: false
 DELETE_DIRECTORIES: true
 
@@ -35,9 +35,11 @@ comparisons:
     eval_batches: 10
     overrides: {}
 
-  - run_name: "NOMG"
+  - run_name: "64"
     N: 2048
     train_batches: 50
     eval_batches: 10
     overrides:
-      USE_META_GAME: false
+      SELECTION_REPLAYS_PER_BATCH: 288 # Número de replays de selección por lote
+      TURN_REPLAYS_PER_BATCH: 960       # Número de replays de turno por lote
+      BATCH_SIZE: 64

@@ -47,6 +47,7 @@ class PlayerAIV:
         self.replayed_selection: int = 0
         self.replayed_turn: int = 0
         self.elo = constants.ELO_INITIAL
+        self._turn_offsets = torch.tensor([0, 6, 12])
 
     def remember_selection_batch(self, c_state, action, reward, next_c_state, done) -> None:
         self.replay_memory_sel.push_batch(c_state, action, reward, next_c_state, done)
@@ -73,7 +74,7 @@ class PlayerAIV:
 
         self.replayed_selection += 1
         batch, tree_indices, weights = self.replay_memory_sel.sample(constants.BATCH_SIZE)
-        weights = torch.tensor(weights, dtype=torch.float32)
+        weights = torch.from_numpy(weights).float()
 
         states = batch.states.float()
         actions = batch.actions
@@ -105,7 +106,7 @@ class PlayerAIV:
 
         self.replayed_turn += 1
         batch, tree_indices, weights = self.replay_memory_turn.sample(constants.BATCH_SIZE)
-        weights = torch.tensor(weights, dtype=torch.float32)
+        weights = torch.from_numpy(weights).float()
 
         states =  batch.states.float()
         warrior_mask = batch.alive
@@ -119,7 +120,7 @@ class PlayerAIV:
 
         qvalues = self.turn_network(states, action_mask=current_action_mask)
 
-        offsets = torch.tensor([0, 6, 12])
+        offsets = self._turn_offsets
         actions_global = actions_b + offsets
         q_selected = qvalues.gather(1, actions_global)
         q_selected = q_selected * warrior_mask.float()
@@ -282,7 +283,9 @@ class PlayerAIV:
     def _random_valid_action(masked_logits):
         valid = (masked_logits != float("-inf")).float()
         valid = torch.where(valid.sum(dim=1, keepdim=True) == 0, torch.ones_like(valid), valid)
-        return torch.multinomial(valid, 1).squeeze(1)
+        noise = torch.rand_like(valid)
+        scored = noise * valid
+        return torch.argmax(scored, dim=1)
 
     @staticmethod
     def _decode_ability_index(idx_0_5):
