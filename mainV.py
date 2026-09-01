@@ -7,11 +7,14 @@ hiperparámetros (usando RunSpec).
 """
 import math
 import os
+import random
 import re
 import shutil
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional, List
+import numpy
+import torch
 import yaml
 
 from AI.Agent.opponent_poolV import OpponentPoolV
@@ -31,7 +34,15 @@ except ImportError:
     wandb_setup = None
     print("Advertencia: wandb_setup no encontrado. Desactivando wandb.")
 
-
+def set_seed(seed: Optional[int]) -> None:
+    """Fija las semillas de torch, numpy y random para reproducibilidad.
+    Si seed es None, no hace nada (comportamiento no determinista, por defecto)."""
+    if seed is None:
+        return
+    torch.manual_seed(seed)
+    numpy.random.seed(seed)
+    random.seed(seed)
+    
 class MainV:
     """
     Clase principal que gestiona la ejecución del entrenamiento y evaluación.
@@ -328,6 +339,7 @@ class RunSpec:
     eval_batches: int
     constants_overrides: dict = field(default_factory=dict)
     player_class: Optional[Callable] = None
+    seed: Optional[int] = None
 
 
 def load_config_yaml(path: str = "config.yaml") -> dict:
@@ -355,6 +367,8 @@ def run_single(
         Tuple (log_dir, version_name) del run ejecutado.
     """
     # Guardar valores originales de constantes para restaurarlos después
+    set_seed(run_spec.seed)
+    
     original_values = {}
     for key, value in run_spec.constants_overrides.items():
         original_values[key] = getattr(constants, key)
@@ -510,10 +524,12 @@ if __name__ == "__main__":
                 train_batches=comp.get("train_batches", constants.TRAIN_EPISODES),
                 eval_batches=comp.get("eval_batches", constants.EVAL_EPISODES),
                 constants_overrides=comp.get("overrides", {}),
+                seed=comp.get("seed", constants.SEED),   # NUEVO: usa la seed del run o la global como fallback
                 # player_class se puede añadir si se quiere, pero por ahora no
             ))
         run_comparison(config, run_specs)
     else:
+        set_seed(constants.SEED) 
         steps = build_steps(config)
         n_efectivo = 1 if constants.HUMAN_OPPONENT != "none" or constants.PLAY_AGAINST_AI else constants.N_BATCH
         MainV(config, steps, N=n_efectivo).run()

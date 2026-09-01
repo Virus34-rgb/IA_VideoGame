@@ -141,6 +141,7 @@ RUN_NAME_SUFFIX = ""   # se puede sobrescribir desde config.yaml
 N_BATCH = 2048
 TRAIN_EPISODES = 20
 EVAL_EPISODES = 2
+SEED = None
 USE_META_GAME = True
 USE_WANDB = True
 RUN_COMPARISON = False
