@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_evaluacion_NO_DUPLICATES_1000T",
-  "timestamp": 1788213648.1137815,
+  "run_name": "v1_64",
+  "timestamp": 1788219568.0834465,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -23,7 +23,7 @@
     "EPSILON_TURN_DECAY": 0.99998,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 200,
+    "EVAL_EPISODES": 10,
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
@@ -59,21 +59,21 @@
       "wasted_heal": -5,
       "wasted_defense": -10
     },
-    "RUN_COMPARISON": false,
+    "RUN_COMPARISON": true,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "evaluacion_NO_DUPLICATES_1000T",
+    "RUN_NAME_SUFFIX": "evaluacion_UPDATES_TIEMPO",
     "RUN_SELF_PLAY": true,
     "SAVE_MODEL_FRACTION": 0.05,
     "SELECTION_LEARNING_RATE": 0.0001,
-    "SELECTION_REPLAYS_PER_BATCH": 600,
+    "SELECTION_REPLAYS_PER_BATCH": 288,
     "SELECTION_REPLAY_DATA": 80000,
-    "TRAIN_EPISODES": 1000,
+    "TRAIN_EPISODES": 50,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
     "TURN_PENALTY_RAMP_START": 4.5,
     "TURN_PENALTY_RAMP_TURNS": 12,
-    "TURN_REPLAYS_PER_BATCH": 1200,
+    "TURN_REPLAYS_PER_BATCH": 960,
     "TURN_REPLAY_DATA": 40000,
     "TURN_STATE_DIM": 130,
     "USE_DUELING_DQN": true,
@@ -89,12 +89,12 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 1000
+        "episodes": 50
       },
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 200
+        "episodes": 10
       }
     ]
   }

@@ -313,7 +313,7 @@ class MetricsLogger:
         """
         import matplotlib.pyplot as plt
 
-        runs  = len(run_names)
+        runs = [(output_dir, run_name) for run_name in run_names]
         
         if not runs:
             return None
