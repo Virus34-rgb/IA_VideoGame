@@ -4,7 +4,7 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_clipping"
+RUN_NAME_SUFFIX: "evaluacion_scale"
 N_BATCH: 2048
 TRAIN_EPISODES: 500
 EVAL_EPISODES: 100
@@ -30,18 +30,18 @@ PLAY_EPSILON: 0.0
 # Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
 # ============================================================
 comparisons:
-  - run_name: "no_clip"
+  - run_name: "no_scale"
     N: 2048
-    train_batches: 150
-    eval_batches: 20
+    train_batches: 200
+    eval_batches: 30
     seed: 42
     overrides:
-      GRAD_CLIP_MAX_NORM: 1000000.0   # equivalente a "sin clip" en la práctica
+      REWARD_SCALE: 1.0
 
-  - run_name: "clip_norm1"
+  - run_name: "scale100"
     N: 2048
-    train_batches: 150
-    eval_batches: 20
+    train_batches: 200
+    eval_batches: 30
     seed: 42
     overrides:
-      GRAD_CLIP_MAX_NORM: 1.0
+      REWARD_SCALE: 100.0
