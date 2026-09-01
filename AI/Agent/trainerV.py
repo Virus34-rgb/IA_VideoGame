@@ -41,13 +41,13 @@ class TrainerV:
         self.snapshot_every = snapshot_every
         self.progress_every = progress_every
 
-        self._catalog_ids = torch.arange(1, constants.WARRIOR_QUANTITY + 1, dtype=torch.long)
+        self._catalog_ids = torch.arange(1, constants.WARRIOR_QUANTITY + 1, dtype=torch.long) # no se usa
 
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._grouped_opponents: Dict[int, Tuple[Any, torch.Tensor]] = {}
         self._current_catalog_abilities: torch.Tensor = torch.zeros(
             self.N, constants.WARRIOR_QUANTITY, constants.ABILITIES_PER_WARRIOR, dtype=torch.long,
-        )
+        ) # no se usa
 
         # NUEVO: se crean siempre (coste despreciable); solo se usan si USE_META_GAME=True
         self.p1_castle = CastleV(self.N)
@@ -164,7 +164,6 @@ class TrainerV:
 
     def _run_batch(self, batch_idx: int, learn_p1: bool, learn_p2: bool, p2_training_player) -> None:
         if not constants.USE_META_GAME:
-            # CAMBIADO: el sorteo de catálogo solo hace falta en modo sin meta-juego
             self._current_catalog_abilities = sample_abilities_batch_all_types(
                 self.environment.warriors_classes, self.N, constants.ABILITIES_PER_WARRIOR
             )
@@ -188,7 +187,6 @@ class TrainerV:
             reward2_acum += self._last_reward2
 
         if constants.USE_META_GAME:
-            # CORREGIDO: antes se pasaba p1_castle_slots dos veces
             self._run_meta_step(
                 self.environment.p1_castle_slots, self.environment.p2_castle_slots,
                 self.environment.p1_alive, self.environment.p2_alive,
@@ -301,9 +299,6 @@ class TrainerV:
             return self._select_teams_castle(p2_training_player)
         return self._select_teams_catalog(p2_training_player)
 
-    # ------------------------------------------------------------
-    # Draft — modo castillo
-    # ------------------------------------------------------------
     def _select_teams_castle(self, p2_training_player):
         indices = torch.arange(self.N)
         used_p1 = torch.zeros(self.N, constants.MAX_CASTLE_SIZE, dtype=torch.bool)
@@ -377,9 +372,6 @@ class TrainerV:
             opp_initial_warrior, opp_initial_position,
         )
 
-    # ------------------------------------------------------------
-    # Draft — modo catálogo (histórico)
-    # ------------------------------------------------------------
     def _select_teams_catalog(self, p2_training_player):
         indices = torch.arange(self.N)
 
