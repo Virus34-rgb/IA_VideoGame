@@ -4,11 +4,11 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "evaluacion_seed"
+RUN_NAME_SUFFIX: "evaluacion_scale"
 N_BATCH: 2048
-TRAIN_EPISODES: 1000
-EVAL_EPISODES: 250
-SEED: None
+TRAIN_EPISODES: 500
+EVAL_EPISODES: 100
+SEED: null
 
 # Flags del juego
 USE_META_GAME: true
@@ -30,19 +30,18 @@ PLAY_EPSILON: 0.0
 # Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
 # ============================================================
 comparisons:
-  - run_name: "baseline"
+  - run_name: "no_scale"
     N: 2048
-    train_batches: 50
-    eval_batches: 10
-    seed: 42
-    overrides: {}
-
-  - run_name: "64"
-    N: 2048
-    train_batches: 50
-    eval_batches: 10
+    train_batches: 150
+    eval_batches: 30
     seed: 42
     overrides:
-      SELECTION_REPLAYS_PER_BATCH: 288 # Número de replays de selección por lote
-      TURN_REPLAYS_PER_BATCH: 960       # Número de replays de turno por lote
-      BATCH_SIZE: 64
+      REWARD_SCALE: 1.0
+
+  - run_name: "scale100"
+    N: 2048
+    train_batches: 150
+    eval_batches: 30
+    seed: 42
+    overrides:
+      REWARD_SCALE: 100.0

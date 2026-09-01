@@ -38,10 +38,11 @@ class resolveAction:
             mask_defend = es_habilidad & ((effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)) & actor_alive_now
             mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
     
-            moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov, new_alive_mov = self._resolve_action_movement(
-                actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos
+            moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov, new_alive_mov,strategic_movement = self._resolve_action_movement(
+                actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, 
+                own_castle_slots, own_alive, actions_actor, pos,
+                enemy_disposition, enemy_alive, enemy_actions, enemy_instance_abilities,
             )
-    
             own_new_disp = own_disposition.clone()
             own_new_disp = torch.where(mask_movPos.unsqueeze(1), new_disp_mov, own_new_disp)
             own_new_disp = torch.where(mask_movNeg.unsqueeze(1), new_disp_mov, own_new_disp)
@@ -54,7 +55,7 @@ class resolveAction:
             own_new_alive = torch.where(mask_movPos.unsqueeze(1), new_alive_mov, own_new_alive)
             own_new_alive = torch.where(mask_movNeg.unsqueeze(1), new_alive_mov, own_new_alive)
     
-            damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack = self._resolve_action_attack(
+            damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack, overkill_damage, kill_confirmed, = self._resolve_action_attack(
                 actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
             )
             damage = torch.where(mask_ataque, damage_raw, torch.zeros_like(damage_raw))
@@ -70,8 +71,6 @@ class resolveAction:
             own_new_health = torch.where(mask_team_heal.unsqueeze(1), own_health_team, own_new_health)
             enemy_new_health = torch.where(mask_ataque.unsqueeze(1), enemy_health_after_attack, enemy_health)
             
-            
-    
             mask_usa_habilidad = (mask_ataque | mask_self_heal | mask_team_heal | mask_defend)
             own_cd_new = self._update_own_cooldowns(actors, actions_actor, ability_pool_idx, pos, own_cooldowns, mask_usa_habilidad)
     
@@ -100,17 +99,19 @@ class resolveAction:
                     pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
                 )
                 defense_wasted = torch.where(mask_defend & ~was_targeted, 1.0, 0.0)
+            
             return (
                 damage, damage_avoided, blocked, moved, heal,
                 own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
                 own_cd_new, own_new_alive, enemy_alive_final,
                 own_abilities_new, ability_pool_idx,
-                own_new_castle,wasted_heal,defense_wasted
+                own_new_castle,wasted_heal,defense_wasted,strategic_movement,kill_confirmed,overkill_damage
             )
     
     def _resolve_action_movement(
         self, actors, own_disposition, own_health, own_cooldowns,
         own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos,
+        enemy_disposition, enemy_alive, enemy_actions, enemy_instance_abilities,
     ):
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
@@ -118,7 +119,23 @@ class resolveAction:
 
         pos_destino_pos = (pos + 1).clamp(max=2)
         pos_destino_neg = (pos - 1).clamp(min=0)
+        
+        new_pos = pos.clone()
+        new_pos = torch.where(mask_movPos, pos + 1, new_pos)  # derecha
+        new_pos = torch.where(mask_movNeg, pos - 1, new_pos)  # izquierda
+        new_pos = new_pos.clamp(0, 2)  # seguridad
 
+        # Calcular targeted antes y después
+        targeted_by_enemy = self._check_if_targeted(
+            pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
+        )
+        targeted_by_enemy_post = self._check_if_targeted(
+            new_pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
+        )
+
+        # Solo para los que realmente se mueven y dejan de ser objetivo
+        strategic_movement = (mask_movPos | mask_movNeg) & targeted_by_enemy & ~targeted_by_enemy_post
+    
         # Intercambiar disposición
         own_new_disp = own_disposition.clone()
         origen = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
@@ -210,7 +227,8 @@ class resolveAction:
             own_new_cd_final,
             own_new_abilities_final,
             own_new_castle_final,
-            own_new_alive_final,   # NUEVO
+            own_new_alive_final,
+            strategic_movement,
         )
 
     def _resolve_action_attack(
@@ -230,6 +248,8 @@ class resolveAction:
         damage_total = torch.zeros_like(would_be_damage)
         avoided_total = torch.zeros_like(would_be_damage)
         blocks_total = torch.zeros_like(would_be_damage)
+        overkill_damage = torch.zeros_like(would_be_damage)
+        kills_this_action = torch.zeros_like(would_be_damage)
 
         for slot in range(3):
             es_target = target_mask[:, slot] & enemy_alive[:, slot]
@@ -251,15 +271,29 @@ class resolveAction:
             avoided = torch.where(es_target, avoided, torch.zeros_like(avoided))
             blocked_flag = torch.where(es_target, blocked_flag, torch.zeros_like(blocked_flag))
 
-            health_slot_actual = enemy_new_health[:, slot]
-            enemy_new_health[:, slot] = torch.where(es_target, health_slot_actual - hit_damage, health_slot_actual)
+            health_slot_before = enemy_new_health[:, slot]
+            overkill_this_slot = torch.where(
+                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
+                hit_damage - health_slot_before,
+                torch.zeros_like(hit_damage),
+            )
+            overkill_damage += overkill_this_slot
+            
+            kill_this_slot = torch.where(
+                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
+                torch.ones_like(hit_damage),
+                torch.zeros_like(hit_damage),
+            )
+            kills_this_action += kill_this_slot
+
+            enemy_new_health[:, slot] = torch.where(es_target, health_slot_before - hit_damage, health_slot_before)
 
             damage_total += hit_damage
             avoided_total += avoided
             blocks_total += blocked_flag
 
         enemy_new_alive = enemy_alive & (enemy_new_health > 0)
-        return damage_total, blocks_total, enemy_new_health, enemy_new_alive
+        return damage_total, blocks_total, enemy_new_health, enemy_new_alive, overkill_damage, kills_this_action
 
     def _resolve_action_self_heal(self, actors, ability_pool_idx, pos, own_health):
         heal_amount = self.damage_por_tipo_habilidad[actors, ability_pool_idx]

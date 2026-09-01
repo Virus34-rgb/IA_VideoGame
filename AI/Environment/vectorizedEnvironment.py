@@ -145,6 +145,12 @@ class VectorizedEnvironment:
         wasted_heal_p2 = torch.zeros(self.N)
         wasted_defense_p1 = torch.zeros(self.N)
         wasted_defense_p2 = torch.zeros(self.N)
+        strategic_movement_p1 = torch.zeros(self.N)
+        strategic_movement_p2 = torch.zeros(self.N)
+        overkill_damage_p1 = torch.zeros(self.N)
+        overkill_damage_p2 = torch.zeros(self.N)
+        kill_confirmed_p1 = torch.zeros(self.N)
+        kill_confirmed_p2 = torch.zeros(self.N)
         
         p1_health_before = self._normalized_team_health(self.p1_healths, self.p1_disposition)
         p2_health_before = self._normalized_team_health(self.p2_healths, self.p2_disposition)
@@ -181,7 +187,8 @@ class VectorizedEnvironment:
                 new_own_disp, new_enemy_disp, new_own_health, new_enemy_health,
                 new_own_cd, new_own_alive, new_enemy_alive,
                 new_own_abilities, ability_pool_idx,
-                new_own_castle,wasted_heal,defense_wasted
+                new_own_castle,wasted_heal,defense_wasted,strategic_movement,
+                overkill_damage,kill_confirmed
             ) = self.resolver.resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
@@ -216,7 +223,13 @@ class VectorizedEnvironment:
             wasted_heal_p2 += torch.where(~es_p1, wasted_heal, torch.zeros_like(healed))
             wasted_defense_p1 += torch.where(es_p1, defense_wasted, torch.zeros_like(healed))
             wasted_defense_p2 += torch.where(~es_p1, defense_wasted, torch.zeros_like(healed))
-            
+            strategic_movement_p1 += torch.where(es_p1, strategic_movement, torch.zeros_like(strategic_movement))
+            strategic_movement_p2 += torch.where(~es_p1, strategic_movement, torch.zeros_like(strategic_movement))
+            overkill_damage_p1 += torch.where(es_p1, overkill_damage, torch.zeros_like(overkill_damage))
+            overkill_damage_p2 += torch.where(~es_p1, overkill_damage, torch.zeros_like(overkill_damage))
+            kill_confirmed_p1 += torch.where(es_p1, kill_confirmed, torch.zeros_like(kill_confirmed))
+            kill_confirmed_p2 += torch.where(~es_p1, kill_confirmed, torch.zeros_like(kill_confirmed))
+
             self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)
             self.stats.accumulate_attacks(actor_type, ability_pool_idx, es_p1, ~ya_terminadas_antes)
 
@@ -232,14 +245,19 @@ class VectorizedEnvironment:
             damage_p1, damage_p2, blocks_p1, blocks_p2,
             damage_avoided_p1, damage_avoided_p2, heal_p1, heal_p2,
             wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2,
+            strategic_movement_p1, strategic_movement_p2,
+            overkill_damage_p1, overkill_damage_p2,
+            kill_confirmed_p1, kill_confirmed_p2,
             ya_terminadas_antes,
         )
+        
 
         rewardP1, rewardP2 = self._calculate_rewards(
             damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
             heal_p1, heal_p2, health_diff_before, health_diff_after,
             p1_new_deaths, p2_new_deaths,wasted_heal_p1,wasted_heal_p2,
-            wasted_defense_p1,wasted_defense_p2,
+            wasted_defense_p1,wasted_defense_p2,strategic_movement_p1,strategic_movement_p2,
+            overkill_damage_p1,overkill_damage_p2,kill_confirmed_p1,kill_confirmed_p2,
         )
 
         rewardP1 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP1), rewardP1)
@@ -319,12 +337,13 @@ class VectorizedEnvironment:
 
     def _reward(self, **components: torch.Tensor) -> torch.Tensor:
         weighted = sum(constants.REWARD_WEIGHTS[name] * value for name, value in components.items())
-        return weighted - self._turn_penalty()
+        return (weighted - self._turn_penalty()) / constants.REWARD_SCALE
 
     def _calculate_rewards(
         self, damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
         healed_p1, healed_p2, health_diff_before, health_diff_after, newDeaths_p1, newDeaths_p2,
-        wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2
+        wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2,strategic_movement_p1,strategic_movement_p2,
+        overkill_damage_p1, overkill_damage_p2,kill_confirmed_p1, kill_confirmed_p2
     ):
         self.p1_deaths += newDeaths_p1
         self.p2_deaths += newDeaths_p2
@@ -351,11 +370,13 @@ class VectorizedEnvironment:
             damage=damage_p1 - damage_p2, deaths=newDeaths_p2 - newDeaths_p1, win=win_p1,
             blocks=damage_avoided_p1, heal=healed_p1, shaping_weight=shaping_term_p1,
             wasted_heal = wasted_heal_p1,wasted_defense = wasted_defense_p1,
+            strategic_movement = strategic_movement_p1,kill_confirmed = kill_confirmed_p1, overkill_damage = overkill_damage_p1
         )
         rewardP2 = self._reward(
             damage=damage_p2 - damage_p1, deaths=newDeaths_p1 - newDeaths_p2, win=win_p2,
             blocks=damage_avoided_p2, heal=healed_p2, shaping_weight=shaping_term_p2,
             wasted_heal = wasted_heal_p2,wasted_defense = wasted_defense_p2,
+            strategic_movement = strategic_movement_p2,kill_confirmed = kill_confirmed_p2, overkill_damage = overkill_damage_p2
         )
         return rewardP1, rewardP2
 

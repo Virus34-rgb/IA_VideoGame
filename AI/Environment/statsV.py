@@ -95,6 +95,10 @@ class StatsV:
         self.p2_succes_blocks: float = 0.0
         self.p1_tot_damage_evaded: float = 0.0
         self.p2_tot_damage_evaded: float = 0.0
+        self.p1_overkill_damage: float = 0.0
+        self.p2_overkill_damage: float = 0.0
+        self.p1_kill_confirmed: float = 0.0
+        self.p2_kill_confirmed: float = 0.0
         self.p1_tot_heal: float = 0.0
         self.p2_tot_heal: float = 0.0
         self.wasted_heal_p1 = 0.0
@@ -109,6 +113,8 @@ class StatsV:
 
         self.p1_movements: float = 0.0
         self.p2_movements: float = 0.0
+        self.p1_strategic_movement: float = 0.0
+        self.p2_strategic_movement: float = 0.0
 
         # Tensores acumuladores por tipo de guerrero y habilidad
         self._p1_attacks_tensor = torch.zeros(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE)
@@ -158,6 +164,12 @@ class StatsV:
         wasted_heal_p2,
         wasted_defense_p1,
         wasted_defense_p2,
+        strategic_movement_p1,
+        strategic_movement_p2,
+        overkill_damage_p1,
+        overkill_damage_p2,
+        kill_confirmed_p1,
+        kill_confirmed_p2,
         ya_terminadas_antes: torch.Tensor,
     ) -> None:
         """
@@ -184,6 +196,12 @@ class StatsV:
         self.wasted_heal_p2 += torch.where(activa, wasted_heal_p2, torch.zeros_like(wasted_heal_p2)).sum().item()
         self.wasted_defense_p1 += torch.where(activa, wasted_defense_p1, torch.zeros_like(wasted_defense_p1)).sum().item()
         self.wasted_defense_p2 += torch.where(activa, wasted_defense_p2, torch.zeros_like(wasted_defense_p2)).sum().item()
+        self.p1_strategic_movement += torch.where(activa, strategic_movement_p1, torch.zeros_like(strategic_movement_p1)).sum().item()
+        self.p2_strategic_movement += torch.where(activa, strategic_movement_p2, torch.zeros_like(strategic_movement_p2)).sum().item()
+        self.p1_overkill_damage += torch.where(activa, overkill_damage_p1, torch.zeros_like(overkill_damage_p1)).sum().item()
+        self.p2_overkill_damage += torch.where(activa, overkill_damage_p2, torch.zeros_like(overkill_damage_p2)).sum().item()
+        self.p1_kill_confirmed += torch.where(activa, kill_confirmed_p1, torch.zeros_like(kill_confirmed_p1)).sum().item()
+        self.p2_kill_confirmed += torch.where(activa, kill_confirmed_p2, torch.zeros_like(kill_confirmed_p2)).sum().item()
 
     def accumulate_movements(self, moved: torch.Tensor, es_p1: torch.Tensor, activa: torch.Tensor) -> None:
         """
@@ -417,6 +435,14 @@ class StatsV:
             f"Daño total P2:             {s.p2_damage:.2f}",
             f"Daño medio P1:             {d['p1_damage_avg']:.2f}",
             f"Daño medio P2:             {d['p2_damage_avg']:.2f}",
+            f"Daño por sobrekill P1:     {self.p1_overkill_damage:.2f}",
+            f"Daño por sobrekill P2:     {self.p2_overkill_damage:.2f}",
+            f"Daño por sobrekill medio P1:{self.p1_overkill_damage / self.partidas:.2f}",
+            f"Daño por sobrekill medio P2:{self.p2_overkill_damage / self.partidas:.2f}",
+            f"Kill confirmed P1:         {self.p1_kill_confirmed:.2f}",
+            f"Kill confirmed P2:         {self.p2_kill_confirmed:.2f}",
+            f"Kill confirmed medio P1:   {self.p1_kill_confirmed / self.partidas:.2f}",
+            f"Kill confirmed medio P2:   {self.p2_kill_confirmed / self.partidas:.2f}",
         ])
 
     def _section_healing(self, s: StatsSummary) -> str:
@@ -463,6 +489,10 @@ class StatsV:
         return self._section("MOVIMIENTOS", [
             f"Movimientos P1:            {int(self.p1_movements)}",
             f"Movimientos P2:            {int(self.p2_movements)}",
+            f"Movimientos estratégicos P1:{int(self.p1_strategic_movement)}",
+            f"Movimientos estratégicos P2:{int(self.p2_strategic_movement)}",
+            f"Movimientos estratégicos P1 (%):{self.p1_strategic_movement / max(self.p1_movements, 1) * 100:.2f}%",
+            f"Movimientos estratégicos P2 (%):{self.p2_strategic_movement / max(self.p2_movements, 1) * 100:.2f}%",
         ])
 
     def _section_bloqueos(self, s: StatsSummary) -> str:

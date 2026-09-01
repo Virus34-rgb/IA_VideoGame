@@ -24,6 +24,7 @@ SELECTION_REPLAY_DATA = 80_000 # Capacidad del buffer de selección Estandar 150
 TURN_REPLAY_DATA = 40_000      # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 128                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
+GRAD_CLIP_MAX_NORM = 1000000.0
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
 
 # ============================================================
@@ -77,6 +78,9 @@ REWARD_WEIGHTS = {
     "shaping_weight": 8,          # Peso para la diferencia de vida (shaping)
     "wasted_heal" : -5,
     "wasted_defense": -10,
+    "strategic_movement": 5,
+    "overkill_damage": -5,
+    "kill_confirmed": 2,
 }
 # DESPUÉS
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
@@ -84,6 +88,7 @@ TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización em
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
 TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
 WIN_REWARD = 1000               # Recompensa base por ganar la partida
+REWARD_SCALE = 1.0
 # AÑADIR, junto a WIN_REWARD
 DRAW_PENALTY = 200                # Penalización por resultado en empate (20% de WIN_REWARD)
 MAX_TURNS = 20                    # Límite de turnos por partida
