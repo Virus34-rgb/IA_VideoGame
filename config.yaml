@@ -23,6 +23,7 @@ HUMAN_OPPONENT: "none"
 HUMAN_EPISODES: 20
 HUMAN_EPSILON: 0.1
 PLAY_AGAINST_AI: false
+USE_GUI: true
 PLAY_EPISODES: 20
 PLAY_EPSILON: 0.0
 
@@ -30,18 +31,18 @@ PLAY_EPSILON: 0.0
 # Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
 # ============================================================
 comparisons:
-  - run_name: "no_scale"
+  - run_name: "no_clip"
     N: 2048
     train_batches: 150
-    eval_batches: 30
+    eval_batches: 20
     seed: 42
     overrides:
-      REWARD_SCALE: 1.0
+      GRAD_CLIP_MAX_NORM: 1000000.0   # equivalente a "sin clip" en la práctica
 
-  - run_name: "scale100"
+  - run_name: "clip_norm1"
     N: 2048
     train_batches: 150
-    eval_batches: 30
+    eval_batches: 20
     seed: 42
     overrides:
-      REWARD_SCALE: 100.0
+      GRAD_CLIP_MAX_NORM: 1.0

@@ -88,7 +88,7 @@ TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización em
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
 TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
 WIN_REWARD = 1000               # Recompensa base por ganar la partida
-REWARD_SCALE = 1.0
+REWARD_SCALE = 100.0
 # AÑADIR, junto a WIN_REWARD
 DRAW_PENALTY = 200                # Penalización por resultado en empate (20% de WIN_REWARD)
 MAX_TURNS = 20                    # Límite de turnos por partida
@@ -149,6 +149,7 @@ EVAL_EPISODES = 2
 SEED = None
 USE_META_GAME = True
 USE_WANDB = True
+USE_GUI = True   # o False para consola
 RUN_COMPARISON = False
 RUN_SELF_PLAY = True
 RUN_EVALUATION = True
