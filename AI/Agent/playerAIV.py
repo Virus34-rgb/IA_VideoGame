@@ -173,7 +173,7 @@ class PlayerAIV:
         greedy = torch.argmax(masked_logits, dim=1) # si no se explora, se elige la accion con mayor qvalue
         random_action = self._random_valid_action(masked_logits) # si se explora se elige una accion aleatoria entre las validas
 
-        epsilon_efectivo = self.epsilon_residual if not self.selection_network.training else 0.0 #aun si se esta evaluando se puede forzar un margen de exploración
+        epsilon_efectivo = self.epsilon_sel if self.selection_network.training else self.epsilon_residual #aun si se esta evaluando se puede forzar un margen de exploración
         explora = (torch.rand(self.N) < epsilon_efectivo) | (opp_initial_warrior == 0) # si el guerrero inicial del rival es 0, se fuerza a explorar para evitar que en la evaluación se haga lo mismo (los dos seleccionan el mismo inicial, el mismo secundario,...)
         action = torch.where(explora, random_action, greedy) # si se explora se elige la accion aleatoria, si no se explora se elige la accion greedy
 

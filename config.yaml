@@ -32,7 +32,7 @@ PLAY_EPSILON: 0.0
 comparisons:
   - run_name: "no_scale"
     N: 2048
-    train_batches: 200
+    train_batches: 150
     eval_batches: 30
     seed: 42
     overrides:
@@ -40,7 +40,7 @@ comparisons:
 
   - run_name: "scale100"
     N: 2048
-    train_batches: 200
+    train_batches: 150
     eval_batches: 30
     seed: 42
     overrides:

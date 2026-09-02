@@ -60,6 +60,8 @@ class resolveAction:
             )
             damage = torch.where(mask_ataque, damage_raw, torch.zeros_like(damage_raw))
             blocked = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
+            overkill_damage = torch.where(mask_ataque, overkill_damage, torch.zeros_like(overkill_damage))
+            kill_confirmed = torch.where(mask_ataque, kill_confirmed, torch.zeros_like(kill_confirmed))
     
             healed_self, own_health_self = self._resolve_action_self_heal(actors, ability_pool_idx, pos, own_health)
             healed_team, own_health_team = self._resolve_action_team_heal(actors, ability_pool_idx, own_disposition, own_health, own_alive)
@@ -105,7 +107,7 @@ class resolveAction:
                 own_new_disp, enemy_disposition, own_new_health, enemy_new_health,
                 own_cd_new, own_new_alive, enemy_alive_final,
                 own_abilities_new, ability_pool_idx,
-                own_new_castle,wasted_heal,defense_wasted,strategic_movement,kill_confirmed,overkill_damage
+                own_new_castle,wasted_heal,defense_wasted,strategic_movement,overkill_damage,kill_confirmed,
             )
     
     def _resolve_action_movement(

@@ -262,7 +262,8 @@ class VectorizedEnvironment:
 
         rewardP1 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP1), rewardP1)
         rewardP2 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP2), rewardP2)
-
+        self._debug_kill_p1 = kill_confirmed_p1.clone()
+        self._debug_kill_p2 = kill_confirmed_p2.clone()
         return self.get_state(), rewardP1, rewardP2, self.ended
 
 
