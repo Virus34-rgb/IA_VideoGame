@@ -1,10 +1,10 @@
 {
-  "run_name": "v1_64",
-  "timestamp": 1788219568.0834465,
+  "run_name": "v1_no_clip",
+  "timestamp": 1788348243.0451927,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
-    "BATCH_SIZE": 64,
+    "BATCH_SIZE": 128,
     "BETA_DECAY_RATE": 0.9999,
     "BETA_END": 1.0,
     "BETA_START": 0.4,
@@ -23,10 +23,11 @@
     "EPSILON_TURN_DECAY": 0.99998,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 10,
+    "EVAL_EPISODES": 100,
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
+    "GRAD_CLIP_MAX_NORM": 1000000.0,
     "HUMAN_EPISODES": 20,
     "HUMAN_EPSILON": 0.1,
     "HUMAN_OPPONENT": "none",
@@ -49,6 +50,7 @@
     "POOL_PORCENTAGE": 0.3,
     "POOL_RANGE_FRACTION": 0.01,
     "RESET_IN_DECISIONS": false,
+    "REWARD_SCALE": 100.0,
     "REWARD_WEIGHTS": {
       "damage": 1.3,
       "deaths": 50,
@@ -57,26 +59,31 @@
       "heal": 0.6,
       "shaping_weight": 8,
       "wasted_heal": -5,
-      "wasted_defense": -10
+      "wasted_defense": -10,
+      "strategic_movement": 5,
+      "overkill_damage": -5,
+      "kill_confirmed": 2
     },
     "RUN_COMPARISON": true,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "evaluacion_UPDATES_TIEMPO",
+    "RUN_NAME_SUFFIX": "evaluacion_scale",
     "RUN_SELF_PLAY": true,
     "SAVE_MODEL_FRACTION": 0.05,
+    "SEED": null,
     "SELECTION_LEARNING_RATE": 0.0001,
-    "SELECTION_REPLAYS_PER_BATCH": 288,
+    "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
-    "TRAIN_EPISODES": 50,
+    "TRAIN_EPISODES": 500,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
     "TURN_PENALTY_RAMP_START": 4.5,
     "TURN_PENALTY_RAMP_TURNS": 12,
-    "TURN_REPLAYS_PER_BATCH": 960,
+    "TURN_REPLAYS_PER_BATCH": 480,
     "TURN_REPLAY_DATA": 40000,
     "TURN_STATE_DIM": 130,
     "USE_DUELING_DQN": true,
+    "USE_GUI": true,
     "USE_META_GAME": true,
     "USE_WANDB": false,
     "VERSION": 1,
@@ -89,12 +96,12 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 50
+        "episodes": 150
       },
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 10
+        "episodes": 20
       }
     ]
   }

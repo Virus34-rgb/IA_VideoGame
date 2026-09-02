@@ -26,6 +26,8 @@ from AI.Logging.metrics_logger import MetricsLogger
 from config import RunConfig
 from training_step import TrainingStep
 import constants
+if constants.USE_GUI:
+    from AI.Agent.playerGUI import PlayerGUIV
 
 # Importar el módulo de wandb (si no existe, se puede desactivar)
 try:
@@ -267,17 +269,11 @@ class MainV:
         print(f"{step.name} terminado en {self._format_time(elapsed)}")
 
     def _build_opponent(self, step: TrainingStep) -> object:
-        """
-        Construye el oponente según la factoría especificada en el paso.
-
-        Args:
-            step: El TrainingStep actual.
-
-        Returns:
-            Instancia del oponente (PlayerAIV o PlayerNoAIV).
-        """
         if step.opponent_factory is PlayerNoAIV:
-            return PlayerNoAIV()
+            if constants.USE_GUI:
+                return PlayerGUIV()
+            else:
+                return PlayerNoAIV()
         return self.player_class(self.N, self.environment)
 
     # ------------------------------------------------------------
