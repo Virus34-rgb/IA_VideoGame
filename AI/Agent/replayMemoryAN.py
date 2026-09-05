@@ -104,6 +104,11 @@ class ReplayMemoryAN:
         """Actualiza las prioridades de las transiciones muestreadas."""
         priorities = np.abs(priorities) + self.epsilon
         priorities = priorities ** self.alpha
+        if not np.all(np.isfinite(priorities)):
+            n_bad = int((~np.isfinite(priorities)).sum())
+            print(f"[DIAG][ReplayMemoryAN] {n_bad} prioridades no finitas detectadas "
+                  f"antes de update_batch. max_priority actual={self.max_priority}, "
+                  f"max(priorities)={np.nanmax(priorities)}")
         self.memory.update_batch(indices, priorities)
         self.max_priority = max(self.max_priority, np.max(priorities))
 

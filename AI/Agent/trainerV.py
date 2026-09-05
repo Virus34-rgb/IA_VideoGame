@@ -65,18 +65,28 @@ class TrainerV:
     def evaluate(self) -> None:
         self.environment.stats.reset()
         self._load_if_exists()
-        self.player1.selection_network.eval()
-        self.player1.turn_network.eval()
-        self.player2.selection_network.eval()
-        self.player2.turn_network.eval()
+        self._set_eval_mode(self.player1)
+        self._set_eval_mode(self.player2)
         self._run(
             batches=self.eval_batches, epsilon_turn=0.02, epsilon_sel=0.02,
             learn_p1=False, learn_p2=False, stats_path=self.path_stats2, restore_epsilon=True,
         )
-        self.player1.selection_network.train()
-        self.player1.turn_network.train()
-        self.player2.selection_network.train()
-        self.player2.turn_network.train()
+        self._set_train_mode(self.player1)
+        self._set_train_mode(self.player2)
+
+    @staticmethod
+    def _set_eval_mode(player) -> None:
+        if hasattr(player, "selection_network"):
+            player.selection_network.eval()
+        if hasattr(player, "turn_network"):
+            player.turn_network.eval()
+
+    @staticmethod
+    def _set_train_mode(player) -> None:
+        if hasattr(player, "selection_network"):
+            player.selection_network.train()
+        if hasattr(player, "turn_network"):
+            player.turn_network.train()
 
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon) -> None:
         save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
@@ -90,10 +100,10 @@ class TrainerV:
         self._grouped_opponents = {}
 
         for batch_idx in range(batches):
-            if batch_idx != 0 and batch_idx % save_every == 0:
+            if (learn_p1 or learn_p2) and batch_idx != 0 and batch_idx % save_every == 0:
                 self.opponent_pool.save_version(p2_training_player)
 
-            if batch_idx != 0 and batch_idx % pool_every == 0:
+            if (learn_p1 or learn_p2) and batch_idx != 0 and batch_idx % pool_every == 0:
                 from_pool, checkpoint_idx = self.opponent_pool.sample_assignment(self.N, constants.POOL_PORCENTAGE, self.player1.elo)
                 self._opponent_from_pool_mask = from_pool
                 self._grouped_opponents = (
@@ -170,7 +180,8 @@ class TrainerV:
 
         self.environment.reset()
         self.player1.reset_noise()
-        self.player2.reset_noise()
+        if(self.player2.__class__.__name__ == "PlayerAIV"):
+            self.player2.reset_noise()
         selection_states_p1, selection_actions_p1, selection_states_p2, selection_actions_p2 = self._select_teams(p2_training_player)
 
         obs1_tensor, obs2_tensor = self._build_observations()
@@ -279,11 +290,24 @@ class TrainerV:
             self.p2_castle.comprar_heroes(mask_compra_p2, tipo_p2)
 
     def _tipo_mas_repetido(self):
-        # CORREGIDO: self.stats -> self.environment.stats (TrainerV no tiene atributo stats propio)
-        tipo_p1 = torch.argmax(self.environment.stats._p1_warrior_use_tensor).item() + 1
-        tipo_p2 = torch.argmax(self.environment.stats._p2_warrior_use_tensor).item() + 1
-        return torch.full((self.N,), tipo_p1, dtype=torch.long), torch.full((self.N,), tipo_p2, dtype=torch.long)
+        usage_p1 = self.environment.stats._p1_warrior_use_ema
+        usage_p2 = self.environment.stats._p2_warrior_use_ema
+        tipo_p1 = self._sample_categorical_shared(usage_p1)
+        tipo_p2 = self._sample_categorical_shared(usage_p2)
+        return tipo_p1, tipo_p2
 
+    def _sample_categorical_shared(self, usage: torch.Tensor) -> torch.Tensor:
+        """
+        Muestrea self.N índices (1..WARRIOR_QUANTITY) de UNA distribución categórica
+        compartida (softmax(usage / SHOP_TEMPERATURE)), sin usar torch.multinomial.
+        Técnica: CDF acumulada + búsqueda binaria vectorizada (searchsorted).
+        """
+        probs = torch.softmax(usage / constants.SHOP_TEMPERATURE, dim=0)   # (WARRIOR_QUANTITY,)
+        cumprobs = torch.cumsum(probs, dim=0)                               # (WARRIOR_QUANTITY,)
+        u = torch.rand(self.N)                                              # (N,)
+        idx = torch.searchsorted(cumprobs, u).clamp(max=constants.WARRIOR_QUANTITY - 1)
+        return idx + 1
+    
     def _traducir_muertes_combate(self, castle_slots, alive_final):
         N = castle_slots.shape[0]
         max_size = constants.MAX_CASTLE_SIZE
@@ -517,8 +541,8 @@ class TrainerV:
         maxh_p1 = self.environment.max_health_por_tipo[self.environment.p1_disposition]
         maxh_p2 = self.environment.max_health_por_tipo[self.environment.p2_disposition]
 
-        health_norm_p1 = self.environment.p1_healths / maxh_p1
-        health_norm_p2 = self.environment.p2_healths / maxh_p2
+        health_norm_p1 = torch.where(maxh_p1 > 0, self.environment.p1_healths / maxh_p1.clamp(min=1e-8), torch.zeros_like(maxh_p1))
+        health_norm_p2 = torch.where(maxh_p2 > 0, self.environment.p2_healths / maxh_p2.clamp(min=1e-8), torch.zeros_like(maxh_p2))
 
         life_p1 = torch.where(self.environment.p1_alive, health_norm_p1, torch.zeros_like(health_norm_p1))
         life_p2 = torch.where(self.environment.p2_alive, health_norm_p2, torch.zeros_like(health_norm_p2))

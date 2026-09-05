@@ -271,9 +271,9 @@ class MainV:
     def _build_opponent(self, step: TrainingStep) -> object:
         if step.opponent_factory is PlayerNoAIV:
             if constants.USE_GUI:
-                return PlayerGUIV()
+                return PlayerGUIV(self.environment)
             else:
-                return PlayerNoAIV()
+                return PlayerNoAIV(self.environment)
         return self.player_class(self.N, self.environment)
 
     # ------------------------------------------------------------

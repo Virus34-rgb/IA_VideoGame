@@ -24,7 +24,7 @@ SELECTION_REPLAY_DATA = 80_000 # Capacidad del buffer de selección Estandar 150
 TURN_REPLAY_DATA = 40_000      # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 128                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
-GRAD_CLIP_MAX_NORM = 1000000.0
+GRAD_CLIP_MAX_NORM = 1.0
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
 
 # ============================================================
@@ -45,10 +45,16 @@ USE_META_GAME = True   # Flag: True = draft desde castillo (10 slots), False = c
 MAX_CASTLE_SIZE = 10
 MAX_BATALLAS = 10
 GOLD_INICIAL = 250
-COST_COMPRA = 40
+COST_COMPRA = 30
 GOLD_POR_BATALLA = 100
 MAX_ABILITY_LEVEL = 5
 GOLD_NORM_REF = 500  # referencia para normalizar el oro en la observación (ajustable)
+
+# ============================================================
+# Heurística de compra (Castillo) — anti-monopolio
+# ============================================================
+WARRIOR_USE_EMA_DECAY = 0.995   # decaimiento de la media móvil de uso reciente por tipo
+SHOP_TEMPERATURE = 0.2          # temperatura del softmax sobre el uso (menor = más determinista)
 
 def get_selection_state_dim(use_meta: bool = None) -> int:
     """Devuelve la dimensión del estado de selección según el modo."""
