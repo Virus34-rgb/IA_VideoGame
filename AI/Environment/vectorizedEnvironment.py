@@ -110,10 +110,12 @@ class VectorizedEnvironment:
         self.p2_disposition[self.indices, pos2] = warrior2
         self.p1_healths[self.indices, pos1] = health1
         self.p2_healths[self.indices, pos2] = health2
-        self.p1_alive[self.indices, pos1] = True
-        self.p2_alive[self.indices, pos2] = True
+        self.p1_alive[self.indices, pos1] = warrior1 > 0
+        self.p2_alive[self.indices, pos2] = warrior2 > 0
         self.p1_instance_abilities[self.indices, pos1] = abilities1
         self.p2_instance_abilities[self.indices, pos2] = abilities2
+
+        self.stats.accumulate_warrior_use(warrior1, warrior2)
 
         self.stats.accumulate_warrior_use(warrior1, warrior2)
 

@@ -81,6 +81,17 @@ class OpponentPoolV:
         Args:
             player: Instancia de PlayerAIV (o cualquier objeto con save_model_inference_only).
         """
+        # CAMBIADO: guard defensivo. save_version() solo tiene sentido para
+        # jugadores con red neuronal entrenable (PlayerAIV); PlayerGUIV y
+        # PlayerNoAIV no implementan save_model_inference_only porque no hay
+        # nada que snapshotear en un humano. Antes esto asumía ciegamente que
+        # player siempre era un PlayerAIV, y crasheaba con AttributeError si
+        # se llamaba (por ejemplo, si el guard de learn_p1/learn_p2 en
+        # TrainerV._run no cubría el caso exacto). Ahora, si el jugador no
+        # soporta snapshots, la función simplemente no hace nada.
+        if not hasattr(player, "save_model_inference_only"):
+            return
+
         cantidad, first_index, last_index = self.list_models()
         if cantidad >= constants.MAX_MODELS:
             self.delete_first(first_index)

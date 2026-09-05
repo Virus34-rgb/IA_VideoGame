@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_no_clip",
-  "timestamp": 1788348243.0451927,
+  "run_name": "v1_TestvsIA",
+  "timestamp": 1788605376.4933424,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -9,7 +9,7 @@
     "BETA_END": 1.0,
     "BETA_START": 0.4,
     "COPY_DQN": 50,
-    "COST_COMPRA": 40,
+    "COST_COMPRA": 30,
     "DELETE_DIRECTORIES": true,
     "DISCOUNT_FACTOR": 0.95,
     "DRAW_PENALTY": 200,
@@ -23,11 +23,11 @@
     "EPSILON_TURN_DECAY": 0.99998,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 100,
+    "EVAL_EPISODES": 1000,
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
-    "GRAD_CLIP_MAX_NORM": 1000000.0,
+    "GRAD_CLIP_MAX_NORM": 1.0,
     "HUMAN_EPISODES": 20,
     "HUMAN_EPSILON": 0.1,
     "HUMAN_OPPONENT": "none",
@@ -64,16 +64,17 @@
       "overkill_damage": -5,
       "kill_confirmed": 2
     },
-    "RUN_COMPARISON": true,
+    "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "evaluacion_scale",
+    "RUN_NAME_SUFFIX": "TestvsIA",
     "RUN_SELF_PLAY": true,
     "SAVE_MODEL_FRACTION": 0.05,
     "SEED": null,
     "SELECTION_LEARNING_RATE": 0.0001,
     "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
-    "TRAIN_EPISODES": 500,
+    "SHOP_TEMPERATURE": 0.2,
+    "TRAIN_EPISODES": 2500,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
@@ -88,6 +89,7 @@
     "USE_WANDB": false,
     "VERSION": 1,
     "WARRIOR_QUANTITY": 5,
+    "WARRIOR_USE_EMA_DECAY": 0.995,
     "WIN_REWARD": 1000
   },
   "extra": {
@@ -96,12 +98,12 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 150
+        "episodes": 2500
       },
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 1000
       }
     ]
   }

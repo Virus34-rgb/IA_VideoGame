@@ -62,6 +62,19 @@ class ChooseStateV:
         opp_initial_warrior: torch.Tensor,
         opp_initial_position: torch.Tensor,
     ) -> torch.Tensor:
+        
+        # Al inicio de encode_choose_state_batch_castle
+        if not isinstance(opp_initial_warrior, torch.Tensor):
+            opp_initial_warrior = torch.tensor(opp_initial_warrior, dtype=torch.long)
+        if not isinstance(opp_initial_position, torch.Tensor):
+            opp_initial_position = torch.tensor(opp_initial_position, dtype=torch.float)
+
+        # Asegurar que tengan al menos dimensión 1 (batch)
+        if opp_initial_warrior.dim() == 0:
+            opp_initial_warrior = opp_initial_warrior.unsqueeze(0)
+        if opp_initial_position.dim() == 0:
+            opp_initial_position = opp_initial_position.unsqueeze(0)
+            
         N = castle_types.shape[0]
 
         idx = (castle_types - 1).clamp(min=0)

@@ -10,23 +10,84 @@ import constants
 
 
 class PlayerGUIV:
-    def __init__(self):
+    def __init__(self, environment):
         self.name = "PlayerGUIV"
         self.root = None
-        
+        self.environment = environment
+        # self.warrior_names hardcodeado eliminado; se usa environment.warriors_classes
+        # como única fuente de verdad (ver _warrior_name).
+
         # Variables para la fase de selección
         self.selection_done = False
         self.selected_item = None   # En catálogo: warrior_id (1..5). En castillo: slot_index (0..9)
         self.selected_position = None
-        
         # Variables para la fase de turno
         self.turn_done = False
         self.actions = [None, None, None]
         self.confirm_btn = None
-        
-        # Nombres de guerreros (para mostrar bonito)
-        self.warrior_names = {1: "Knight", 2: "Archer", 3: "Rogue",
-                              4: "Wizard", 5: "Cleric"}
+        self.elo = constants.ELO_INITIAL
+
+    def _warrior_name(self, warrior_id: int) -> str:
+        """Devuelve el nombre del guerrero a partir de su ID, o 'Vacío'/'Desconocido'."""
+        if not warrior_id or warrior_id <= 0:
+            return "Vacío"
+        warrior_data = self.environment.warriors_classes.get(warrior_id)
+        return warrior_data.name if warrior_data is not None else "Desconocido"
+
+    # NUEVO: construye una etiqueta legible para el botón de una habilidad,
+    # a partir del AbilityData real (no solo su índice). Sin esto, el jugador
+    # humano no tenía forma de distinguir qué hacía cada botón de habilidad.
+    _EFFECT_LABELS = {
+        "ATTACK": "Ataque",
+        "SELF_HEAL": "Autocura",
+        "TEAM_HEAL": "Cura equipo",
+        "DEFEND_FULL": "Defensa total",
+        "DEFEND_HALF": "Defensa parcial",
+    }
+
+    def _ability_label(self, ability) -> str:
+        tipo_efecto = self._EFFECT_LABELS.get(ability.effect_type.name, ability.effect_type.name)
+        detalle = f"dmg/cura={ability.damage}" if ability.damage else "sin daño"
+        cd_txt = f"cd={ability.turn_cd}" if ability.turn_cd > 0 else "sin cd"
+        return f"{ability.name}\n({tipo_efecto}, {detalle}, {cd_txt})"
+
+    # ------------------------------------------------------------
+    # Máscara de acciones válidas — idéntica a PlayerAIV.compute_action_mask.
+    # NUEVO: antes turn() decidía qué botones mostrar solo con cd[hab]==0 y
+    # slot<2/slot>0, sin comprobar si una habilidad de ataque tiene algún
+    # objetivo enemigo válido. Esto permitía mostrar botones que el entorno
+    # luego trataría como "sin efecto" (target_mask sin coincidencia), dando
+    # una experiencia distinta a la que ve la red. Duplicada aquí porque su
+    # lógica no depende de ninguna red neuronal, solo de disposición/
+    # cooldowns/vida/habilidades — el humano necesita la misma información.
+    # ------------------------------------------------------------
+    def compute_action_mask(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities):
+        N = own_disposition.shape[0]
+        mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
+
+        mask[:, :, :4] &= (own_cooldowns == 0)
+
+        table = self.environment.target_mask_por_tipo_habilidad
+        target_mask_pool = table[own_disposition]
+        idx = own_instance_abilities.unsqueeze(-1).expand(-1, -1, -1, 3)
+        target_mask_full = target_mask_pool.gather(2, idx)
+
+        enemy_ocupado = (enemy_disposition > 0).unsqueeze(1).unsqueeze(1)
+        hay_target_valido = (target_mask_full & enemy_ocupado).any(dim=-1)
+        sin_target = ~hay_target_valido & target_mask_full.any(dim=-1)
+
+        mask[:, :, :4] &= ~sin_target
+
+        mask[:, 0, 5] = False
+        mask[:, 2, 4] = False
+
+        return mask
+
+    def reset_noise(self):
+        # NUEVO: no-op. No hay NoisyLinear en un jugador humano; se añade solo
+        # por si algún punto del pipeline (p.ej. un guard futuro en TrainerV)
+        # llega a invocarlo incondicionalmente sobre el oponente.
+        pass
 
     # ---------- Métodos requeridos por el entrenador ----------
     def selection(self, batch_encoded_states, disposition, opp_initial_warrior,
@@ -52,7 +113,7 @@ class PlayerGUIV:
 
         # Cabecera
         info = f"Tu disposición: {self._fmt_disp(disp)}\n"
-        info += f"Enemigo seleccionó: {self.warrior_names.get(opp, 'Ninguno')}\n"
+        info += f"Enemigo seleccionó: {self._warrior_name(opp)}\n"
         info += "Elige un guerrero/slot y luego una posición libre."
         tk.Label(self.root, text=info, wraplength=400).pack(pady=10)
 
@@ -67,14 +128,14 @@ class PlayerGUIV:
             for slot in range(constants.MAX_CASTLE_SIZE):
                 if alive[slot] and not used[slot]:
                     tipo = types[slot]
-                    nombre = self.warrior_names.get(tipo, "Desconocido")
+                    nombre = self._warrior_name(tipo)
                     elegibles.append((slot, nombre))
             
             if not elegibles:
                 # Fallback: si no hay ninguno, coge el primero vivo (por si acaso)
                 for slot in range(constants.MAX_CASTLE_SIZE):
                     if alive[slot]:
-                        elegibles.append((slot, self.warrior_names.get(types[slot], "?")))
+                        elegibles.append((slot, self._warrior_name(types[slot])))
                         break
 
             frame_items = tk.Frame(self.root)
@@ -95,7 +156,7 @@ class PlayerGUIV:
             frame_items.pack(pady=5)
             tk.Label(frame_items, text="Guerreros disponibles:").pack()
             for w in disponibles:
-                btn = tk.Button(frame_items, text=f"{w}: {self.warrior_names[w]}",
+                btn = tk.Button(frame_items, text=f"{w}: {self._warrior_name(w)}",
                                 command=lambda wid=w: self._set_item(wid))
                 btn.pack(side=tk.LEFT, padx=5)
 
@@ -125,7 +186,9 @@ class PlayerGUIV:
              own_alive, enemy_disposition, own_instance_abilities):
         """
         Muestra la ventana para elegir acciones.
-        AHORA extrae y muestra las vidas normalizadas del tensor de observación.
+        Extrae y muestra las vidas normalizadas del tensor de observación.
+        Solo muestra botones para acciones que compute_action_mask marca
+        como válidas (antes: solo se comprobaba cooldown y posición del slot).
         """
         self._init_root()
         self.turn_done = False
@@ -136,8 +199,13 @@ class PlayerGUIV:
         for w in self.root.winfo_children():
             w.destroy()
 
+        # NUEVO: máscara real de acciones válidas (N,3,6), igual que ve la red.
+        action_mask = self.compute_action_mask(
+            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities
+        )
+
         # ------------------------------------------------------------
-        # 1. EXTRAER VIDAS DEL TENSOR DE OBSERVACIÓN (NUEVO)
+        # 1. EXTRAER VIDAS DEL TENSOR DE OBSERVACIÓN
         # ------------------------------------------------------------
         # batch_encoded_obs tiene forma (1, TURN_STATE_DIM)
         obs = batch_encoded_obs.squeeze(0).cpu().numpy()  # lo pasamos a numpy para manejarlo fácil
@@ -145,9 +213,9 @@ class PlayerGUIV:
         # Índices según ObservationV.normalize_batch:
         # - Índices 18, 19, 20 -> Vida de tus guerreros (posiciones 0, 1, 2)
         # - Índices 39, 40, 41 -> Vida de los enemigos (posiciones 0, 1, 2)
-        own_health_norm = obs[18:21]      # array de 3 floats (0.0 a 1.0)
-        enemy_health_norm = obs[39:42]    # array de 3 floats (0.0 a 1.0)
-        
+        own_health_norm = np.array([obs[6], obs[19], obs[32]])
+        enemy_health_norm = np.array([obs[39], obs[40], obs[41]])
+
         # Recortar por si hay algún valor fuera de rango (por seguridad)
         own_health_norm = np.clip(own_health_norm, 0.0, 1.0)
         enemy_health_norm = np.clip(enemy_health_norm, 0.0, 1.0)
@@ -159,7 +227,7 @@ class PlayerGUIV:
         for i, t in enumerate(enemy_disp):
             if t != 0:
                 hp_pct = int(enemy_health_norm[i] * 100)
-                name = self.warrior_names.get(t, "?")
+                name = self._warrior_name(t)
                 enemy_parts.append(f"{name} ({hp_pct}%)")
             else:
                 enemy_parts.append("Vacío")
@@ -186,27 +254,33 @@ class PlayerGUIV:
             hp_pct = int(own_health_norm[slot] * 100)
             
             # Mostrar nombre y vida
-            label = tk.Label(frame, text=f"Posición {slot}: {self.warrior_names.get(tipo, '?')} - ❤️ {hp_pct}% HP")
+            label = tk.Label(frame, text=f"Posición {slot}: {self._warrior_name(tipo)} - ❤️ {hp_pct}% HP")
             label.pack()
 
-            # Cooldowns
+            # Cooldowns (informativo, se mantiene igual)
             cd = own_cooldowns[0, slot].tolist()
             cd_txt = "Cooldowns: " + " | ".join(f"Hab{i}:{c}" for i, c in enumerate(cd))
             tk.Label(frame, text=cd_txt).pack()
 
-            # Botones de habilidades (si CD == 0)
+            own_abilities_slot = own_instance_abilities[0, slot].tolist()  # (4,) índices de pool
             for hab in range(4):
-                if cd[hab] == 0:
-                    btn = tk.Button(frame, text=f"Habilidad {hab}",
+                if action_mask[0, slot, hab]:
+                    pool_idx = own_abilities_slot[hab]
+                    ability = self.environment.warriors_classes[tipo].ability_pool[pool_idx]
+                    etiqueta = self._ability_label(ability)
+                    btn = tk.Button(frame, text=etiqueta,
                                     command=lambda s=slot, h=hab: self._set_action(s, h))
                     btn.pack(side=tk.LEFT, padx=2)
 
-            # Movimiento
-            if slot < 2:
+            # CAMBIADO: antes `if slot < 2` / `if slot > 0` — ahora se usa
+            # action_mask[0, slot, 4]/[0, slot, 5], que ya codifica exactamente
+            # las mismas restricciones de borde (mask[:,0,5]=False, mask[:,2,4]
+            # =False) desde el único punto de verdad compartido con la red.
+            if action_mask[0, slot, 5]:
                 btn = tk.Button(frame, text="→ Mover derecha",
                                 command=lambda s=slot: self._set_action(s, 5))
                 btn.pack(side=tk.LEFT, padx=2)
-            if slot > 0:
+            if action_mask[0, slot, 4]:
                 btn = tk.Button(frame, text="← Mover izquierda",
                                 command=lambda s=slot: self._set_action(s, 6))
                 btn.pack(side=tk.LEFT, padx=2)
@@ -250,6 +324,5 @@ class PlayerGUIV:
     def _confirm(self):
         self.turn_done = True
 
-    @staticmethod
-    def _fmt_disp(disp):
-        return " | ".join(str(v) if v != 0 else "Vacío" for v in disp)
+    def _fmt_disp(self, disp):
+        return " | ".join(self._warrior_name(v) for v in disp)

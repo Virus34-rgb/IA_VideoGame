@@ -5,215 +5,215 @@
 RESULTADOS
 -----------------------------------------------------------------
 Partidas:                  40960
-Victorias P1:              25605 (62.51%)
-Victorias P2:              15347 (37.47%)
-Empates:                   8 (0.02%)
-Win ratio P1 (sin empates):62.52%
-Win ratio P2 (sin empates):37.48%
-Terminadas por muerte:     34076 (83.19%)
-Terminadas por límite:     6884 (16.81%)
-Turnos totales:            395252
-Turnos medios por partida: 9.65
+Victorias P1:              12468 (30.44%)
+Victorias P2:              28421 (69.39%)
+Empates:                   71 (0.17%)
+Win ratio P1 (sin empates):30.49%
+Win ratio P2 (sin empates):69.51%
+Terminadas por muerte:     39503 (96.44%)
+Terminadas por límite:     1457 (3.56%)
+Turnos totales:            348948
+Turnos medios por partida: 8.52
 
 ELO (MATCHMAKING)
 -----------------------------------------------------------------
-Elo P1:                    1015.8
-Elo P2:                    996.0
+Elo P1:                    998.5
+Elo P2:                    1021.2
 
 Snapshots en la pool:      40
 
-  Checkpoint    6:        1003.2
-  Checkpoint    7:        1003.2
-  Checkpoint    4:        1002.6
-  Checkpoint   14:        1002.4
-  Checkpoint   16:        1001.9
-  Checkpoint    9:        1001.2
-  Checkpoint   11:        1000.1
-  Checkpoint   12:        1000.1
-  Checkpoint    5:        999.6
-  Checkpoint   20:        999.1
-  Checkpoint   15:        999.0
-  Checkpoint   21:        998.9
-  Checkpoint   18:        998.7
-  Checkpoint    8:        998.5
-  Checkpoint   10:        998.0
-  Checkpoint   22:        996.0
-  Checkpoint   23:        996.0
-  Checkpoint   24:        996.0
-  Checkpoint   25:        996.0
-  Checkpoint   26:        996.0
-  Checkpoint   27:        996.0
-  Checkpoint   28:        996.0
-  Checkpoint   29:        996.0
-  Checkpoint   30:        996.0
-  Checkpoint   31:        996.0
-  Checkpoint   32:        996.0
-  Checkpoint   33:        996.0
-  Checkpoint   34:        996.0
-  Checkpoint   35:        996.0
-  Checkpoint   36:        996.0
-  Checkpoint   37:        996.0
-  Checkpoint   38:        996.0
-  Checkpoint   39:        996.0
-  Checkpoint   40:        996.0
-  Checkpoint   13:        995.1
-  Checkpoint    1:        986.4
-  Checkpoint    2:        986.0
-  Checkpoint   19:        985.2
-  Checkpoint   17:        977.4
-  Checkpoint    3:        974.0
+  Checkpoint   20:        1032.4
+  Checkpoint   18:        1030.5
+  Checkpoint   15:        1027.5
+  Checkpoint    5:        1022.3
+  Checkpoint   22:        1021.2
+  Checkpoint   23:        1021.2
+  Checkpoint   24:        1021.2
+  Checkpoint   25:        1021.2
+  Checkpoint   26:        1021.2
+  Checkpoint   27:        1021.2
+  Checkpoint   28:        1021.2
+  Checkpoint   29:        1021.2
+  Checkpoint   30:        1021.2
+  Checkpoint   31:        1021.2
+  Checkpoint   32:        1021.2
+  Checkpoint   33:        1021.2
+  Checkpoint   34:        1021.2
+  Checkpoint   35:        1021.2
+  Checkpoint   36:        1021.2
+  Checkpoint   37:        1021.2
+  Checkpoint   38:        1021.2
+  Checkpoint   39:        1021.2
+  Checkpoint   40:        1021.2
+  Checkpoint    7:        1018.7
+  Checkpoint   19:        1017.5
+  Checkpoint    2:        1015.1
+  Checkpoint   14:        1014.5
+  Checkpoint   16:        1013.7
+  Checkpoint   11:        1013.6
+  Checkpoint    9:        1013.2
+  Checkpoint   21:        1013.0
+  Checkpoint   17:        1011.8
+  Checkpoint    8:        1009.5
+  Checkpoint   12:        1008.0
+  Checkpoint    4:        1007.4
+  Checkpoint   13:        1007.2
+  Checkpoint   10:        1005.8
+  Checkpoint    1:        1002.0
+  Checkpoint    3:        993.8
+  Checkpoint    6:        969.5
 
 RECOMPENSA ACUMULADA
 -----------------------------------------------------------------
-Reward total P1:           54043.40
-Reward total P2:           -125080.75
-Reward media P1:           1.32/partida
-Reward media P2:           -3.05/partida
+Reward total P1:           -216420.33
+Reward total P2:           94170.45
+Reward media P1:           -5.28/partida
+Reward media P2:           2.30/partida
 
 DAÑO
 -----------------------------------------------------------------
-Daño total P1:             4067034.50
-Daño total P2:             3828592.00
-Daño medio P1:             99.29
-Daño medio P2:             93.47
-Daño por sobrekill P1:     336217.00
-Daño por sobrekill P2:     236162.50
-Daño por sobrekill medio P1:8.21
-Daño por sobrekill medio P2:5.77
-Kill confirmed P1:         88033.00
-Kill confirmed P2:         66471.00
-Kill confirmed medio P1:   2.15
-Kill confirmed medio P2:   1.62
+Daño total P1:             3685157.00
+Daño total P2:             3932966.00
+Daño medio P1:             89.97
+Daño medio P2:             96.02
+Daño por sobrekill P1:     264260.50
+Daño por sobrekill P2:     317164.50
+Daño por sobrekill medio P1:6.45
+Daño por sobrekill medio P2:7.74
+Kill confirmed P1:         70415.00
+Kill confirmed P2:         82284.00
+Kill confirmed medio P1:   1.72
+Kill confirmed medio P2:   2.01
 
 Healing
 -----------------------------------------------------------------
-Heal total P1:             989743.82
-Heal total P2:             722523.07
-Heal medio P1:             24.16
-Heal medio P2:             17.64
-Cura desperdiciada media P1:  0.79
-Cura desperdiciada media P2:  0.35
+Heal total P1:             623582.64
+Heal total P2:             712873.72
+Heal medio P1:             15.22
+Heal medio P2:             17.40
+Cura desperdiciada media P1:  0.30
+Cura desperdiciada media P2:  0.42
 
 BAJAS (PROPIAS)
 -----------------------------------------------------------------
-Bajas totales P1:          67352
-Bajas totales P2:          88589
-Bajas medias P1:           1.64
-Bajas medias P2:           2.16
+Bajas totales P1:          95196
+Bajas totales P2:          72485
+Bajas medias P1:           2.32
+Bajas medias P2:           1.77
 
 MOVIMIENTOS
 -----------------------------------------------------------------
-Movimientos P1:            3735
-Movimientos P2:            2170
-Movimientos estratégicos P1:186
-Movimientos estratégicos P2:190
-Movimientos estratégicos P1 (%):4.98%
-Movimientos estratégicos P2 (%):8.76%
+Movimientos P1:            66537
+Movimientos P2:            10209
+Movimientos estratégicos P1:7298
+Movimientos estratégicos P2:609
+Movimientos estratégicos P1 (%):10.97%
+Movimientos estratégicos P2 (%):5.97%
 
 BLOQUEOS Y DAÑO EVITADO
 -----------------------------------------------------------------
-Bloqueos exitosos P1:      129249.00 -> 3.16/partida
-Bloqueos exitosos P2:      153127.00 -> 3.74/partida
-Daño evitado P1:           129249.00 -> 3.16/partida
-Daño evitado P2:           153127.00 -> 3.74/partida
-Defensas desperdiciadas P1:1.77
-Defensas desperdiciadas P2:1.42
+Bloqueos exitosos P1:      139639.00 -> 3.41/partida
+Bloqueos exitosos P2:      120633.00 -> 2.95/partida
+Daño evitado P1:           139639.00 -> 3.41/partida
+Daño evitado P2:           120633.00 -> 2.95/partida
+Defensas desperdiciadas P1:1.10
+Defensas desperdiciadas P2:1.68
 
 SELECCIÓN DE GUERREROS
 -----------------------------------------------------------------
-Selecciones totales P1:    122880.0
-Selecciones totales P2:    122875.0
+Selecciones totales P1:    245758.0
+Selecciones totales P2:    245760.0
 
 P1:
-Knight:          20798 ( 16.93%)
-Archer:          21342 ( 17.37%)
-Rogue:          19609 ( 15.96%)
-Wizard:          21555 ( 17.54%)
-Cleric:          39576 ( 32.21%)
+Knight:          54672 ( 22.25%)
+Archer:          46772 ( 19.03%)
+Rogue:          59442 ( 24.19%)
+Wizard:          41130 ( 16.74%)
+Cleric:          43742 ( 17.80%)
 
 P2:
-Knight:          22091 ( 17.98%)
-Archer:          18233 ( 14.84%)
-Rogue:          21552 ( 17.54%)
-Wizard:          39379 ( 32.05%)
-Cleric:          21620 ( 17.60%)
+Knight:          39596 ( 16.11%)
+Archer:          41242 ( 16.78%)
+Rogue:          55710 ( 22.67%)
+Wizard:          58524 ( 23.81%)
+Cleric:          50688 ( 20.62%)
 
 ATAQUES (habilidad seleccionada)
 -----------------------------------------------------------------
-Ataques totales P1:        1182601.0
-Ataques totales P2:        1165460.0
+Ataques totales P1:        1037979.0
+Ataques totales P2:        1046782.0
 
 P1 - USO DE HABILIDADES POR GUERRERO:
-  Guerrero 1 (total: 203361.0,  17.20% global):
-    Smite           30326 ( 14.91% del guerrero,   2.56% global)
-    Guard Up        32658 ( 16.06% del guerrero,   2.76% global)
-    Slice           46090 ( 22.66% del guerrero,   3.90% global)
-    Throw           39031 ( 19.19% del guerrero,   3.30% global)
-    Shield Bash     30591 ( 15.04% del guerrero,   2.59% global)
-    Second Wind     24665 ( 12.13% del guerrero,   2.09% global)
-  Guerrero 2 (total: 210440.0,  17.79% global):
-    Arrow           40075 ( 19.04% del guerrero,   3.39% global)
-    Heal            33899 ( 16.11% del guerrero,   2.87% global)
-    Arrow2          37838 ( 17.98% del guerrero,   3.20% global)
-    Rain            32620 ( 15.50% del guerrero,   2.76% global)
-    Arrow Shield    34208 ( 16.26% del guerrero,   2.89% global)
-    Multi Shot      31800 ( 15.11% del guerrero,   2.69% global)
-  Guerrero 3 (total: 188396.0,  15.93% global):
-    BackAttack      30010 ( 15.93% del guerrero,   2.54% global)
-    Hide            32930 ( 17.48% del guerrero,   2.78% global)
-    PoisonGas       34301 ( 18.21% del guerrero,   2.90% global)
-    Knife           39308 ( 20.86% del guerrero,   3.32% global)
-    Ambush          26450 ( 14.04% del guerrero,   2.24% global)
-    Vanish          25397 ( 13.48% del guerrero,   2.15% global)
-  Guerrero 4 (total: 198932.0,  16.82% global):
-    Magic Missile   38508 ( 19.36% del guerrero,   3.26% global)
-    Zap             30994 ( 15.58% del guerrero,   2.62% global)
-    FireBall        32410 ( 16.29% del guerrero,   2.74% global)
-    StaffAttack     39862 ( 20.04% del guerrero,   3.37% global)
-    Magic Shield    31632 ( 15.90% del guerrero,   2.67% global)
-    Arcane Surge    25526 ( 12.83% del guerrero,   2.16% global)
-  Guerrero 5 (total: 381472.0,  32.26% global):
-    Charge          80026 ( 20.98% del guerrero,   6.77% global)
-    HealAll         50632 ( 13.27% del guerrero,   4.28% global)
-    Defend          64442 ( 16.89% del guerrero,   5.45% global)
-    Light           61994 ( 16.25% del guerrero,   5.24% global)
-    Holy Nova       60054 ( 15.74% del guerrero,   5.08% global)
-    Renew           64324 ( 16.86% del guerrero,   5.44% global)
+  Guerrero 1 (total: 230055.0,  22.16% global):
+    Smite           34228 ( 14.88% del guerrero,   3.30% global)
+    Guard Up        39716 ( 17.26% del guerrero,   3.83% global)
+    Slice           47313 ( 20.57% del guerrero,   4.56% global)
+    Throw           46268 ( 20.11% del guerrero,   4.46% global)
+    Shield Bash     34542 ( 15.01% del guerrero,   3.33% global)
+    Second Wind     27988 ( 12.17% del guerrero,   2.70% global)
+  Guerrero 2 (total: 203027.0,  19.56% global):
+    Arrow           36685 ( 18.07% del guerrero,   3.53% global)
+    Heal            33595 ( 16.55% del guerrero,   3.24% global)
+    Arrow2          36756 ( 18.10% del guerrero,   3.54% global)
+    Rain            30713 ( 15.13% del guerrero,   2.96% global)
+    Arrow Shield    35636 ( 17.55% del guerrero,   3.43% global)
+    Multi Shot      29642 ( 14.60% del guerrero,   2.86% global)
+  Guerrero 3 (total: 259519.0,  25.00% global):
+    BackAttack      41717 ( 16.07% del guerrero,   4.02% global)
+    Hide            48339 ( 18.63% del guerrero,   4.66% global)
+    PoisonGas       43385 ( 16.72% del guerrero,   4.18% global)
+    Knife           51839 ( 19.98% del guerrero,   4.99% global)
+    Ambush          36849 ( 14.20% del guerrero,   3.55% global)
+    Vanish          37390 ( 14.41% del guerrero,   3.60% global)
+  Guerrero 4 (total: 162726.0,  15.68% global):
+    Magic Missile   31488 ( 19.35% del guerrero,   3.03% global)
+    Zap             25481 ( 15.66% del guerrero,   2.45% global)
+    FireBall        25721 ( 15.81% del guerrero,   2.48% global)
+    StaffAttack     31445 ( 19.32% del guerrero,   3.03% global)
+    Magic Shield    27689 ( 17.02% del guerrero,   2.67% global)
+    Arcane Surge    20902 ( 12.84% del guerrero,   2.01% global)
+  Guerrero 5 (total: 182652.0,  17.60% global):
+    Charge          37259 ( 20.40% del guerrero,   3.59% global)
+    HealAll         24149 ( 13.22% del guerrero,   2.33% global)
+    Defend          31044 ( 17.00% del guerrero,   2.99% global)
+    Light           29480 ( 16.14% del guerrero,   2.84% global)
+    Holy Nova       29696 ( 16.26% del guerrero,   2.86% global)
+    Renew           31024 ( 16.99% del guerrero,   2.99% global)
 
 P2 - USO DE HABILIDADES POR GUERRERO:
-  Guerrero 1 (total: 209837.0,  18.00% global):
-    Smite           32047 ( 15.27% del guerrero,   2.75% global)
-    Guard Up        34254 ( 16.32% del guerrero,   2.94% global)
-    Slice           45879 ( 21.86% del guerrero,   3.94% global)
-    Throw           42340 ( 20.18% del guerrero,   3.63% global)
-    Shield Bash     31495 ( 15.01% del guerrero,   2.70% global)
-    Second Wind     23822 ( 11.35% del guerrero,   2.04% global)
-  Guerrero 2 (total: 176817.0,  15.17% global):
-    Arrow           32194 ( 18.21% del guerrero,   2.76% global)
-    Heal            29057 ( 16.43% del guerrero,   2.49% global)
-    Arrow2          30438 ( 17.21% del guerrero,   2.61% global)
-    Rain            28041 ( 15.86% del guerrero,   2.41% global)
-    Arrow Shield    29887 ( 16.90% del guerrero,   2.56% global)
-    Multi Shot      27200 ( 15.38% del guerrero,   2.33% global)
-  Guerrero 3 (total: 202339.0,  17.36% global):
-    BackAttack      33650 ( 16.63% del guerrero,   2.89% global)
-    Hide            35271 ( 17.43% del guerrero,   3.03% global)
-    PoisonGas       37444 ( 18.51% del guerrero,   3.21% global)
-    Knife           40706 ( 20.12% del guerrero,   3.49% global)
-    Ambush          28617 ( 14.14% del guerrero,   2.46% global)
-    Vanish          26651 ( 13.17% del guerrero,   2.29% global)
-  Guerrero 4 (total: 372000.0,  31.92% global):
-    Magic Missile   70896 ( 19.06% del guerrero,   6.08% global)
-    Zap             60927 ( 16.38% del guerrero,   5.23% global)
-    FireBall        59835 ( 16.08% del guerrero,   5.13% global)
-    StaffAttack     73281 ( 19.70% del guerrero,   6.29% global)
-    Magic Shield    58093 ( 15.62% del guerrero,   4.98% global)
-    Arcane Surge    48968 ( 13.16% del guerrero,   4.20% global)
-  Guerrero 5 (total: 204467.0,  17.54% global):
-    Charge          43827 ( 21.43% del guerrero,   3.76% global)
-    HealAll         29214 ( 14.29% del guerrero,   2.51% global)
-    Defend          31049 ( 15.19% del guerrero,   2.66% global)
-    Light           32068 ( 15.68% del guerrero,   2.75% global)
-    Holy Nova       34106 ( 16.68% del guerrero,   2.93% global)
-    Renew           34203 ( 16.73% del guerrero,   2.93% global)
+  Guerrero 1 (total: 172325.0,  16.46% global):
+    Smite           25168 ( 14.60% del guerrero,   2.40% global)
+    Guard Up        27610 ( 16.02% del guerrero,   2.64% global)
+    Slice           37771 ( 21.92% del guerrero,   3.61% global)
+    Throw           35541 ( 20.62% del guerrero,   3.40% global)
+    Shield Bash     25500 ( 14.80% del guerrero,   2.44% global)
+    Second Wind     20735 ( 12.03% del guerrero,   1.98% global)
+  Guerrero 2 (total: 178193.0,  17.02% global):
+    Arrow           33122 ( 18.59% del guerrero,   3.16% global)
+    Heal            27691 ( 15.54% del guerrero,   2.65% global)
+    Arrow2          36068 ( 20.24% del guerrero,   3.45% global)
+    Rain            26371 ( 14.80% del guerrero,   2.52% global)
+    Arrow Shield    29344 ( 16.47% del guerrero,   2.80% global)
+    Multi Shot      25597 ( 14.36% del guerrero,   2.45% global)
+  Guerrero 3 (total: 236315.0,  22.58% global):
+    BackAttack      38984 ( 16.50% del guerrero,   3.72% global)
+    Hide            42817 ( 18.12% del guerrero,   4.09% global)
+    PoisonGas       42448 ( 17.96% del guerrero,   4.06% global)
+    Knife           47640 ( 20.16% del guerrero,   4.55% global)
+    Ambush          31786 ( 13.45% del guerrero,   3.04% global)
+    Vanish          32640 ( 13.81% del guerrero,   3.12% global)
+  Guerrero 4 (total: 243901.0,  23.30% global):
+    Magic Missile   47385 ( 19.43% del guerrero,   4.53% global)
+    Zap             38868 ( 15.94% del guerrero,   3.71% global)
+    FireBall        40760 ( 16.71% del guerrero,   3.89% global)
+    StaffAttack     46486 ( 19.06% del guerrero,   4.44% global)
+    Magic Shield    38832 ( 15.92% del guerrero,   3.71% global)
+    Arcane Surge    31570 ( 12.94% del guerrero,   3.02% global)
+  Guerrero 5 (total: 216048.0,  20.64% global):
+    Charge          43374 ( 20.08% del guerrero,   4.14% global)
+    HealAll         29178 ( 13.51% del guerrero,   2.79% global)
+    Defend          37111 ( 17.18% del guerrero,   3.55% global)
+    Light           35205 ( 16.29% del guerrero,   3.36% global)
+    Holy Nova       35406 ( 16.39% del guerrero,   3.38% global)
+    Renew           35774 ( 16.56% del guerrero,   3.42% global)
 =================================================================

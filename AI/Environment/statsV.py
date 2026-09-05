@@ -121,6 +121,8 @@ class StatsV:
         self._p2_attacks_tensor = torch.zeros(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE)
         self._p1_warrior_use_tensor = torch.zeros(constants.WARRIOR_QUANTITY)
         self._p2_warrior_use_tensor = torch.zeros(constants.WARRIOR_QUANTITY)
+        self._p1_warrior_use_ema = torch.zeros(constants.WARRIOR_QUANTITY) 
+        self._p2_warrior_use_ema = torch.zeros(constants.WARRIOR_QUANTITY)
 
         # Buffers por batch (se reinician en start_batch)
         self._p1_damage_batch: torch.Tensor | None = None
@@ -248,16 +250,17 @@ class StatsV:
             self._p2_attacks_tensor += counts.view(constants.WARRIOR_QUANTITY + 1, constants.MAX_POOL_SIZE).float()
 
     def accumulate_warrior_use(self, warrior1: torch.Tensor, warrior2: torch.Tensor) -> None:
-        """
-        Acumula la selección de guerreros al inicio de la partida.
-
-        Args:
-            warrior1, warrior2: (N,) IDs de los guerreros seleccionados por P1 y P2.
-        """
         c1 = torch.bincount(warrior1, minlength=constants.WARRIOR_QUANTITY + 1)[1:]
         c2 = torch.bincount(warrior2, minlength=constants.WARRIOR_QUANTITY + 1)[1:]
         self._p1_warrior_use_tensor += c1.float()
         self._p2_warrior_use_tensor += c2.float()
+
+        # NUEVO: actualizar EMA de uso reciente (proporciones normalizadas por batch)
+        decay = constants.WARRIOR_USE_EMA_DECAY
+        prop1 = c1.float() / c1.sum().clamp(min=1.0)
+        prop2 = c2.float() / c2.sum().clamp(min=1.0)
+        self._p1_warrior_use_ema = decay * self._p1_warrior_use_ema + (1 - decay) * prop1
+        self._p2_warrior_use_ema = decay * self._p2_warrior_use_ema + (1 - decay) * prop2
 
     # ------------------------------------------------------------
     # Cierre de partidas finalizadas
