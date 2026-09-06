@@ -100,6 +100,7 @@ class TrainerV:
 
         p2_training_player = self.player2
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
+        self._opponent_rusher_mask = torch.zeros(self.N,dtype=torch.bool)
         self._grouped_opponents = {}
 
         for batch_idx in range(batches):
@@ -116,8 +117,7 @@ class TrainerV:
                 
             if (learn_p1 or learn_p2) and batch_idx :
                 rand = torch.rand(self.N)
-                self._opponent_rusher_mask = torch.where(rand > constants.RUSHER_OPPONENT_PERCENTAGE and ~self._opponent_from_pool_mask 
-                                                         ,1,0)
+                self._opponent_rusher_mask = (rand < constants.RUSHER_OPPONENT_PERCENTAGE) & ~self._opponent_from_pool_mask
 
             self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player)
 
@@ -127,8 +127,8 @@ class TrainerV:
             S_p2 = torch.where(winners == 1, torch.ones_like(winners, dtype=torch.float),
                 torch.where(winners == 0, torch.zeros_like(winners, dtype=torch.float), torch.full_like(winners, 0.5, dtype=torch.float)))
             mask_no_pool = ~self._opponent_from_pool_mask
-            mask_p2_normal = mask_no_pool and ~self._opponent_rusher_mask
-            n = mask_no_pool.sum()
+            mask_p2_normal = mask_no_pool & ~self._opponent_rusher_mask
+            n = mask_p2_normal.sum()
             
             if learn_p1 or learn_p2:
                 if n != 0:
@@ -219,7 +219,7 @@ class TrainerV:
                 self._remember_turn_batch(self.player1, experience)
         if learn_p2:
             for experience in n_steps_buffer_p2.flush():
-                self._remember_turn_batch(p2_training_player, experience, skip_mask=self._opponent_from_pool_mask)
+                self._remember_turn_batch(p2_training_player, experience, skip_mask=self._opponent_from_pool_mask | self._opponent_rusher_mask)
 
         if learn_p1:
             self._replay_turn_and_selection(self.player1, selection_states_p1, selection_actions_p1, reward1_acum, "p1", batch_idx)
@@ -229,13 +229,13 @@ class TrainerV:
         if learn_p2:
             self._replay_turn_and_selection(
                 p2_training_player, selection_states_p2, selection_actions_p2, reward2_acum, "p2", batch_idx,
-                skip_mask=self._opponent_from_pool_mask and self._opponent_rusher_mask,
+                skip_mask=self._opponent_from_pool_mask | self._opponent_rusher_mask,
             )
             if self.train_batches != 0:
                 p2_training_player.update_beta()
 
         self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
-        reward2_valid = reward2_acum[~self._opponent_from_pool_mask]
+        reward2_valid = reward2_acum[~self._opponent_from_pool_mask & ~self._opponent_rusher_mask]
         self.environment.stats.total_reward_p2 += reward2_valid.sum().item()
 
     def _run_turn(self, obs1_tensor, obs2_tensor, n_steps_buffer_p1, n_steps_buffer_p2, p2_training_player, learn_p1, learn_p2) -> None:
@@ -283,7 +283,7 @@ class TrainerV:
                 p2_abilities_now, p2_action_mask_now,
             )
             if exp_p2 is not None:
-                self._remember_turn_batch(p2_training_player, exp_p2, skip_mask=self._opponent_from_pool_mask)
+                self._remember_turn_batch(p2_training_player, exp_p2, skip_mask=self._opponent_from_pool_mask | self._opponent_rusher_mask)
 
     def _run_meta_step(self, castle_slots_p1, castle_slots_p2, p1_alive_final, p2_alive_final):
         self.p1_castle.envejecer_heroes(castle_slots_p1)
@@ -364,7 +364,7 @@ class TrainerV:
 
         slot1_2, pos1_2, action1_2 = self.player1.selection(cstate1_2, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1,self.p1_castle.castle_types)
         slot2_2, pos2_2, action2_2 = p2_training_player.selection(cstate2_2, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
-        slot2_2R, pos2_2R, action2_2R = self.playerRusher.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
+        slot2_2R, pos2_2R, action2_2R = self.playerRusher.selection(cstate2_2, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
         slot2_2= torch.where(self._opponent_rusher_mask,slot2_2R,slot2_2)
         pos2_2 = torch.where(self._opponent_rusher_mask,pos2_2R,pos2_2)
         action2_2 = torch.where(self._opponent_rusher_mask,action2_2R,action2_2)
@@ -385,7 +385,7 @@ class TrainerV:
 
         slot1_3, pos1_3, action1_3 = self.player1.selection(cstate1_3, self.environment.p1_disposition, warr2_1_type, self.p1_castle.castle_alive, used_p1,self.p1_castle.castle_types)
         slot2_3, pos2_3, action2_3 = p2_training_player.selection(cstate2_3, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
-        slot2_3R, pos2_3R, action2_3R = self.playerRusher.selection(cstate2_1, self.environment.p2_disposition, torch.zeros(self.N, dtype=torch.long), self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
+        slot2_3R, pos2_3R, action2_3R = self.playerRusher.selection(cstate2_3, self.environment.p2_disposition, warr1_1_type, self.p2_castle.castle_alive, used_p2,self.p2_castle.castle_types)
         slot2_3 = torch.where(self._opponent_rusher_mask,slot2_3R,slot2_3)
         pos2_3 = torch.where(self._opponent_rusher_mask,pos2_3R,pos2_3)
         action2_3 = torch.where(self._opponent_rusher_mask,action2_3R,action2_3)
@@ -591,11 +591,12 @@ class TrainerV:
             self.environment.p2_alive, self.environment.p1_disposition,
             self.environment.p2_instance_abilities,
         )
+        rusher_mask_3 = self._opponent_rusher_mask.unsqueeze(-1)
         actions_rusher = self.playerRusher.turn(obs2_tensor, self.environment.p2_disposition, self.environment.p2_cooldowns,
             self.environment.p2_alive, self.environment.p1_disposition,
             self.environment.p2_instance_abilities,)
         
-        actions = torch.where(self._opponent_rusher_mask,actions_rusher,actions)
+        actions = torch.where(rusher_mask_3,actions_rusher,actions)
 
         for cp_id, (opponent, indices) in grouped_opponents.items():
             pool_actions = opponent.turn(

@@ -269,10 +269,10 @@ class StatsV:
         self._p2_warrior_use_ema = decay * self._p2_warrior_use_ema + (1 - decay) * prop2
         
     def accumulate_rusher_stats(self,winner:torch.tensor,rusher_mask: torch.tensor):
-        self.partidas_vs_rusher = torch.where(rusher_mask,1,0).sum()
-        self.p1_victories_vs_rusher = torch.where(rusher_mask & winner == 0,1,0).sum()
-        self.empates_vs_rusher = torch.where(rusher_mask & winner == 2,1,0).sum()
-        self.p2_victories_vs_rusher = self.partidas_vs_rusher -self.p1_victories_vs_rusher -self.empates_vs_rusher
+        self.partidas_vs_rusher += torch.where(rusher_mask,1,0).sum()
+        self.p1_victories_vs_rusher += (rusher_mask & (winner == 0)).sum().item()
+        self.empates_vs_rusher += (rusher_mask & (winner == 2)).sum().item()
+        self.p2_victories_vs_rusher += self.partidas_vs_rusher -self.p1_victories_vs_rusher -self.empates_vs_rusher
 
     # ------------------------------------------------------------
     # Cierre de partidas finalizadas
@@ -366,7 +366,7 @@ class StatsV:
         ]
 
         header = "=" * 65 + "\n                    ESTADÍSTICAS IA\n" + "=" * 65 + "\n"
-        body = "\n\n".join(sections)
+        body = "\n\n".join(s for s in sections if s)
         footer = "\n" + "=" * 65 + "\n"
 
         with open(path, "w", encoding="utf-8") as f:
@@ -545,6 +545,7 @@ class StatsV:
             f"Victorias Rusher:           {self.p2_victories_vs_rusher} -> {self.p2_victories_vs_rusher / self.partidas_vs_rusher}",
             f"Empates:           {self.empates_vs_rusher} -> {self.empates_vs_rusher / self.partidas_vs_rusher}",
         ])
+        return ""
 
 
     # ------------------------------------------------------------

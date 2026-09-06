@@ -20,6 +20,7 @@ import yaml
 from AI.Agent.opponent_poolV import OpponentPoolV
 from AI.Agent.playerAIV import PlayerAIV
 from AI.Agent.playerNoIAV import PlayerNoAIV
+from AI.Agent.player_rusher import PlayerRusherV
 from AI.Environment.vectorizedEnvironment import VectorizedEnvironment
 from AI.Agent.trainerV import TrainerV
 from AI.Logging.metrics_logger import MetricsLogger
@@ -44,7 +45,7 @@ def set_seed(seed: Optional[int]) -> None:
     torch.manual_seed(seed)
     numpy.random.seed(seed)
     random.seed(seed)
-    
+
 class MainV:
     """
     Clase principal que gestiona la ejecución del entrenamiento y evaluación.
@@ -76,6 +77,7 @@ class MainV:
         self.log_dir = log_dir or self.config.base_path
 
         self.player1: Optional[PlayerAIV] = None
+        self.playerRusher: Optional[PlayerRusherV] = None
         self.environment: Optional[VectorizedEnvironment] = None
         self.logger: Optional[MetricsLogger] = None
         self.opponent_pool: OpponentPoolV = OpponentPoolV(self.config.path_opp_pool)
@@ -92,7 +94,7 @@ class MainV:
         # Limpiar directorios antiguos si está configurado
         if constants.DELETE_DIRECTORIES:
             shutil.rmtree(self.config.p1_path, ignore_errors=True)
-            shutil.rmtree(self.config.p2_path, ignore_errors=True) 
+            shutil.rmtree(self.config.p2_path, ignore_errors=True)
 
         # Crear directorios necesarios
         os.makedirs(self.config.p1_path, exist_ok=True)
@@ -102,7 +104,8 @@ class MainV:
         # Inicializar entorno y jugador
         self.environment = VectorizedEnvironment(self.N)
         self.player1 = self.player_class(self.N, self.environment)
-        
+        self.playerRusher = PlayerRusherV(self.N, self.environment)
+
         clean_suffix = self.sanitize_filename(self.config.suffix) if self.config.suffix else ""
         if clean_suffix:
             run_nameA = f"v{self.config.version}_{clean_suffix}"
@@ -149,11 +152,12 @@ class MainV:
                     "deaths_weight": constants.REWARD_WEIGHTS["deaths"],
                     "blocks_weight": constants.REWARD_WEIGHTS["blocks"],
                     "heal_weight": constants.REWARD_WEIGHTS["heal"],
+                    "rusher_opponent_percentage": constants.RUSHER_OPPONENT_PERCENTAGE,
                 }
             )
 
         self._print_configuration()
-        
+
     def sanitize_filename(self,name: str) -> str:
         """Reemplaza caracteres no válidos en nombres de archivo por '_'."""
         return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
@@ -203,10 +207,19 @@ class MainV:
             if os.path.exists(sel_path) and os.path.exists(turn_path):
                 opponent.load_model(sel_path, turn_path)
 
+        # FIX (bug 3): ruta de stats de "evaluate" unificada — si el step trae
+        # su propio stats_path (Human, Play, Rusher...) se respeta; si no, se
+        # cae al comportamiento de siempre (config.stats2_path). Esta misma
+        # variable se usa tanto para construir TrainerV (modo automático) como
+        # dentro de la rama personalizada más abajo (bug 3 original: esa rama
+        # ignoraba step.stats_path por completo).
+        stats2_path_for_step = step.stats_path if step.stats_path else self.config.stats2_path
+
         # Crear entrenador
         trainer = TrainerV(
             active_player1,
             opponent,
+            self.playerRusher,
             self.environment,
             self.opponent_pool,
             train_batches=step.episodes if step.action == "train" else 0,
@@ -216,7 +229,7 @@ class MainV:
             pathp2_1=self.config.path_p2_sel,
             pathp2_2=self.config.path_p2_turn,
             path_stats=self.config.stats_path,
-            path_stats2=self.config.stats2_path,
+            path_stats2=stats2_path_for_step,   # FIX: antes step.stats_path a pelo (podia ser None sin más fallback)
             logger=self.logger,
         )
 
@@ -237,7 +250,9 @@ class MainV:
             epsilon_turn = step.epsilon_turn if step.epsilon_turn is not None else (
                 0.5 if default_learn else 0.02
             )
-            stats_path = self.config.stats_path if step.action == "train" else self.config.stats2_path
+            stats_path = step.stats_path if step.stats_path else (
+                self.config.stats_path if step.action == "train" else self.config.stats2_path
+            )
 
             if step.action == "evaluate":
                 self.environment.stats.reset()
@@ -274,6 +289,8 @@ class MainV:
                 return PlayerGUIV(self.environment)
             else:
                 return PlayerNoAIV(self.environment)
+        if step.opponent_factory is PlayerRusherV:
+            return self.playerRusher
         return self.player_class(self.N, self.environment)
 
     # ------------------------------------------------------------
@@ -365,7 +382,7 @@ def run_single(
     # Guardar valores originales de constantes para restaurarlos después
     if run_spec.seed is not None and constants.SEED != 'None':
         set_seed(run_spec.seed)
-    
+
     original_values = {}
     for key, value in run_spec.constants_overrides.items():
         original_values[key] = getattr(constants, key)
@@ -443,9 +460,21 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         steps.append(TrainingStep(
             name="Evaluación final",
             action="evaluate",
+            # FIX (bug 2): quitado el "()" — config.stats2_path es una @property.
+            # Se deja explicito (aunque sea igual al fallback) por claridad.
+            stats_path=config.stats2_path,
             episodes=config.eval_episodes,
             opponent_factory=PlayerAIV,
             load_opponent_checkpoint=(config.path_p2_sel, config.path_p2_turn),
+        ))
+
+    if constants.RUN_RUSHER_TESTS:
+        steps.append(TrainingStep(
+            name="Evaluación vs Rusher",
+            action="evaluate",
+            stats_path=config.stats_rusher_path,
+            episodes=constants.RUSHER_TEST_EPISODES,
+            opponent_factory=PlayerRusherV,
         ))
 
     # Fine-tuning contra humano
@@ -461,6 +490,7 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         steps.append(TrainingStep(
             name=f"Fine-tuning contra humano ({constants.HUMAN_OPPONENT.upper()})",
             action="train",
+            stats_path=config.stats_human,
             episodes=constants.HUMAN_EPISODES,
             opponent_factory=PlayerNoAIV,
             player1_checkpoint=player1_checkpoint,
@@ -527,7 +557,7 @@ if __name__ == "__main__":
         run_comparison(config, run_specs)
     else:
         if(constants.SEED is not None and constants.SEED != 'None'):
-            set_seed(constants.SEED) 
+            set_seed(constants.SEED)
         steps = build_steps(config)
         n_efectivo = 1 if constants.HUMAN_OPPONENT != "none" or constants.PLAY_AGAINST_AI else constants.N_BATCH
         MainV(config, steps, N=n_efectivo).run()
