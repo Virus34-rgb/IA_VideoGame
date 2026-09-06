@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_no_clip",
-  "timestamp": 1788549828.55589,
+  "run_name": "v1_TestNewObs",
+  "timestamp": 1788647680.9156005,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -9,7 +9,7 @@
     "BETA_END": 1.0,
     "BETA_START": 0.4,
     "COPY_DQN": 50,
-    "COST_COMPRA": 40,
+    "COST_COMPRA": 30,
     "DELETE_DIRECTORIES": true,
     "DISCOUNT_FACTOR": 0.95,
     "DRAW_PENALTY": 200,
@@ -23,11 +23,11 @@
     "EPSILON_TURN_DECAY": 0.99998,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 5,
+    "EVAL_EPISODES": 50,
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
-    "GRAD_CLIP_MAX_NORM": 1000000.0,
+    "GRAD_CLIP_MAX_NORM": 1.0,
     "HUMAN_EPISODES": 20,
     "HUMAN_EPSILON": 0.1,
     "HUMAN_OPPONENT": "none",
@@ -53,20 +53,20 @@
     "REWARD_SCALE": 100.0,
     "REWARD_WEIGHTS": {
       "damage": 1.3,
-      "deaths": 50,
+      "deaths": 20,
       "win": 1,
       "blocks": 0.6,
       "heal": 0.6,
-      "shaping_weight": 8,
+      "shaping_weight": 10,
       "wasted_heal": -5,
       "wasted_defense": -10,
       "strategic_movement": 5,
       "overkill_damage": -5,
-      "kill_confirmed": 2
+      "kill_confirmed": 0.5
     },
-    "RUN_COMPARISON": true,
+    "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "comprobacion_clip_grad_norm",
+    "RUN_NAME_SUFFIX": "TestNewObs",
     "RUN_SELF_PLAY": true,
     "SAVE_MODEL_FRACTION": 0.05,
     "SEED": null,
@@ -74,7 +74,7 @@
     "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
     "SHOP_TEMPERATURE": 0.2,
-    "TRAIN_EPISODES": 10,
+    "TRAIN_EPISODES": 150,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
@@ -82,7 +82,7 @@
     "TURN_PENALTY_RAMP_TURNS": 12,
     "TURN_REPLAYS_PER_BATCH": 480,
     "TURN_REPLAY_DATA": 40000,
-    "TURN_STATE_DIM": 130,
+    "TURN_STATE_DIM": 214,
     "USE_DUELING_DQN": true,
     "USE_GUI": true,
     "USE_META_GAME": true,
@@ -103,7 +103,7 @@
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 50
       }
     ]
   }

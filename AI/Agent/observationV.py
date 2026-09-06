@@ -43,6 +43,8 @@ class ObservationV:
         opp_disposition: torch.Tensor,
         turn_norm: torch.Tensor,
         own_instance_abilities: torch.Tensor,   # NUEVO (N,3,4)
+        opp_cooldowns: torch.Tensor,                # NUEVO (N,3,4)
+        opp_instance_abilities: torch.Tensor,  # NUEVO (N,3,4)
     ) -> torch.Tensor:
         N = pl_types.shape[0] #cantidad de partidas
 
@@ -72,7 +74,15 @@ class ObservationV:
         pool_onehot = torch.nn.functional.one_hot(own_instance_abilities, num_classes=constants.MAX_POOL_SIZE).float()  # (N,3,4,POOL)
         pool_onehot = pool_onehot * pl_alive.view(N, 3, 1, 1).float()   # a 0 si el slot está muerto
         pool_onehot_flat = pool_onehot.flatten(start_dim=1)             # (N, 3*4*POOL)
+        
+        pool_opp = torch.nn.functional.one_hot(opp_instance_abilities, num_classes=constants.MAX_POOL_SIZE).float()  # (N,3,4,POOL)
+        pool_opp = pool_opp * (opp_disposition > 0).view(N, 3, 1, 1).float()   # a 0 si el slot está muerto
+        pool_opp_flat = pool_opp.flatten(start_dim=1)             # (N, 3*4*POOL)
+        
+        cd_opp_usable = (opp_cooldowns == 0).float()   #mascara de habilidades disponibles (1 si está disponible, 0 si está en cooldown)
+        cd_opp_usable = torch.where((opp_disposition > 0).unsqueeze(-1), cd_opp_usable, torch.zeros_like(cd_opp_usable))
+        cd_opp_usable_flat = cd_opp_usable.flatten(start_dim=1)
 
         return torch.cat(
-            [propio, opp_life, one_hot_opp, turn_norm.unsqueeze(-1), pool_onehot_flat], dim=-1
+            [propio, opp_life, one_hot_opp, turn_norm.unsqueeze(-1), pool_onehot_flat, pool_opp_flat, cd_opp_usable_flat], dim=-1
         )
