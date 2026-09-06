@@ -552,12 +552,12 @@ class TrainerV:
         obs1 = ObservationV.normalize_batch(
             self.environment.p1_disposition, self.environment.p1_alive, speed_p1, health_norm_p1,
             self.environment.p1_cooldowns, life_p2, self.environment.p2_disposition, turn_norm,
-            self.environment.p1_instance_abilities,
+            self.environment.p1_instance_abilities,self.environment.p2_cooldowns,self.environment.p2_instance_abilities,
         )
         obs2 = ObservationV.normalize_batch(
             self.environment.p2_disposition, self.environment.p2_alive, speed_p2, health_norm_p2,
             self.environment.p2_cooldowns, life_p1, self.environment.p1_disposition, turn_norm,
-            self.environment.p2_instance_abilities,
+            self.environment.p2_instance_abilities,self.environment.p1_cooldowns,self.environment.p1_instance_abilities,
         )
         return obs1, obs2
 

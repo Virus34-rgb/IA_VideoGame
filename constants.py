@@ -71,22 +71,22 @@ def get_selection_state_dim(use_meta: bool = None) -> int:
     else:
         return 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
 
-TURN_STATE_DIM = 58 + 3 * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
+TURN_STATE_DIM = 58 + 24 * MAX_POOL_SIZE + 12
 # ============================================================
 # Juego - Recompensas
 # ============================================================
 REWARD_WEIGHTS = {
     "damage": 1.3,                  # Daño infligido (diferencia entre P1 y P2)
-    "deaths": 50,                 # Muertes causadas
+    "deaths": 20,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
     "blocks": 0.6,                  # Daño bloqueado/evadido
     "heal": 0.6,                    # Curación realizada
-    "shaping_weight": 8,          # Peso para la diferencia de vida (shaping)
+    "shaping_weight": 10,          # Peso para la diferencia de vida (shaping)
     "wasted_heal" : -5,
     "wasted_defense": -10,
     "strategic_movement": 5,
     "overkill_damage": -5,
-    "kill_confirmed": 2,
+    "kill_confirmed": 0.5,
 }
 # DESPUÉS
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
