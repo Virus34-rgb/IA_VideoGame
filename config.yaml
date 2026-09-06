@@ -4,10 +4,10 @@
 
 # Parámetros de ejecución
 VERSION: 1
-RUN_NAME_SUFFIX: "TestNewObs"
+RUN_NAME_SUFFIX: "TestNewObs2"
 N_BATCH: 2048
-TRAIN_EPISODES: 150
-EVAL_EPISODES: 50
+TRAIN_EPISODES: 800
+EVAL_EPISODES: 250
 SEED: null
 
 RUSHER_OPPONENT_PERCENTAGE: 0.0
@@ -38,7 +38,7 @@ PLAY_EPSILON: 0.0
 comparisons:
   - run_name: "no_clip"
     N: 2048
-    train_batches: 150
+    train_batches: 500
     eval_batches: 20
     seed: 42
     overrides:
