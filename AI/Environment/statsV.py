@@ -133,6 +133,12 @@ class StatsV:
         self._p2_evaded_batch: torch.Tensor | None = None
         self._p1_heal_batch: torch.Tensor | None = None
         self._p2_heal_batch: torch.Tensor | None = None
+        
+        #Buffers rusher
+        self.partidas_vs_rusher: int = 0
+        self.p1_victories_vs_rusher: int = 0
+        self.p2_victories_vs_rusher: int = 0
+        self.empates_vs_rusher: int = 0
 
     def start_batch(self, N: int) -> None:
         """
@@ -261,6 +267,12 @@ class StatsV:
         prop2 = c2.float() / c2.sum().clamp(min=1.0)
         self._p1_warrior_use_ema = decay * self._p1_warrior_use_ema + (1 - decay) * prop1
         self._p2_warrior_use_ema = decay * self._p2_warrior_use_ema + (1 - decay) * prop2
+        
+    def accumulate_rusher_stats(self,winner:torch.tensor,rusher_mask: torch.tensor):
+        self.partidas_vs_rusher = torch.where(rusher_mask,1,0).sum()
+        self.p1_victories_vs_rusher = torch.where(rusher_mask & winner == 0,1,0).sum()
+        self.empates_vs_rusher = torch.where(rusher_mask & winner == 2,1,0).sum()
+        self.p2_victories_vs_rusher = self.partidas_vs_rusher -self.p1_victories_vs_rusher -self.empates_vs_rusher
 
     # ------------------------------------------------------------
     # Cierre de partidas finalizadas
@@ -340,6 +352,7 @@ class StatsV:
 
         sections = [
             self._section_resultados(summary),
+            self._section_rusher() ,
             self._section_elo(p1_elo, p2_elo, pool_elos or {}),
             self._section_recompensa(summary),
             
@@ -501,8 +514,6 @@ class StatsV:
     def _section_bloqueos(self, s: StatsSummary) -> str:
         d = s.to_dict()
         return self._section("BLOQUEOS Y DAÑO EVITADO", [
-            f"Bloqueos exitosos P1:      {s.p1_succes_blocks:.2f} -> {d['p1_success_blocks_avg']:.2f}/partida",
-            f"Bloqueos exitosos P2:      {s.p2_succes_blocks:.2f} -> {d['p2_success_blocks_avg']:.2f}/partida",
             f"Daño evitado P1:           {s.p1_tot_damage_evaded:.2f} -> {d['p1_damage_evaded_avg']:.2f}/partida",
             f"Daño evitado P2:           {s.p2_tot_damage_evaded:.2f} -> {d['p2_damage_evaded_avg']:.2f}/partida",
             f"Defensas desperdiciadas P1:{self.wasted_defense_p1 / self.partidas:.2f}",
@@ -525,6 +536,16 @@ class StatsV:
         else:
             lines.append("Pool vacía (sin snapshots aún).")
         return self._section("ELO (MATCHMAKING)", lines)
+    
+    def _section_rusher(self):
+        if(self.partidas_vs_rusher > 0):
+                    return self._section("RESULTADOS VS RUSHER", [
+            f"PARTIDAS VS RUSHER:           {self.partidas_vs_rusher}",
+            f"Victorias IA:           {self.p1_victories_vs_rusher} -> {self.p1_victories_vs_rusher / self.partidas_vs_rusher}",
+            f"Victorias Rusher:           {self.p2_victories_vs_rusher} -> {self.p2_victories_vs_rusher / self.partidas_vs_rusher}",
+            f"Empates:           {self.empates_vs_rusher} -> {self.empates_vs_rusher / self.partidas_vs_rusher}",
+        ])
+
 
     # ------------------------------------------------------------
     # Utilidades de formateo (estáticas)

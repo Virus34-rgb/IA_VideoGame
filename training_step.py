@@ -6,6 +6,7 @@ from typing import Callable, Optional
 class TrainingStep:
     name: str
     action: str
+    stats_path: Optional[str] = None
     episodes: int
     opponent_factory: Callable
     load_opponent_checkpoint: Optional[tuple] = None
