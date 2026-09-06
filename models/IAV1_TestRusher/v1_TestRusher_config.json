@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_TestvsIA",
-  "timestamp": 1788598892.7008584,
+  "run_name": "v1_TestRusher",
+  "timestamp": 1788725893.2765453,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -52,29 +52,33 @@
     "RESET_IN_DECISIONS": false,
     "REWARD_SCALE": 100.0,
     "REWARD_WEIGHTS": {
-      "damage": 1.3,
-      "deaths": 50,
+      "damage": 2,
+      "deaths": 20,
       "win": 1,
       "blocks": 0.6,
       "heal": 0.6,
-      "shaping_weight": 8,
+      "shaping_weight": 10,
       "wasted_heal": -5,
-      "wasted_defense": -10,
+      "wasted_defense": -15,
       "strategic_movement": 5,
       "overkill_damage": -5,
-      "kill_confirmed": 2
+      "kill_confirmed": 0.5
     },
     "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "TestvsIA",
+    "RUN_NAME_SUFFIX": "TestRusher",
+    "RUN_RUSHER_TESTS": true,
     "RUN_SELF_PLAY": true,
+    "RUSHER_OPPONENT_PERCENTAGE": 0.3,
+    "RUSHER_TEST_EPISODES": 100,
+    "RUSHER_TEST_EPSILON": 0.0,
     "SAVE_MODEL_FRACTION": 0.05,
     "SEED": null,
     "SELECTION_LEARNING_RATE": 0.0001,
     "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
     "SHOP_TEMPERATURE": 0.2,
-    "TRAIN_EPISODES": 500,
+    "TRAIN_EPISODES": 150,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
@@ -82,7 +86,7 @@
     "TURN_PENALTY_RAMP_TURNS": 12,
     "TURN_REPLAYS_PER_BATCH": 480,
     "TURN_REPLAY_DATA": 40000,
-    "TURN_STATE_DIM": 130,
+    "TURN_STATE_DIM": 214,
     "USE_DUELING_DQN": true,
     "USE_GUI": true,
     "USE_META_GAME": true,
@@ -98,10 +102,15 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 500
+        "episodes": 150
       },
       {
         "name": "Evaluación final",
+        "action": "evaluate",
+        "episodes": 100
+      },
+      {
+        "name": "Evaluación vs Rusher",
         "action": "evaluate",
         "episodes": 100
       }

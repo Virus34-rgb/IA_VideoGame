@@ -82,14 +82,14 @@ COPY_DQN = 50                     # Frecuencia de copia a target network (en pas
 # Juego - Recompensas
 # ============================================================
 REWARD_WEIGHTS = {
-    "damage": 1.3,                  # Daño infligido (diferencia entre P1 y P2)
+    "damage": 2,                  # Daño infligido (diferencia entre P1 y P2)
     "deaths": 20,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
     "blocks": 0.6,                  # Daño bloqueado/evadido
     "heal": 0.6,                    # Curación realizada
     "shaping_weight": 10,          # Peso para la diferencia de vida (shaping)
     "wasted_heal" : -5,
-    "wasted_defense": -10,
+    "wasted_defense": -15,
     "strategic_movement": 5,
     "overkill_damage": -5,
     "kill_confirmed": 0.5,

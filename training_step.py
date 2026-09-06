@@ -6,12 +6,12 @@ from typing import Callable, Optional
 class TrainingStep:
     name: str
     action: str
-    stats_path: Optional[str] = None
     episodes: int
     opponent_factory: Callable
     load_opponent_checkpoint: Optional[tuple] = None
-    player1_checkpoint: Optional[tuple] = None   # nuevo: Opción B
-    epsilon_turn: Optional[float] = None          # nuevo
-    epsilon_sel: Optional[float] = None            # nuevo
-    learn_p1: Optional[bool] = None                # nuevo
-    learn_p2: Optional[bool] = None                # nuevo
+    player1_checkpoint: Optional[tuple] = None  
+    epsilon_turn: Optional[float] = None         
+    epsilon_sel: Optional[float] = None           
+    learn_p1: Optional[bool] = None           
+    learn_p2: Optional[bool] = None           
+    stats_path: Optional[str] = None   # ruta de stats a usar en este step; si es None, se usa el fallback de siempre (config.stats_path / config.stats2_path segun action)
