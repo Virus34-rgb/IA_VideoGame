@@ -35,6 +35,9 @@ class RunConfig:
     @property
     def stats2_path(self):
         return os.path.join(self.base_path, "stats2.txt")
+    
+    def stats_rusher_path(self):
+        return os.path.join(self.base_path, "stats_rusher.txt")
 
     @property
     def path_p1_sel(self):
