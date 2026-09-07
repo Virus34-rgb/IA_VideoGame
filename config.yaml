@@ -3,16 +3,20 @@
 # ============================================================
 
 # Parámetros de ejecución
-VERSION: 1
-RUN_NAME_SUFFIX: "TestRusher2"
+VERSION: 2
+RUN_NAME_SUFFIX: "RusherKiller"
 N_BATCH: 2048
-TRAIN_EPISODES: 2500
-EVAL_EPISODES: 500
+TRAIN_EPISODES: 500
+EVAL_EPISODES: 100
 SEED: null
 
-RUSHER_OPPONENT_PERCENTAGE: 0.4
+#Step solo para rusher
+RUN_RUSHER_FINETUNE: false
+RUSHER_FINETUNE_EPISODES : 150
+#Step para ambos juntos
+RUSHER_OPPONENT_PERCENTAGE: 0.7
 RUN_RUSHER_TESTS: true
-RUSHER_TEST_EPISODES: 500
+RUSHER_TEST_EPISODES: 100
 RUSHER_TEST_EPSILON: 0.00
 
 # Flags del juego
@@ -24,9 +28,11 @@ DELETE_DIRECTORIES: true
 # Flags de ejecución
 RUN_SELF_PLAY: true
 RUN_EVALUATION: true
+#Entrenamiento
 HUMAN_OPPONENT: "none"
 HUMAN_EPISODES: 20
 HUMAN_EPSILON: 0.1
+#Evaluacion
 PLAY_AGAINST_AI: false
 USE_GUI: true
 PLAY_EPISODES: 20

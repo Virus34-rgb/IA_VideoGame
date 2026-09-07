@@ -17,38 +17,6 @@ class ChooseStateV:
         self.opp_initialPosition = opp_initial_position
 
     # ------------------------------------------------------------
-    # Modo catálogo (histórico, sin meta-juego)
-    # ------------------------------------------------------------
-    @staticmethod
-    def encode_choose_state_batch_catalog(
-        pl_disposition: torch.Tensor,
-        pl_warriors_ids: torch.Tensor,
-        opp_initial_warrior: torch.Tensor,
-        opp_initial_position: torch.Tensor,
-        catalog_abilities: torch.Tensor,   # (N, WARRIOR_QUANTITY, 4)
-    ) -> torch.Tensor:
-        idx_disp = (pl_disposition - 1).clamp(min=0)
-        one_hot_disp = torch.nn.functional.one_hot(idx_disp, num_classes=constants.WARRIOR_QUANTITY).float()
-        one_hot_disp = one_hot_disp * (pl_disposition > 0).unsqueeze(-1).float()
-        one_hot_disp = one_hot_disp.flatten(start_dim=1)
-
-        idx_w = (pl_warriors_ids - 1).clamp(min=0)
-        one_hot_w = torch.nn.functional.one_hot(idx_w, num_classes=constants.WARRIOR_QUANTITY).float()
-        one_hot_w = one_hot_w * (pl_warriors_ids > 0).unsqueeze(-1).float()
-        one_hot_w = one_hot_w.flatten(start_dim=1)
-
-        idx_opp = (opp_initial_warrior - 1).clamp(min=0)
-        one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=constants.WARRIOR_QUANTITY).float()
-        one_hot_opp = one_hot_opp * (opp_initial_warrior > 0).unsqueeze(-1).float()
-
-        pos_norm = (opp_initial_position / 3.0).unsqueeze(-1)
-
-        catalog_onehot = torch.nn.functional.one_hot(catalog_abilities, num_classes=constants.MAX_POOL_SIZE).float()
-        catalog_onehot = catalog_onehot.flatten(start_dim=1)
-
-        return torch.cat([one_hot_disp, one_hot_w, one_hot_opp, pos_norm, catalog_onehot], dim=-1)
-
-    # ------------------------------------------------------------
     # Modo castillo (meta-juego)
     # ------------------------------------------------------------
     @staticmethod

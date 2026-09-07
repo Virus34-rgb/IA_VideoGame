@@ -58,10 +58,10 @@ class resolveAction:
             damage_raw, blocked_raw, enemy_health_after_attack, enemy_alive_after_attack, overkill_damage, kill_confirmed, = self._resolve_action_attack(
                 actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions, enemy_instance_abilities,
             )
-            damage = torch.where(mask_ataque, damage_raw, torch.zeros_like(damage_raw))
-            blocked = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
-            overkill_damage = torch.where(mask_ataque, overkill_damage, torch.zeros_like(overkill_damage))
-            kill_confirmed = torch.where(mask_ataque, kill_confirmed, torch.zeros_like(kill_confirmed))
+            damage = damage_raw * mask_ataque.float()
+            blocked = blocked_raw * mask_ataque.float()
+            overkill_damage = overkill_damage * mask_ataque.float()
+            kill_confirmed = kill_confirmed * mask_ataque.float()
     
             healed_self, own_health_self = self._resolve_action_self_heal(actors, ability_pool_idx, pos, own_health)
             healed_team, own_health_team = self._resolve_action_team_heal(actors, ability_pool_idx, own_disposition, own_health, own_alive)
@@ -86,10 +86,8 @@ class resolveAction:
     
             enemy_alive_final = torch.where(mask_ataque.unsqueeze(1), enemy_alive_after_attack, enemy_alive)
     
-            heal = torch.zeros_like(own_health[:, 0])
-            heal = torch.where(mask_self_heal, healed_self, heal)
-            heal = torch.where(mask_team_heal, healed_team, heal)
-            wasted_heal = torch.where((mask_self_heal | mask_team_heal) & (heal == 0), 1, 0)
+            heal = healed_self * mask_self_heal.float() + healed_team * mask_team_heal.float()
+            wasted_heal = ((mask_self_heal | mask_team_heal) & (heal == 0)).float()
     
             damage_avoided = torch.where(mask_ataque, blocked_raw, torch.zeros_like(blocked_raw))
             
@@ -100,7 +98,7 @@ class resolveAction:
                 was_targeted = self._check_if_targeted(
                     pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
                 )
-                defense_wasted = torch.where(mask_defend & ~was_targeted, 1.0, 0.0)
+                defense_wasted = (mask_defend & ~was_targeted).float()
             
             return (
                 damage, damage_avoided, blocked, moved, heal,
@@ -108,6 +106,7 @@ class resolveAction:
                 own_cd_new, own_new_alive, enemy_alive_final,
                 own_abilities_new, ability_pool_idx,
                 own_new_castle,wasted_heal,defense_wasted,strategic_movement,overkill_damage,kill_confirmed,
+                effect_type
             )
     
     def _resolve_action_movement(

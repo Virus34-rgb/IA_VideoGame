@@ -42,9 +42,10 @@ class ObservationV:
         opp_life: torch.Tensor,
         opp_disposition: torch.Tensor,
         turn_norm: torch.Tensor,
-        own_instance_abilities: torch.Tensor,   # NUEVO (N,3,4)
-        opp_cooldowns: torch.Tensor,                # NUEVO (N,3,4)
-        opp_instance_abilities: torch.Tensor,  # NUEVO (N,3,4)
+        own_instance_abilities: torch.Tensor,
+        opp_cooldowns: torch.Tensor,
+        opp_instance_abilities: torch.Tensor,
+        opp_profile: torch.Tensor,   # NUEVO — (N,4) perfil del rival ya normalizado
     ) -> torch.Tensor:
         N = pl_types.shape[0] #cantidad de partidas
 
@@ -54,12 +55,12 @@ class ObservationV:
 
         #speed (N,3) normalizado a rango [0,1], 0 si el guerrero está muerto
         #Health (N,3) normalizado a rango [0,1], 0 si el guerrero está muerto
-        speed = torch.where(pl_alive, pl_speed_norm, torch.zeros_like(pl_speed_norm)).unsqueeze(-1) # normaliza la velocidad de los guerreros vivos
-        health = torch.where(pl_alive, pl_health_norm, torch.zeros_like(pl_health_norm)).unsqueeze(-1) # normaliza la salud de los guerreros vivos
 
         cd_usable = (pl_cooldowns == 0).float()   #mascara de habilidades disponibles (1 si está disponible, 0 si está en cooldown)
         #tensor (N,3,4) con 1 si la habilidad está disponible y el guerrero está vivo, 0 si está en cooldown o el guerrero está muerto
-        cd_usable = torch.where(pl_alive.unsqueeze(-1), cd_usable, torch.zeros_like(cd_usable)) 
+        speed = (pl_speed_norm * pl_alive.float()).unsqueeze(-1)
+        health = (pl_health_norm * pl_alive.float()).unsqueeze(-1)
+        cd_usable = cd_usable * pl_alive.unsqueeze(-1).float()
         
         extra_zeros = torch.zeros(N, 3, 2)
         #(N,3,13) = (N,3,6) + (N,3,1) + (N,3,1) + (N,3,2)
@@ -84,5 +85,5 @@ class ObservationV:
         cd_opp_usable_flat = cd_opp_usable.flatten(start_dim=1)
 
         return torch.cat(
-            [propio, opp_life, one_hot_opp, turn_norm.unsqueeze(-1), pool_onehot_flat, pool_opp_flat, cd_opp_usable_flat], dim=-1
+            [propio, opp_life, one_hot_opp, turn_norm.unsqueeze(-1), pool_onehot_flat, pool_opp_flat, cd_opp_usable_flat, opp_profile], dim=-1
         )

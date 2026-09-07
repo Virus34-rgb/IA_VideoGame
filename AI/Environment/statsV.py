@@ -272,7 +272,7 @@ class StatsV:
         self.partidas_vs_rusher += torch.where(rusher_mask,1,0).sum()
         self.p1_victories_vs_rusher += (rusher_mask & (winner == 0)).sum().item()
         self.empates_vs_rusher += (rusher_mask & (winner == 2)).sum().item()
-        self.p2_victories_vs_rusher += self.partidas_vs_rusher -self.p1_victories_vs_rusher -self.empates_vs_rusher
+        self.p2_victories_vs_rusher = self.partidas_vs_rusher -self.p1_victories_vs_rusher -self.empates_vs_rusher
 
     # ------------------------------------------------------------
     # Cierre de partidas finalizadas
