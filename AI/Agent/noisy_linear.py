@@ -144,3 +144,16 @@ class NoisyLinear(nn.Linear):
                 return self.bias_mu
         else:
             return None
+        
+    @torch.no_grad()
+    def clamp_sigma(self, min_sigma: float) -> None:
+        """Recorta weight_sigma/bias_sigma a un mínimo absoluto, para evitar
+        que el optimizador los colapse hacia 0 (y con ello, la exploración)."""
+        self.weight_sigma.data.clamp_(min=min_sigma)
+        if self.bias_sigma is not None:
+            self.bias_sigma.data.clamp_(min=min_sigma)
+
+    @torch.no_grad()
+    def mean_abs_sigma(self) -> float:
+        """Media de |sigma| de esta capa, para logging/diagnóstico."""
+        return self.weight_sigma.data.abs().mean().item()

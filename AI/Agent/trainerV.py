@@ -154,6 +154,11 @@ class TrainerV:
                     self.playerRusher.set_aggression(torch.rand(self.N))
 
             self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player)
+            
+            if learn_p1 and hasattr(self.player1, "update_epsilon"):
+                self.player1.update_epsilon(n_games=self.N)
+            if learn_p2 and hasattr(p2_training_player, "update_epsilon"):
+                p2_training_player.update_epsilon(n_games=self.N)
 
             self.environment.stats.accumulate_rusher_stats(self.environment.winner, self._opponent_rusher_mask)
 
@@ -203,9 +208,24 @@ class TrainerV:
                             "elo/pool_mean": sum(pool_elos) / len(pool_elos),
                             "elo/pool_max": max(pool_elos),
                         }, step=batch_idx)
+                        
+                sigmas = {"sel_p1": None, "turn_p1": None, "sel_p2": None, "turn_p2": None}
+                if hasattr(self.player1, "mean_sigmas"):
+                    p1_sigmas = self.player1.mean_sigmas()
+                    sigmas["sel_p1"] = p1_sigmas["sel"]
+                    sigmas["turn_p1"] = p1_sigmas["turn"]
+                if hasattr(p2_training_player, "mean_sigmas"):
+                    p2_sigmas = p2_training_player.mean_sigmas()
+                    sigmas["sel_p2"] = p2_sigmas["sel"]
+                    sigmas["turn_p2"] = p2_sigmas["turn"]
+                sigmas = {k: v for k, v in sigmas.items() if v is not None}
+
                 self.logger.log_snapshot(
                     batch_idx, self.player1, p2_training_player, self.environment.stats,
                     elo_p1=self.player1.elo, elo_p2=p2_training_player.elo, pool_elos=self.opponent_pool.elos,
+                    sigmas=sigmas,
+                    profile_p1=self._p1_profile.mean(dim=0).tolist(),
+                    profile_p2=self._p2_profile.mean(dim=0).tolist(),
                 )
 
             self._print_progress(batch_idx, batches, start_time)

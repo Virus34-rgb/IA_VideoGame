@@ -54,3 +54,15 @@ class TurnNetwork(nn.Module):
             self.advantage.reset_noise()
         else:
             self.value.reset_noise()
+            
+    def clamp_sigma(self, min_sigma: float) -> None:
+        if constants.USE_DUELING_DQN:
+            self.value.clamp_sigma(min_sigma)
+            self.advantage.clamp_sigma(min_sigma)
+        else:
+            self.value.clamp_sigma(min_sigma)
+
+    def mean_abs_sigma(self) -> float:
+        if constants.USE_DUELING_DQN:
+            return (self.value.mean_abs_sigma() + self.advantage.mean_abs_sigma()) / 2
+        return self.value.mean_abs_sigma()

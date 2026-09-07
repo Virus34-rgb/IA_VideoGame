@@ -30,3 +30,9 @@ class SelectionNetwork(nn.Module):
 
     def reset_noise(self):
         self.fc4.reset_noise()
+        
+    def clamp_sigma(self, min_sigma: float) -> None:
+        self.fc4.clamp_sigma(min_sigma)
+
+    def mean_abs_sigma(self) -> float:
+        return self.fc4.mean_abs_sigma()

@@ -338,6 +338,13 @@ class PlayerAIV:
         self.turn_network.reset_noise()
         self.target_selection_network.reset_noise()
         self.target_turn_network.reset_noise()
+        
+    def mean_sigmas(self) -> dict:
+        """Devuelve el sigma medio actual de ambas redes, para logging."""
+        return {
+            "sel": self.selection_network.mean_abs_sigma(),
+            "turn": self.turn_network.mean_abs_sigma(),
+        }
 
     def update_beta(self) -> None:
         self.replay_memory_sel.update_beta(self.replayed_selection)
@@ -348,6 +355,7 @@ class PlayerAIV:
         loss.backward()
         torch.nn.utils.clip_grad_value_(network.parameters(), constants.GRAD_CLIP_MAX_NORM)
         optimizer.step()
+        network.clamp_sigma(constants.SIGMA_MIN)   # NUEVO: evita colapso de exploración
         replayed = getattr(self, replayed_counter_attr)
         if replayed % constants.COPY_DQN == 0:
             target_network.load_state_dict(network.state_dict())

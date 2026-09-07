@@ -27,12 +27,6 @@ class LossRecord:
 
 @dataclass
 class SnapshotRecord:
-    """
-    Registro de un snapshot de progreso.
-
-    Contiene métricas de rendimiento y evolución de Elo.
-    NOTA: Los campos de epsilon han sido eliminados (Noisy Networks los reemplaza).
-    """
     episode: int
     p1_winrate: float
     p2_winrate: float
@@ -42,12 +36,24 @@ class SnapshotRecord:
     avg_turns: float
     p1_reward_avg: float
     p2_reward_avg: float
-    # Campos de Elo (nuevos)
     elo_p1: float
     elo_p2: float
     pool_elo_mean: float
     pool_elo_max: float
     pool_elo_min: float
+    # NUEVO: diagnóstico de exploración (NoisyNets) y de perfil de oponente
+    sigma_sel_p1: float = 0.0
+    sigma_turn_p1: float = 0.0
+    sigma_sel_p2: float = 0.0
+    sigma_turn_p2: float = 0.0
+    profile_p1_aggression: float = 0.5
+    profile_p1_movement: float = 0.5
+    profile_p1_defense: float = 0.5
+    profile_p1_dmgratio: float = 0.5
+    profile_p2_aggression: float = 0.5
+    profile_p2_movement: float = 0.5
+    profile_p2_defense: float = 0.5
+    profile_p2_dmgratio: float = 0.5
     timestamp: float = field(default_factory=time.time)
 
 
@@ -133,6 +139,9 @@ class MetricsLogger:
         elo_p1: float = None,
         elo_p2: float = None,
         pool_elos: dict = None,
+        sigmas: dict = None,
+        profile_p1: list = None,
+        profile_p2: list = None,
     ) -> None:
         """
         Registra un snapshot de progreso (métricas y Elo).
@@ -162,6 +171,10 @@ class MetricsLogger:
         else:
             pool_mean = pool_max = pool_min = constants.ELO_INITIAL
 
+        sigmas = sigmas or {}
+        profile_p1 = profile_p1 or [0.5, 0.5, 0.5, 0.5]
+        profile_p2 = profile_p2 or [0.5, 0.5, 0.5, 0.5]
+
         record = SnapshotRecord(
             episode=episode,
             p1_winrate=stats.p1_victories / partidas * 100,
@@ -177,6 +190,18 @@ class MetricsLogger:
             pool_elo_mean=pool_mean,
             pool_elo_max=pool_max,
             pool_elo_min=pool_min,
+            sigma_sel_p1=sigmas.get("sel_p1", 0.0),
+            sigma_turn_p1=sigmas.get("turn_p1", 0.0),
+            sigma_sel_p2=sigmas.get("sel_p2", 0.0),
+            sigma_turn_p2=sigmas.get("turn_p2", 0.0),
+            profile_p1_aggression=profile_p1[0],
+            profile_p1_movement=profile_p1[1],
+            profile_p1_defense=profile_p1[2],
+            profile_p1_dmgratio=profile_p1[3],
+            profile_p2_aggression=profile_p2[0],
+            profile_p2_movement=profile_p2[1],
+            profile_p2_defense=profile_p2[2],
+            profile_p2_dmgratio=profile_p2[3],
         )
         self._append_csv(self.snapshot_path, record, self._snapshot_header_written)
         self._snapshot_header_written = True
@@ -254,6 +279,57 @@ class MetricsLogger:
 
                 plt.tight_layout()
                 path = os.path.join(self.output_dir, f"{self.run_name}_progress.png")
+                fig.savefig(path, dpi=150)
+                fig_paths.append(path)
+
+        # Graficar exploración (sigma NoisyNets) y perfil de oponente observado
+        if os.path.exists(self.snapshot_path):
+            rows = self._read_csv(self.snapshot_path)
+            if rows and "sigma_turn_p1" in rows[0]:
+                episodes = [int(r["episode"]) for r in rows]
+                fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+                fig.suptitle(f"Exploración y perfil de oponente — {self.run_name}")
+
+                # 1. Sigma medio de TurnNetwork (arriba izquierda)
+                axes[0, 0].plot(episodes, [float(r["sigma_turn_p1"]) for r in rows], label="P1", color="blue")
+                axes[0, 0].plot(episodes, [float(r["sigma_turn_p2"]) for r in rows], label="P2", color="orange")
+                axes[0, 0].axhline(y=constants.SIGMA_MIN, color="red", linestyle=":", label="Sigma mínimo")
+                axes[0, 0].set_title("Sigma medio — TurnNetwork")
+                axes[0, 0].legend()
+                axes[0, 0].grid(True, alpha=0.3)
+
+                # 2. Sigma medio de SelectionNetwork (arriba derecha)
+                axes[0, 1].plot(episodes, [float(r["sigma_sel_p1"]) for r in rows], label="P1", color="blue")
+                axes[0, 1].plot(episodes, [float(r["sigma_sel_p2"]) for r in rows], label="P2", color="orange")
+                axes[0, 1].axhline(y=constants.SIGMA_MIN, color="red", linestyle=":", label="Sigma mínimo")
+                axes[0, 1].set_title("Sigma medio — SelectionNetwork")
+                axes[0, 1].legend()
+                axes[0, 1].grid(True, alpha=0.3)
+
+                # 3. Perfil de rival observado por P1 (abajo izquierda)
+                axes[1, 0].plot(episodes, [float(r["profile_p1_aggression"]) for r in rows], label="Agresividad")
+                axes[1, 0].plot(episodes, [float(r["profile_p1_movement"]) for r in rows], label="Movimiento")
+                axes[1, 0].plot(episodes, [float(r["profile_p1_defense"]) for r in rows], label="Defensa/cura")
+                axes[1, 0].plot(episodes, [float(r["profile_p1_dmgratio"]) for r in rows], label="Ratio daño")
+                axes[1, 0].axhline(y=0.5, color="gray", linestyle=":")
+                axes[1, 0].set_ylim(0, 1)
+                axes[1, 0].set_title("Perfil rival observado por P1")
+                axes[1, 0].legend()
+                axes[1, 0].grid(True, alpha=0.3)
+
+                # 4. Perfil de rival observado por P2 (abajo derecha)
+                axes[1, 1].plot(episodes, [float(r["profile_p2_aggression"]) for r in rows], label="Agresividad")
+                axes[1, 1].plot(episodes, [float(r["profile_p2_movement"]) for r in rows], label="Movimiento")
+                axes[1, 1].plot(episodes, [float(r["profile_p2_defense"]) for r in rows], label="Defensa/cura")
+                axes[1, 1].plot(episodes, [float(r["profile_p2_dmgratio"]) for r in rows], label="Ratio daño")
+                axes[1, 1].axhline(y=0.5, color="gray", linestyle=":")
+                axes[1, 1].set_ylim(0, 1)
+                axes[1, 1].set_title("Perfil rival observado por P2")
+                axes[1, 1].legend()
+                axes[1, 1].grid(True, alpha=0.3)
+
+                plt.tight_layout()
+                path = os.path.join(self.output_dir, f"{self.run_name}_exploration_profile.png")
                 fig.savefig(path, dpi=150)
                 fig_paths.append(path)
 
