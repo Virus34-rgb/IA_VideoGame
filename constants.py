@@ -128,6 +128,7 @@ N_STEP = 3                       # Número de pasos para N-step returns (1 = est
 USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
 NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma
+SIGMA_MIN = 0.05   # suelo mínimo para weight_sigma/bias_sigma de las NoisyLinear
 RESET_IN_DECISIONS = False
 
 # ============================================================
