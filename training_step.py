@@ -14,4 +14,5 @@ class TrainingStep:
     epsilon_sel: Optional[float] = None           
     learn_p1: Optional[bool] = None           
     learn_p2: Optional[bool] = None           
-    stats_path: Optional[str] = None   # ruta de stats a usar en este step; si es None, se usa el fallback de siempre (config.stats_path / config.stats2_path segun action)
+    stats_path: Optional[str] = None
+    rusher_aggression: Optional[float] = None

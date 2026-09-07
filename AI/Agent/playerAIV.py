@@ -180,59 +180,42 @@ class PlayerAIV:
         item_index = action // 3 # si se esta en modo castillo, item_index es el slot del castillo (0..MAX_CASTLE_SIZE-1), si se esta en modo catálogo, item_index es el tipo de guerrero (0..WARRIOR_QUANTITY-1)
         position = action % 3 # la posición es la misma para ambos modos (0..2)
 
-        if not constants.USE_META_GAME:
-            item_index = item_index + 1   # compatibilidad histórica: tipo 1..WARRIOR_QUANTITY
-
         return item_index, position, action
 
     def _mask_selection(self, logits, disposition, castle_alive=None, already_used=None,castle_types = None):
         N = disposition.shape[0]
         ocupado_pos = disposition > 0   # (N,3)
 
-        if constants.USE_META_GAME:
-            num_items = constants.MAX_CASTLE_SIZE
+        num_items = constants.MAX_CASTLE_SIZE
 
-            item_disponible_base = castle_alive & ~already_used   # (N, MAX_CASTLE_SIZE)
+        item_disponible_base = castle_alive & ~already_used   # (N, MAX_CASTLE_SIZE)
 
-            tipo_usado = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool, device=disposition.device) # (N, WARRIOR_QUANTITY)  BOOL
-            for slot in range(3):
-                tipo = disposition[:, slot] # (N,)  0 para muerto, 1..WARRIOR_QUANTITY para vivos
-                mask = (tipo > 0)
-                idx = (tipo - 1).clamp(min=0) #(N,)  0..WARRIOR_QUANTITY-1 para vivos
-                #Tipo usado (N,5)
-                #Mask (N,) indica que guerrero esta usado (tipo 1..5) en la disposición actual, para evitar que se repita en el draft
-                #idx (N,) indica el indice del guerrero usado (tipo 0..4)
-                #Primero con mask te quedas con las filas que son true
-                #Luego con idx[mask] te quedas con los indices de los guerreros usados en esas filas
-                #Los marcas como true en tipo_usado para indicar que esos guerreros ya estan usados en la disposición actual y no se pueden seleccionar de nuevo
-                tipo_usado[mask, idx[mask]] = True 
-                
-            #Se pone a 0 todos los tipos del castillo que no esten muertos
-            #Ambos son (N, MAX_CASTLE_SIZE) solo que castle alive es de boolean y castle_types de int
-            tipos_slot = castle_alive * castle_types  # (N, MAX_CASTLE_SIZE)  0 para muertos
-            #Conviertes los tipos (1-5) a indices de la red (0,5)
-            idx_tipo = (tipos_slot - 1).clamp(min=0)  # (N, MAX_CASTLE_SIZE)
-            #Obtenemos un booleano (N, MAX_CASTLE_SIZE) indicando si ese tipo ya está usado
-            #tipo_usado (N, WARRIOR_QUANTITY)
-            #idx_tipo (N, MAX_CASTLE_SIZE)
-            #torch.gather toma el valor de tipo usado, con el indice index de index = idx_tipo[i,j] (gather en dimension 1) y se lo asigna a tipo_disponible
-            tipo_disponible = ~tipo_usado.gather(1, idx_tipo)
-            #Los slots muertos (tipo 0) quedarán como ~tipo_usado[0], que es True, pero luego se filtran con castle_alive
-            #Enmascaras entre los guerreros disponibles del castillo y los guerreros cuyo tipo no esta disponible
-            item_disponible = item_disponible_base & tipo_disponible
-
-        else:
-            # Modo catálogo (histórico): sin repetición de tipos
-            num_items = constants.WARRIOR_QUANTITY
-            usados_tipo = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool)
-            for slot in range(3):
-                tipo_en_slot = disposition[:, slot]
-                hay_tipo = tipo_en_slot > 0
-                idx = (tipo_en_slot - 1).clamp(min=0)
-                if hay_tipo.any():
-                    rows = torch.arange(N)[hay_tipo]
-                    usados_tipo[rows, idx[hay_tipo]] = True
-            item_disponible = ~usados_tipo
+        tipo_usado = torch.zeros(N, constants.WARRIOR_QUANTITY, dtype=torch.bool, device=disposition.device) # (N, WARRIOR_QUANTITY)  BOOL
+        for slot in range(3):
+            tipo = disposition[:, slot] # (N,)  0 para muerto, 1..WARRIOR_QUANTITY para vivos
+            mask = (tipo > 0)
+            idx = (tipo - 1).clamp(min=0) #(N,)  0..WARRIOR_QUANTITY-1 para vivos
+            #Tipo usado (N,5)
+            #Mask (N,) indica que guerrero esta usado (tipo 1..5) en la disposición actual, para evitar que se repita en el draft
+            #idx (N,) indica el indice del guerrero usado (tipo 0..4)
+            #Primero con mask te quedas con las filas que son true
+            #Luego con idx[mask] te quedas con los indices de los guerreros usados en esas filas
+            #Los marcas como true en tipo_usado para indicar que esos guerreros ya estan usados en la disposición actual y no se pueden seleccionar de nuevo
+            tipo_usado[mask, idx[mask]] = True 
+            
+        #Se pone a 0 todos los tipos del castillo que no esten muertos
+        #Ambos son (N, MAX_CASTLE_SIZE) solo que castle alive es de boolean y castle_types de int
+        tipos_slot = castle_alive * castle_types  # (N, MAX_CASTLE_SIZE)  0 para muertos
+        #Conviertes los tipos (1-5) a indices de la red (0,5)
+        idx_tipo = (tipos_slot - 1).clamp(min=0)  # (N, MAX_CASTLE_SIZE)
+        #Obtenemos un booleano (N, MAX_CASTLE_SIZE) indicando si ese tipo ya está usado
+        #tipo_usado (N, WARRIOR_QUANTITY)
+        #idx_tipo (N, MAX_CASTLE_SIZE)
+        #torch.gather toma el valor de tipo usado, con el indice index de index = idx_tipo[i,j] (gather en dimension 1) y se lo asigna a tipo_disponible
+        tipo_disponible = ~tipo_usado.gather(1, idx_tipo)
+        #Los slots muertos (tipo 0) quedarán como ~tipo_usado[0], que es True, pero luego se filtran con castle_alive
+        #Enmascaras entre los guerreros disponibles del castillo y los guerreros cuyo tipo no esta disponible
+        item_disponible = item_disponible_base & tipo_disponible
 
         # Luego, la lógica de expansión de posiciones es la misma para ambos modos
         #Antes (N,MAX_CASTLE_SIZE) después (N,MAX_CASTLE_SIZE,3) (es decir triplica la máscara para cada posición)
@@ -313,7 +296,7 @@ class PlayerAIV:
         """Wrapper de compatibilidad: calcula la máscara y la aplica a logits."""
         N = own_disposition.shape[0]
         mask = self.compute_action_mask(own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities)
-        mask_flat = mask.reshape(N, 18) #Transforma de (N,3,6) a (N,18) para poder aplicarla a los logits de la red
+        mask_flat = mask.view(N, 18) #Transforma de (N,3,6) a (N,18) para poder aplicarla a los logits de la red
         return logits.masked_fill(~mask_flat, float("-inf"))
 
     @staticmethod

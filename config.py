@@ -41,6 +41,22 @@ class RunConfig:
         return os.path.join(self.base_path, "stats_rusher.txt")
     
     @property
+    def stats_rusher_aggr_low_path(self):
+        return os.path.join(self.base_path, "stats_rusher_aggr_0.txt")
+
+    @property
+    def stats_rusher_aggr_mid_path(self):
+        return os.path.join(self.base_path, "stats_rusher_aggr_05.txt")
+
+    @property
+    def stats_rusher_aggr_high_path(self):
+        return os.path.join(self.base_path, "stats_rusher_aggr_1.txt")
+    
+    @property
+    def stats_rusher_finetune_path(self):
+        return os.path.join(self.base_path, "stats_rusher_finetune.txt")
+    
+    @property
     def stats_human(self):
         return os.path.join(self.base_path, "stats_human.txt")
     

@@ -40,20 +40,15 @@ SHOP_TEMPERATURE = 0.2          # temperatura del softmax sobre el uso (menor = 
 # ============================================================
 def get_selection_state_dim(use_meta: bool = None) -> int:
     """Devuelve la dimensión del estado de selección según el modo."""
-    if use_meta is None:
-        use_meta = USE_META_GAME
-    if use_meta:
-        return (
-            MAX_CASTLE_SIZE * (WARRIOR_QUANTITY + ABILITIES_PER_WARRIOR * MAX_POOL_SIZE + ABILITIES_PER_WARRIOR)
-            + MAX_CASTLE_SIZE   # edad por instancia
-            + 1                 # oro
-            + WARRIOR_QUANTITY  # one-hot del guerrero inicial del rival
-            + 1                 # posición inicial del rival
-        )
-    else:
-        return 46 + WARRIOR_QUANTITY * ABILITIES_PER_WARRIOR * MAX_POOL_SIZE
+    return (
+        MAX_CASTLE_SIZE * (WARRIOR_QUANTITY + ABILITIES_PER_WARRIOR * MAX_POOL_SIZE + ABILITIES_PER_WARRIOR)
+        + MAX_CASTLE_SIZE   # edad por instancia
+        + 1                 # oro
+        + WARRIOR_QUANTITY  # one-hot del guerrero inicial del rival
+        + 1                 # posición inicial del rival
+    )
 
-TURN_STATE_DIM = 58 + 24 * MAX_POOL_SIZE + 12
+TURN_STATE_DIM = 58 + 24 * MAX_POOL_SIZE + 12 + 4   # +4: perfil de oponente (agresividad, movimiento, defensa/cura, ratio de daño)
 
 # ============================================================
 # IA - Parámetros de exploración (epsilon-greedy)
@@ -62,8 +57,8 @@ EPSILON_SELECTION = 0.5           # Épsilon inicial para selección de equipo
 EPSILON_TURN = 0.5                # Épsilon inicial para acciones de turno
 EPSILON_SEL_MIN = 0.05            # Épsilon mínimo para selección
 EPSILON_TURN_MIN = 0.05           # Épsilon mínimo para turno
-EPSILON_SEL_DECAY = 0.99998       # Decaimiento por lote para selección
-EPSILON_TURN_DECAY = 0.99998      # Decaimiento por lote para turno
+EPSILON_SEL_DECAY = 0.99      # Decaimiento por lote para selección
+EPSILON_TURN_DECAY = 0.99      # Decaimiento por lote para turno
 EPSILON_RESIDUAL = 0.01
 
 # ============================================================
@@ -169,3 +164,6 @@ RUSHER_OPPONENT_PERCENTAGE = 0.3
 RUN_RUSHER_TESTS = True
 RUSHER_TEST_EPISODES = 100
 RUSHER_TEST_EPSILON = 0.05
+
+RUN_RUSHER_FINETUNE = False
+RUSHER_FINETUNE_EPISODES = 300

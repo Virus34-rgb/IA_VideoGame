@@ -1,6 +1,6 @@
 {
-  "run_name": "v1_TestRusher",
-  "timestamp": 1788725893.2765453,
+  "run_name": "v2_RusherKiller",
+  "timestamp": 1788818794.2492685,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -17,10 +17,10 @@
     "ELO_TEMPERATURE": 15,
     "EPSILON_RESIDUAL": 0.01,
     "EPSILON_SELECTION": 0.5,
-    "EPSILON_SEL_DECAY": 0.99998,
+    "EPSILON_SEL_DECAY": 0.99,
     "EPSILON_SEL_MIN": 0.05,
     "EPSILON_TURN": 0.5,
-    "EPSILON_TURN_DECAY": 0.99998,
+    "EPSILON_TURN_DECAY": 0.99,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
     "EVAL_EPISODES": 100,
@@ -66,10 +66,12 @@
     },
     "RUN_COMPARISON": false,
     "RUN_EVALUATION": true,
-    "RUN_NAME_SUFFIX": "TestRusher",
+    "RUN_NAME_SUFFIX": "RusherKiller",
+    "RUN_RUSHER_FINETUNE": false,
     "RUN_RUSHER_TESTS": true,
     "RUN_SELF_PLAY": true,
-    "RUSHER_OPPONENT_PERCENTAGE": 0.3,
+    "RUSHER_FINETUNE_EPISODES": 150,
+    "RUSHER_OPPONENT_PERCENTAGE": 0.7,
     "RUSHER_TEST_EPISODES": 100,
     "RUSHER_TEST_EPSILON": 0.0,
     "SAVE_MODEL_FRACTION": 0.05,
@@ -78,7 +80,7 @@
     "SELECTION_REPLAYS_PER_BATCH": 144,
     "SELECTION_REPLAY_DATA": 80000,
     "SHOP_TEMPERATURE": 0.2,
-    "TRAIN_EPISODES": 150,
+    "TRAIN_EPISODES": 500,
     "TURN_LEARNING_RATE": 0.0001,
     "TURN_PENALTY_BASE": 2,
     "TURN_PENALTY_MAX": 35,
@@ -86,12 +88,12 @@
     "TURN_PENALTY_RAMP_TURNS": 12,
     "TURN_REPLAYS_PER_BATCH": 480,
     "TURN_REPLAY_DATA": 40000,
-    "TURN_STATE_DIM": 214,
+    "TURN_STATE_DIM": 218,
     "USE_DUELING_DQN": true,
     "USE_GUI": true,
     "USE_META_GAME": true,
     "USE_WANDB": false,
-    "VERSION": 1,
+    "VERSION": 2,
     "WARRIOR_QUANTITY": 5,
     "WARRIOR_USE_EMA_DECAY": 0.995,
     "WIN_REWARD": 1000
@@ -102,7 +104,7 @@
       {
         "name": "Entrenamiento self-play",
         "action": "train",
-        "episodes": 150
+        "episodes": 500
       },
       {
         "name": "Evaluación final",
@@ -110,7 +112,17 @@
         "episodes": 100
       },
       {
-        "name": "Evaluación vs Rusher",
+        "name": "Evaluación vs Rusher (aggression=0.0)",
+        "action": "evaluate",
+        "episodes": 100
+      },
+      {
+        "name": "Evaluación vs Rusher (aggression=0.5)",
+        "action": "evaluate",
+        "episodes": 100
+      },
+      {
+        "name": "Evaluación vs Rusher (aggression=1.0)",
         "action": "evaluate",
         "episodes": 100
       }

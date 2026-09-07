@@ -25,6 +25,7 @@ class VectorizedEnvironment:
         self.turn_cd_por_tipo_habilidad: torch.Tensor
         self.target_mask_por_tipo_habilidad: torch.Tensor
         self.effect_type_por_tipo_habilidad: torch.Tensor
+        
         self._build_static_tables()
         self.resolver = resolveAction(
             self.max_health_por_tipo,
@@ -34,27 +35,8 @@ class VectorizedEnvironment:
             self.effect_type_por_tipo_habilidad
         )
 
-        self.p1_disposition: torch.Tensor
-        self.p2_disposition: torch.Tensor
-        self.p1_healths: torch.Tensor
-        self.p2_healths: torch.Tensor
-        self.p1_cooldowns: torch.Tensor
-        self.p2_cooldowns: torch.Tensor
-        self.p1_alive: torch.Tensor
-        self.p2_alive: torch.Tensor
-        self.p1_initialWarrior: torch.Tensor
-        self.p2_initialWarrior: torch.Tensor
-        self.p1_initialPosition: torch.Tensor
-        self.p2_initialPosition: torch.Tensor
-        self.p1_deaths: torch.Tensor
-        self.p2_deaths: torch.Tensor
-        self.ended: torch.Tensor
-        self.winner: torch.Tensor
-        self.turn_number: torch.Tensor
-        self.p1_instance_abilities: torch.Tensor   
-        self.p2_instance_abilities: torch.Tensor
-
         self.stats: StatsV = StatsV()
+        
         self.reset()
 
     def reset(self) -> GameState:
@@ -79,9 +61,35 @@ class VectorizedEnvironment:
         self.p2_instance_abilities = torch.zeros((self.N, 3, 4), dtype=torch.long)
         self.p1_castle_slots = torch.zeros((self.N, 3), dtype=torch.long)
         self.p2_castle_slots = torch.zeros((self.N, 3), dtype=torch.long)
+        
+        self.p1_attacks = torch.zeros(self.N, dtype=torch.long)
+        self.p1_movements = torch.zeros(self.N, dtype=torch.long)
+        self.p1_defenses = torch.zeros(self.N, dtype=torch.long)
+        self.p1_healed = torch.zeros(self.N, dtype=torch.long)
+        self.p1_damage = torch.zeros(self.N, dtype=torch.float)
+        
+        self.p2_attacks = torch.zeros(self.N, dtype=torch.long)
+        self.p2_movements = torch.zeros(self.N, dtype=torch.long)
+        self.p2_defenses = torch.zeros(self.N, dtype=torch.long)
+        self.p2_healed = torch.zeros(self.N, dtype=torch.long)
+        self.p2_damage = torch.zeros(self.N, dtype=torch.float)
 
         self.stats.start_batch(self.N)
+        
         return self.get_state()
+    
+    def reset_proffile_stats(self):
+        self.p1_attacks = torch.zeros(self.N, dtype=torch.long)
+        self.p1_movements = torch.zeros(self.N, dtype=torch.long)
+        self.p1_defenses = torch.zeros(self.N, dtype=torch.long)
+        self.p1_healed = torch.zeros(self.N, dtype=torch.long)
+        self.p1_damage = torch.zeros(self.N, dtype=torch.float)
+        
+        self.p2_attacks = torch.zeros(self.N, dtype=torch.long)
+        self.p2_movements = torch.zeros(self.N, dtype=torch.long)
+        self.p2_defenses = torch.zeros(self.N, dtype=torch.long)
+        self.p2_healed = torch.zeros(self.N, dtype=torch.long)
+        self.p2_damage = torch.zeros(self.N, dtype=torch.float)
 
     def get_state(self) -> GameState:
         return GameState(
@@ -154,6 +162,8 @@ class VectorizedEnvironment:
         kill_confirmed_p1 = torch.zeros(self.N)
         kill_confirmed_p2 = torch.zeros(self.N)
         
+        self.reset_proffile_stats()
+        
         p1_health_before = self._normalized_team_health(self.p1_healths, self.p1_disposition)
         p2_health_before = self._normalized_team_health(self.p2_healths, self.p2_disposition)
 
@@ -190,7 +200,7 @@ class VectorizedEnvironment:
                 new_own_cd, new_own_alive, new_enemy_alive,
                 new_own_abilities, ability_pool_idx,
                 new_own_castle,wasted_heal,defense_wasted,strategic_movement,
-                overkill_damage,kill_confirmed
+                overkill_damage,kill_confirmed,ability_type
             ) = self.resolver.resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
@@ -211,32 +221,44 @@ class VectorizedEnvironment:
             self.p1_castle_slots = torch.where(player_mask, new_own_castle, self.p1_castle_slots)
             self.p2_castle_slots = torch.where(~player_mask, new_own_castle, self.p2_castle_slots)
 
-            damage_p1 += torch.where(es_p1, dmg, torch.zeros_like(dmg))
-            damage_p2 += torch.where(es_p1, torch.zeros_like(dmg), dmg)
-            damage_avoided_p1 += torch.where(~es_p1, avoided, torch.zeros_like(avoided))
-            damage_avoided_p2 += torch.where(~es_p1, torch.zeros_like(avoided), avoided)
-            blocks_p1 += torch.where(~es_p1, blocked, torch.zeros_like(blocked))
-            blocks_p2 += torch.where(~es_p1, torch.zeros_like(blocked), blocked)
-            heal_p1 += torch.where(es_p1, healed, torch.zeros_like(healed))
-            heal_p2 += torch.where(~es_p1, healed, torch.zeros_like(healed))
-            heal_p1 += torch.where(es_p1, healed, torch.zeros_like(healed))
-            heal_p2 += torch.where(~es_p1, healed, torch.zeros_like(healed))
-            wasted_heal_p1 += torch.where(es_p1, wasted_heal, torch.zeros_like(healed))
-            wasted_heal_p2 += torch.where(~es_p1, wasted_heal, torch.zeros_like(healed))
-            wasted_defense_p1 += torch.where(es_p1, defense_wasted, torch.zeros_like(healed))
-            wasted_defense_p2 += torch.where(~es_p1, defense_wasted, torch.zeros_like(healed))
-            strategic_movement_p1 += torch.where(es_p1, strategic_movement, torch.zeros_like(strategic_movement))
-            strategic_movement_p2 += torch.where(~es_p1, strategic_movement, torch.zeros_like(strategic_movement))
-            overkill_damage_p1 += torch.where(es_p1, overkill_damage, torch.zeros_like(overkill_damage))
-            overkill_damage_p2 += torch.where(~es_p1, overkill_damage, torch.zeros_like(overkill_damage))
-            kill_confirmed_p1 += torch.where(es_p1, kill_confirmed, torch.zeros_like(kill_confirmed))
-            kill_confirmed_p2 += torch.where(~es_p1, kill_confirmed, torch.zeros_like(kill_confirmed))
+            damage_p1 += dmg * es_p1.float()
+            damage_p2 += dmg * (~es_p1).float()
+            damage_avoided_p1 += avoided * (~es_p1).float()
+            damage_avoided_p2 += avoided * es_p1.float()
+            blocks_p1 += blocked * (~es_p1).float()
+            blocks_p2 += blocked * es_p1.float()
+            heal_p1 += healed * es_p1.float()
+            heal_p2 += healed * (~es_p1).float()
+            wasted_heal_p1 += wasted_heal * es_p1.float()
+            wasted_heal_p2 += wasted_heal * (~es_p1).float()
+            wasted_defense_p1 += defense_wasted * es_p1.float()
+            wasted_defense_p2 += defense_wasted * (~es_p1).float()
+            strategic_movement_p1 += strategic_movement * es_p1.float()
+            strategic_movement_p2 += strategic_movement * (~es_p1).float()
+            overkill_damage_p1 += overkill_damage * es_p1.float()
+            overkill_damage_p2 += overkill_damage * (~es_p1).float()
+            kill_confirmed_p1 += kill_confirmed * es_p1.float()
+            kill_confirmed_p2 += kill_confirmed * (~es_p1).float()
+            
+            self.p1_attacks += es_p1 & (ability_type == EffectType.ATTACK)
+            self.p1_movements += es_p1 & (moved > 0)
+            self.p1_defenses += es_p1 & ((ability_type == EffectType.DEFEND_FULL) | (ability_type == EffectType.DEFEND_HALF))
+            self.p1_healed += es_p1 & ((ability_type == EffectType.SELF_HEAL) | (ability_type == EffectType.TEAM_HEAL))
+            self.p1_damage += torch.where(es_p1, dmg, torch.zeros_like(dmg))
+            
+            self.p2_attacks += ~es_p1 & (ability_type == EffectType.ATTACK)
+            self.p2_movements += ~es_p1 & (moved > 0)
+            self.p2_defenses += ~es_p1 & ((ability_type == EffectType.DEFEND_FULL) | (ability_type == EffectType.DEFEND_HALF))
+            self.p2_healed += ~es_p1 & ((ability_type == EffectType.SELF_HEAL) | (ability_type == EffectType.TEAM_HEAL))
+            self.p2_damage += torch.where(~es_p1, dmg, torch.zeros_like(dmg))
 
             self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)
             self.stats.accumulate_attacks(actor_type, ability_pool_idx, es_p1, ~ya_terminadas_antes)
+            
 
         p1_health_after = self._normalized_team_health(self.p1_healths, self.p1_disposition)
         p2_health_after = self._normalized_team_health(self.p2_healths, self.p2_disposition)
+        
         health_diff_before = p1_health_before / 3 - p2_health_before / 3
         health_diff_after = p1_health_after / 3 - p2_health_after / 3
 

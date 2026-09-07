@@ -241,7 +241,8 @@ class MainV:
             if step.action == "train":
                 trainer.train()
             else:
-                trainer.evaluate()
+                trainer.evaluate(fixed_rusher_aggression=step.rusher_aggression)
+                
         else:
             # Modo personalizado con flags explícitos
             default_learn = step.action == "train"
@@ -454,6 +455,17 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
             episodes=config.train_episodes,
             opponent_factory=PlayerAIV,
         ))
+        
+    if constants.RUN_RUSHER_FINETUNE:
+        steps.append(TrainingStep(
+            name="Fine-tuning vs Rusher",
+            action="train",
+            stats_path=config.stats_rusher_finetune_path,
+            episodes=constants.RUSHER_FINETUNE_EPISODES,
+            opponent_factory=PlayerRusherV,
+            learn_p1=True,
+            learn_p2=False,
+        ))
 
     # Evaluación final
     if constants.RUN_EVALUATION:
@@ -470,14 +482,31 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
 
     if constants.RUN_RUSHER_TESTS:
         steps.append(TrainingStep(
-            name="Evaluación vs Rusher",
+            name="Evaluación vs Rusher (aggression=0.0)",
             action="evaluate",
-            stats_path=config.stats_rusher_path,
+            stats_path=config.stats_rusher_aggr_low_path,
             episodes=constants.RUSHER_TEST_EPISODES,
             opponent_factory=PlayerRusherV,
+            rusher_aggression=0.0,
+        ))
+        steps.append(TrainingStep(
+            name="Evaluación vs Rusher (aggression=0.5)",
+            action="evaluate",
+            stats_path=config.stats_rusher_aggr_mid_path,
+            episodes=constants.RUSHER_TEST_EPISODES,
+            opponent_factory=PlayerRusherV,
+            rusher_aggression=0.5,
+        ))
+        steps.append(TrainingStep(
+            name="Evaluación vs Rusher (aggression=1.0)",
+            action="evaluate",
+            stats_path=config.stats_rusher_aggr_high_path,
+            episodes=constants.RUSHER_TEST_EPISODES,
+            opponent_factory=PlayerRusherV,
+            rusher_aggression=1.0,
         ))
 
-    # Fine-tuning contra humano
+    # Fine-tuning contra humano (aprendizaje)
     if constants.HUMAN_OPPONENT != "none":
         player1_checkpoint = None
         if constants.HUMAN_OPPONENT == "ia2":
@@ -499,7 +528,7 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
             epsilon_turn=constants.HUMAN_EPSILON,
         ))
 
-    # Jugar contra IA (modo humano vs IA)
+    # Jugar contra IA (modo humano vs IA) (Evaluacion)
     if constants.PLAY_AGAINST_AI:
         steps.append(TrainingStep(
             name="Jugar contra IA",
@@ -520,6 +549,10 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
 # ================================================================
 
 if __name__ == "__main__":
+    
+    torch.set_num_threads(6)
+    os.environ["OMP_NUM_THREADS"] = "6"
+    os.environ["MKL_NUM_THREADS"] = "6"
     # 1. Cargar configuración desde YAML
     yaml_config = load_config_yaml()
 
