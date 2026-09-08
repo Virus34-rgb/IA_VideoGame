@@ -207,12 +207,6 @@ class MainV:
             if os.path.exists(sel_path) and os.path.exists(turn_path):
                 opponent.load_model(sel_path, turn_path)
 
-        # FIX (bug 3): ruta de stats de "evaluate" unificada — si el step trae
-        # su propio stats_path (Human, Play, Rusher...) se respeta; si no, se
-        # cae al comportamiento de siempre (config.stats2_path). Esta misma
-        # variable se usa tanto para construir TrainerV (modo automático) como
-        # dentro de la rama personalizada más abajo (bug 3 original: esa rama
-        # ignoraba step.stats_path por completo).
         stats2_path_for_step = step.stats_path if step.stats_path else self.config.stats2_path
 
         # Crear entrenador
@@ -267,6 +261,9 @@ class MainV:
                 learn_p2=learn_p2,
                 stats_path=stats_path,
                 restore_epsilon=True,
+                fixed_rusher_aggression=step.rusher_aggression,
+                fixed_rusher_aggression_min=step.rusher_aggression_min,
+                fixed_rusher_aggression_max=step.rusher_aggression_max,
             )
 
             # Guardar modelos si se aprendió
@@ -456,16 +453,20 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
             opponent_factory=PlayerAIV,
         ))
         
-    if constants.RUN_RUSHER_FINETUNE:
-        steps.append(TrainingStep(
-            name="Fine-tuning vs Rusher",
-            action="train",
-            stats_path=config.stats_rusher_finetune_path,
-            episodes=constants.RUSHER_FINETUNE_EPISODES,
-            opponent_factory=PlayerRusherV,
-            learn_p1=True,
-            learn_p2=False,
-        ))
+        if constants.RUN_RUSHER_FINETUNE:
+            finetune_stats = (config.stats_rusher_finetune_low, config.stats_rusher_finetune_medium, config.stats_rusher_finetune_hight)
+            for phase_idx, (fraction, agg_min, agg_max) in enumerate(constants.RUSHER_FINETUNE_PHASES):
+                steps.append(TrainingStep(
+                    name=f"Fine-tuning vs Rusher (fase {phase_idx + 1}, agg {agg_min}-{agg_max})",
+                    action="evaluate",
+                    stats_path=finetune_stats[phase_idx],
+                    episodes=max(1, int(constants.RUSHER_FINETUNE_EPISODES * fraction)),
+                    opponent_factory=PlayerRusherV,
+                    learn_p1=True,
+                    learn_p2=False,
+                    rusher_aggression_min=agg_min,
+                    rusher_aggression_max=agg_max,
+                ))
 
     # Evaluación final
     if constants.RUN_EVALUATION:

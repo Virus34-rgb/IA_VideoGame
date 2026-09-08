@@ -50,25 +50,6 @@ class TrainerV:
 
         self.p1_castle = CastleV(self.N)
         self.p2_castle = CastleV(self.N)
-        
-        #Perfilado de oponente
-        self._p1_atk_taken = torch.zeros(self.N)
-        self._p1_atk_opp = torch.zeros(self.N)
-        self._p1_def_taken = torch.zeros(self.N)
-        self._p1_def_opp = torch.zeros(self.N)
-        self._p1_move_taken = torch.zeros(self.N)
-        self._p1_move_opp = torch.zeros(self.N)
-        self._p1_dmg_dealt = torch.zeros(self.N)
-        self._p1_dmg_recv = torch.zeros(self.N)
-
-        self._p2_atk_taken = torch.zeros(self.N)
-        self._p2_atk_opp = torch.zeros(self.N)
-        self._p2_def_taken = torch.zeros(self.N)
-        self._p2_def_opp = torch.zeros(self.N)
-        self._p2_move_taken = torch.zeros(self.N)
-        self._p2_move_opp = torch.zeros(self.N)
-        self._p2_dmg_dealt = torch.zeros(self.N)
-        self._p2_dmg_recv = torch.zeros(self.N)
 
         self._p1_profile = torch.full((self.N, 4), 0.5)
         self._p2_profile = torch.full((self.N, 4), 0.5)
@@ -82,7 +63,7 @@ class TrainerV:
         self._save_if_supported(self.player1, self.pathp1_1, self.pathp1_2)
         self._save_if_supported(self.player2, self.pathp2_1, self.pathp2_2)
 
-    def evaluate(self, fixed_rusher_aggression=None) -> None:
+    def evaluate(self, fixed_rusher_aggression=None, fixed_rusher_aggression_min=None, fixed_rusher_aggression_max=None) -> None:
         self.environment.stats.reset()
         self._load_if_exists()
         self._set_eval_mode(self.player1)
@@ -91,6 +72,8 @@ class TrainerV:
             batches=self.eval_batches, epsilon_turn=0.02, epsilon_sel=0.02,
             learn_p1=False, learn_p2=False, stats_path=self.path_stats2, restore_epsilon=True,
             fixed_rusher_aggression=fixed_rusher_aggression,
+            fixed_rusher_aggression_min=fixed_rusher_aggression_min,
+            fixed_rusher_aggression_max=fixed_rusher_aggression_max,
         )
         self._set_train_mode(self.player1)
         self._set_train_mode(self.player2)
@@ -109,7 +92,8 @@ class TrainerV:
         if hasattr(player, "turn_network"):
             player.turn_network.train()
 
-    def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon, fixed_rusher_aggression=None) -> None:
+    def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon
+             , fixed_rusher_aggression=None, fixed_rusher_aggression_min = None,fixed_rusher_aggression_max = None) -> None:
         save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
         pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
         snapshot_every = max(1, batches // 50)
@@ -145,15 +129,15 @@ class TrainerV:
             if is_rusher_step:
                 self._opponent_rusher_mask = torch.ones(self.N, dtype=torch.bool)
                 if fixed_rusher_aggression is None:
-                    self.playerRusher.set_aggression(torch.rand(self.N))
+                    self.playerRusher.set_aggression(self._sample_rusher_aggression(self.N,fixed_rusher_aggression_min,fixed_rusher_aggression_max))
                     
             elif (learn_p1 or learn_p2) and batch_idx:
                 rand = torch.rand(self.N)
                 self._opponent_rusher_mask = (rand < constants.RUSHER_OPPONENT_PERCENTAGE) & ~self._opponent_from_pool_mask
                 if self._opponent_rusher_mask.any():
-                    self.playerRusher.set_aggression(torch.rand(self.N))
+                    self.playerRusher.set_aggression(self._sample_rusher_aggression(self.N))
 
-            self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player)
+            self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player, batches)
             
             if learn_p1 and hasattr(self.player1, "update_epsilon"):
                 self.player1.update_epsilon(n_games=self.N)
@@ -238,18 +222,9 @@ class TrainerV:
             p1_elo=self.player1.elo, p2_elo=p2_training_player.elo, pool_elos=self.opponent_pool.elos,
         )
 
-    def _run_batch(self, batch_idx: int, learn_p1: bool, learn_p2: bool, p2_training_player) -> None:
+    def _run_batch(self, batch_idx: int, learn_p1: bool, learn_p2: bool, p2_training_player, batches: int) -> None:
 
         self.environment.reset()
-        
-        self._p1_atk_taken.zero_(); self._p1_atk_opp.zero_()
-        self._p1_def_taken.zero_(); self._p1_def_opp.zero_()
-        self._p1_move_taken.zero_(); self._p1_move_opp.zero_()
-        self._p1_dmg_dealt.zero_(); self._p1_dmg_recv.zero_()
-        self._p2_atk_taken.zero_(); self._p2_atk_opp.zero_()
-        self._p2_def_taken.zero_(); self._p2_def_opp.zero_()
-        self._p2_move_taken.zero_(); self._p2_move_opp.zero_()
-        self._p2_dmg_dealt.zero_(); self._p2_dmg_recv.zero_()
         self._p1_profile = torch.full((self.N, 4), 0.5)
         self._p2_profile = torch.full((self.N, 4), 0.5)
         
@@ -257,6 +232,9 @@ class TrainerV:
         if(self.player2.__class__.__name__ == "PlayerAIV"):
             self.player2.reset_noise()
         selection_states_p1, selection_actions_p1, selection_states_p2, selection_actions_p2 = self._select_teams(p2_training_player)
+        
+        self._p1_profile[:, 0] = self._estimate_aggression_prior(self.environment.p1_disposition, self.environment.p1_instance_abilities)
+        self._p2_profile[:, 0] = self._estimate_aggression_prior(self.environment.p2_disposition, self.environment.p2_instance_abilities)
 
         obs1_tensor, obs2_tensor = self._build_observations()
         reward1_acum = torch.zeros(self.N)
@@ -286,7 +264,7 @@ class TrainerV:
 
         if learn_p1:
             self._replay_turn_and_selection(self.player1, selection_states_p1, selection_actions_p1, reward1_acum, "p1", batch_idx)
-            if self.train_batches != 0:
+            if batches != 0:
                 self.player1.update_beta()
 
         if learn_p2:
@@ -294,9 +272,9 @@ class TrainerV:
                 p2_training_player, selection_states_p2, selection_actions_p2, reward2_acum, "p2", batch_idx,
                 skip_mask=self._opponent_from_pool_mask | self._opponent_rusher_mask,
             )
-            if self.train_batches != 0:
+            if batches != 0:
                 p2_training_player.update_beta()
-
+                
         self.environment.stats.total_reward_p1 += reward1_acum.sum().item()
         reward2_valid = reward2_acum[~self._opponent_from_pool_mask & ~self._opponent_rusher_mask]
         self.environment.stats.total_reward_p2 += reward2_valid.sum().item()
@@ -386,6 +364,31 @@ class TrainerV:
         u = torch.rand(self.N)                                              # (N,)
         idx = torch.searchsorted(cumprobs, u).clamp(max=constants.WARRIOR_QUANTITY - 1)
         return idx + 1
+    
+    def _sample_rusher_aggression(self, N: int,min : float = None,max : float = None) -> torch.Tensor:
+        """
+        Sustituye el muestreo uniforme torch.rand(N) por un muestreo por bandas
+        ponderadas (constants.RUSHER_AGGRESSION_BANDS / RUSHER_AGGRESSION_BAND_WEIGHTS),
+        para dar más exposición a las agresividades donde peor rinde la IA (ver
+        diagnóstico: ~14.7% winrate en [0.9,1.0], ~24.3% en torno a 0.5).
+        Misma técnica de CDF acumulada + búsqueda binaria vectorizada que
+        _sample_categorical_shared, para no introducir torch.multinomial.
+        """
+        if min is not None and max is not None:
+            u_within = torch.rand(N)
+            return min + u_within * (max - min)
+        
+        weights = torch.tensor(constants.RUSHER_AGGRESSION_BAND_WEIGHTS, dtype=torch.float)
+        cumprobs = torch.cumsum(weights, dim=0)
+        u_band = torch.rand(N)
+        band_idx = torch.searchsorted(cumprobs, u_band).clamp(max=len(constants.RUSHER_AGGRESSION_BANDS) - 1)
+
+        bands = torch.tensor(constants.RUSHER_AGGRESSION_BANDS, dtype=torch.float)
+        lo = bands[band_idx, 0]
+        hi = bands[band_idx, 1]
+
+        u_within = torch.rand(N)
+        return lo + u_within * (hi - lo)
     
     def _traducir_muertes_combate(self, castle_slots, alive_final):
         N = castle_slots.shape[0]
@@ -626,47 +629,68 @@ class TrainerV:
         p1_es_ataque, p1_es_def = self._ability_type_masks(p1_types_now, p1_abilities_now)
         p1_atk_valid = p1_action_mask_now[:, :, :4] & p1_es_ataque
         p1_def_valid = p1_action_mask_now[:, :, :4] & p1_es_def
-        self._p1_atk_opp += p1_atk_valid.any(dim=-1).sum(dim=-1).float()
-        self._p1_def_opp += p1_def_valid.any(dim=-1).sum(dim=-1).float()
-        self._p1_move_opp += p1_alive_now.sum(dim=-1).float()
-        self._p1_atk_taken += self.environment.p1_attacks.float()
-        self._p1_def_taken += self.environment.p1_defenses.float()
-        self._p1_move_taken += self.environment.p1_movements.float()
-        self._p1_dmg_dealt += self.environment.p1_damage
-        self._p1_dmg_recv += self.environment.p2_damage
+        _p1_atk_opp = p1_atk_valid.any(dim=-1).sum(dim=-1).float()
+        _p1_def_opp = p1_def_valid.any(dim=-1).sum(dim=-1).float()
+        _p1_move_opp = p1_alive_now.sum(dim=-1).float()
+        _p1_atk_taken = self.environment.p1_attacks.float()
+        _p1_def_taken = self.environment.p1_defenses.float()
+        _p1_move_taken = self.environment.p1_movements.float()
+        _p1_dmg_dealt = self.environment.p1_damage
+        _p1_dmg_recv = self.environment.p2_damage
 
         p2_es_ataque, p2_es_def = self._ability_type_masks(p2_types_now, p2_abilities_now)
         p2_atk_valid = p2_action_mask_now[:, :, :4] & p2_es_ataque
         p2_def_valid = p2_action_mask_now[:, :, :4] & p2_es_def
-        self._p2_atk_opp += p2_atk_valid.any(dim=-1).sum(dim=-1).float()
-        self._p2_def_opp += p2_def_valid.any(dim=-1).sum(dim=-1).float()
-        self._p2_move_opp += p2_alive_now.sum(dim=-1).float()
-        self._p2_atk_taken += self.environment.p2_attacks.float()
-        self._p2_def_taken += self.environment.p2_defenses.float()
-        self._p2_move_taken += self.environment.p2_movements.float()
-        self._p2_dmg_dealt += self.environment.p2_damage
-        self._p2_dmg_recv += self.environment.p1_damage
+        _p2_atk_opp = p2_atk_valid.any(dim=-1).sum(dim=-1).float()
+        _p2_def_opp = p2_def_valid.any(dim=-1).sum(dim=-1).float()
+        _p2_move_opp = p2_alive_now.sum(dim=-1).float()
+        _p2_atk_taken = self.environment.p2_attacks.float()
+        _p2_def_taken = self.environment.p2_defenses.float()
+        _p2_move_taken = self.environment.p2_movements.float()
+        _p2_dmg_dealt = self.environment.p2_damage
+        _p2_dmg_recv = self.environment.p1_damage
 
         self._p1_profile = self._compute_profile(
-            self._p1_atk_taken, self._p1_atk_opp, self._p1_def_taken, self._p1_def_opp,
-            self._p1_move_taken, self._p1_move_opp, self._p1_dmg_dealt, self._p1_dmg_recv,
+            self._p1_profile,
+            _p1_atk_taken, _p1_atk_opp, _p1_def_taken, _p1_def_opp,
+            _p1_move_taken, _p1_move_opp, _p1_dmg_dealt, _p1_dmg_recv,
         )
         self._p2_profile = self._compute_profile(
-            self._p2_atk_taken, self._p2_atk_opp, self._p2_def_taken, self._p2_def_opp,
-            self._p2_move_taken, self._p2_move_opp, self._p2_dmg_dealt, self._p2_dmg_recv,
+            self._p2_profile,
+            _p2_atk_taken, _p2_atk_opp, _p2_def_taken, _p2_def_opp,
+            _p2_move_taken, _p2_move_opp, _p2_dmg_dealt, _p2_dmg_recv,
         )
 
-    @staticmethod
-    def _compute_profile(atk_taken, atk_opp, def_taken, def_opp, move_taken, move_opp, dmg_dealt, dmg_recv):
-        """Normaliza los acumulados a 4 features en [0,1]. Cuando el
-        denominador de oportunidad es 0 (aún no hubo ningún turno con esa
-        opción disponible), se devuelve 0.5 (neutro) en vez de 0/0."""
-        aggression = torch.where(atk_opp > 0, atk_taken / atk_opp.clamp(min=1), torch.full_like(atk_opp, 0.5))
-        defense_usage = torch.where(def_opp > 0, def_taken / def_opp.clamp(min=1), torch.full_like(def_opp, 0.5))
-        movement_freq = torch.where(move_opp > 0, move_taken / move_opp.clamp(min=1), torch.full_like(move_opp, 0.5))
+    def _compute_profile(self, old_profile, atk_taken, atk_opp, def_taken, def_opp, move_taken, move_opp, dmg_dealt, dmg_recv):
+        """EMA turno a turno. Si el denominador de oportunidad de este turno es 0
+        (nadie tuvo esa opción disponible), no hay observación nueva y se mantiene
+        el valor anterior sin mezclar — evita contaminar la EMA con NaN por 0/0."""
+        decay = constants.PROFILE_EMA_DECAY
+
+        new_aggression = torch.where(atk_opp > 0, atk_taken / atk_opp.clamp(min=1), old_profile[:, 0])
+        aggression = decay * new_aggression + (1 - decay) * old_profile[:, 0]
+
+        new_movement = torch.where(move_opp > 0, move_taken / move_opp.clamp(min=1), old_profile[:, 1])
+        movement_freq = decay * new_movement + (1 - decay) * old_profile[:, 1]
+
+        new_defense = torch.where(def_opp > 0, def_taken / def_opp.clamp(min=1), old_profile[:, 2])
+        defense_usage = decay * new_defense + (1 - decay) * old_profile[:, 2]
+
         damage_ratio_raw = dmg_dealt / dmg_recv.clamp(min=1)
-        damage_ratio = damage_ratio_raw / (damage_ratio_raw + 1.0)
+        new_damage_ratio = damage_ratio_raw / (damage_ratio_raw + 1.0)
+        damage_ratio = decay * new_damage_ratio + (1 - decay) * old_profile[:, 3]
+
         return torch.stack([aggression, movement_freq, defense_usage, damage_ratio], dim=-1)
+    
+    def _estimate_aggression_prior(self, disposition, instance_abilities):
+        damage = self.environment.damage_por_tipo_habilidad[disposition.unsqueeze(-1),instance_abilities]
+        effect_type = self.environment.effect_type_por_tipo_habilidad[disposition.unsqueeze(-1),instance_abilities]
+        attack_mask = effect_type == EffectType.ATTACK
+        attack_damage = damage * attack_mask
+        total_damage = attack_damage.sum(dim=(1,2))
+        prior = total_damage / constants.PROFILE_DAMAGE_POTENTIAL_REF
+        prior = prior.clamp(0.0, 1.0)
+        return prior
 
     def _turn_mixed_opponent(self, obs2_tensor, from_pool, grouped_opponents, p2_training_player):
         actions = p2_training_player.turn(

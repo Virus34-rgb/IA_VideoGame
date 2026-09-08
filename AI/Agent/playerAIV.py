@@ -235,10 +235,12 @@ class PlayerAIV:
             self.turn_network.reset_noise()
 
         obs = batch_encoded_obs.float() #conviertes el estado a float32 (antes float16) para que la red lo pueda procesar
+        action_mask = self.compute_action_mask(own_disposition, own_cooldowns, own_alive,
+                                       enemy_disposition, own_instance_abilities)
         with torch.inference_mode():
-            logits = self.turn_network(obs) #obtenemos los qvalues de la red para los estados actuales
+            logits = self.turn_network(obs,action_mask = action_mask) #obtenemos los qvalues de la red para los estados actuales
         #Enmascaras los q-values para seleccionar unicamente acciones validas
-        masked_logits = self.mask_turn(own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities, logits)
+        masked_logits = logits.masked_fill(~action_mask.reshape(self.N, 18), float("-inf"))
         #conviertes los logits en una forma (N,3,6) para poder seleccionar la acción por guerrero y posición
         masked_3d = masked_logits.view(self.N, 3, 6)
         #compruebas si hay alguna acción valida para cada guerrero y posición, si no hay ninguna acción valida se marca como False
