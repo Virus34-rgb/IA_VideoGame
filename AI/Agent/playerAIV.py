@@ -353,7 +353,7 @@ class PlayerAIV:
     def _optimize_step(self, loss, optimizer, network, target_network, replayed_counter_attr):
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_value_(network.parameters(), constants.GRAD_CLIP_MAX_NORM)
+        torch.nn.utils.clip_grad_norm_(network.parameters(), constants.GRAD_CLIP_MAX_NORM)
         optimizer.step()
         network.clamp_sigma(constants.SIGMA_MIN)   # NUEVO: evita colapso de exploración
         replayed = getattr(self, replayed_counter_attr)

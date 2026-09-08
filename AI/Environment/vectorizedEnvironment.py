@@ -125,8 +125,6 @@ class VectorizedEnvironment:
 
         self.stats.accumulate_warrior_use(warrior1, warrior2)
 
-        self.stats.accumulate_warrior_use(warrior1, warrior2)
-
     def turn(self, actionsp1: torch.Tensor, actionsp2: torch.Tensor):
         self.turn_number += 1
 
