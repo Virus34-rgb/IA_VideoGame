@@ -2,58 +2,51 @@
 # Configuración del proyecto Castle Game
 # ============================================================
 
-# Parámetros de ejecución
 VERSION: 2
-RUN_NAME_SUFFIX: "RusherKillerLarge"
+RUN_NAME_SUFFIX: "RusherKillerCompare"
 N_BATCH: 2048
-TRAIN_EPISODES: 2000
-EVAL_EPISODES: 400
-SEED: null
+TRAIN_EPISODES: 100
+EVAL_EPISODES: 50
+SEED: 42
 
-#Step solo para rusher
-RUN_RUSHER_FINETUNE: false
-RUSHER_FINETUNE_EPISODES : 150
-#Step para ambos juntos
+RUN_RUSHER_FINETUNE: false   # irrelevante con RUN_COMPARISON: true — cada RunSpec lo sobrescribe
+RUSHER_FINETUNE_EPISODES: 100
 RUSHER_OPPONENT_PERCENTAGE: 0.4
 RUN_RUSHER_TESTS: true
-RUSHER_TEST_EPISODES: 400
+RUSHER_TEST_EPISODES: 50
 RUSHER_TEST_EPSILON: 0.00
 
-# Flags del juego
 USE_META_GAME: true
 USE_WANDB: false
-RUN_COMPARISON: false
+RUN_COMPARISON: true
 DELETE_DIRECTORIES: true
 
-# Flags de ejecución
 RUN_SELF_PLAY: true
 RUN_EVALUATION: true
-#Entrenamiento
 HUMAN_OPPONENT: "none"
 HUMAN_EPISODES: 20
 HUMAN_EPSILON: 0.1
-#Evaluacion
 PLAY_AGAINST_AI: false
 USE_GUI: true
 PLAY_EPISODES: 20
 PLAY_EPSILON: 0.0
 
 # ============================================================
-# Comparaciones de runs (solo se usan si RUN_COMPARISON = true)
+# Comparación: mismo self-play, solo cambia si hay finetune
 # ============================================================
 comparisons:
-  - run_name: "no_clip"
+  - run_name: "baseline_no_finetune"
     N: 2048
-    train_batches: 500
-    eval_batches: 20
+    train_batches: 100
+    eval_batches: 50
     seed: 42
     overrides:
-      GRAD_CLIP_MAX_NORM: 1000000.0   # equivalente a "sin clip" en la práctica
+      RUN_RUSHER_FINETUNE: false
 
-  - run_name: "clip_norm1"
+  - run_name: "with_rusher_finetune"
     N: 2048
-    train_batches: 150
-    eval_batches: 20
+    train_batches: 100
+    eval_batches: 50
     seed: 42
     overrides:
-      GRAD_CLIP_MAX_NORM: 1.0
+      RUN_RUSHER_FINETUNE: true

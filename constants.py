@@ -66,8 +66,8 @@ EPSILON_RESIDUAL = 0.01
 # ============================================================
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
-SELECTION_REPLAY_DATA = 80_000 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
-TURN_REPLAY_DATA = 40_000      # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
+SELECTION_REPLAY_DATA = 131_072 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
+TURN_REPLAY_DATA = 65_536     # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 128                   # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
@@ -80,11 +80,11 @@ REWARD_WEIGHTS = {
     "damage": 2,                  # Daño infligido (diferencia entre P1 y P2)
     "deaths": 20,                 # Muertes causadas
     "win": 1,                     # Victoria/derrota (multiplicador de WIN_REWARD)
-    "blocks": 0.6,                  # Daño bloqueado/evadido
-    "heal": 0.6,                    # Curación realizada
+    "blocks": 1,                  # Daño bloqueado/evadido
+    "heal": 1,                    # Curación realizada
     "shaping_weight": 10,          # Peso para la diferencia de vida (shaping)
     "wasted_heal" : -5,
-    "wasted_defense": -15,
+    "wasted_defense": -5,
     "strategic_movement": 5,
     "overkill_damage": -5,
     "kill_confirmed": 0.5,
@@ -168,3 +168,13 @@ RUSHER_TEST_EPSILON = 0.05
 
 RUN_RUSHER_FINETUNE = False
 RUSHER_FINETUNE_EPISODES = 300
+
+# ============================================================
+# Muestreo de agresividad del rusher durante entrenamiento normal
+# ============================================================
+RUSHER_AGGRESSION_BANDS = [(0.0, 0.3), (0.35, 0.65), (0.7, 1.0)]
+RUSHER_AGGRESSION_BAND_WEIGHTS = [0.25, 0.35, 0.40]
+RUSHER_FINETUNE_PHASES = [(0.15,0.0,0.3),(0.35,0.3,0.6),(0.5,0.6,1)]
+
+PROFILE_EMA_DECAY = 0.7
+PROFILE_DAMAGE_POTENTIAL_REF = 75 # ROGUE (POSION GASS 7 * 3) + WIZARD (FIREBALL 7*3) + CÑREIC (HOLY NOVA 9*3)

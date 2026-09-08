@@ -16,3 +16,5 @@ class TrainingStep:
     learn_p2: Optional[bool] = None           
     stats_path: Optional[str] = None
     rusher_aggression: Optional[float] = None
+    rusher_aggression_min: Optional[float] = None 
+    rusher_aggression_max: Optional[float] = None 
