@@ -169,6 +169,11 @@ RUSHER_TEST_EPSILON = 0.05
 RUN_RUSHER_FINETUNE = False
 RUSHER_FINETUNE_EPISODES = 300
 
+PROFILE_CPROFILE = True          # Activa cProfile (global)
+PROFILE_TORCH = False            # Activa torch.profiler (solo primeros batches)
+PROFILE_TORCH_BATCHES = 3        # Número de batches a perfilar con torch
+PROFILE_CPROFILE_OUTPUT = "profile_cpu.prof"
+
 # ============================================================
 # Muestreo de agresividad del rusher durante entrenamiento normal
 # ============================================================

@@ -1,0 +1,66 @@
+=================================================================
+                    CASTLE GAME (VECTORIZADO)
+=================================================================
+Versión:  IA V2   |   N (partidas por lote): 2048
+  - Entrenamiento self-play: train, 100 lotes
+  - Fine-tuning vs Rusher (fase 1, agg 0.0-0.3): evaluate, 15 lotes
+  - Fine-tuning vs Rusher (fase 2, agg 0.3-0.6): evaluate, 35 lotes
+  - Fine-tuning vs Rusher (fase 3, agg 0.6-1): evaluate, 50 lotes
+  - Evaluación final: evaluate, 50 lotes
+  - Evaluación vs Rusher (aggression=0.0): evaluate, 50 lotes
+  - Evaluación vs Rusher (aggression=0.5): evaluate, 50 lotes
+  - Evaluación vs Rusher (aggression=1.0): evaluate, 50 lotes
+Logs en:  C:\Users\mende\Universidad\AI-Adaptive-Game\CastleGame\models\IAV2_Tiempo
+Wandb:    Desactivado
+=================================================================
+
+=================================================================
+STEP: Entrenamiento self-play (train, 100 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 100/100 |    0.1 lotes/s | ETA 0.0s     
+Entrenamiento self-play terminado en 24m 31.25s
+
+=================================================================
+STEP: Fine-tuning vs Rusher (fase 1, agg 0.0-0.3) (evaluate, 15 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 15/15 |    0.1 lotes/s | ETA 0.0s    
+Fine-tuning vs Rusher (fase 1, agg 0.0-0.3) terminado en 2m 5.64s
+
+=================================================================
+STEP: Fine-tuning vs Rusher (fase 2, agg 0.3-0.6) (evaluate, 35 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 35/35 |    0.1 lotes/s | ETA 0.0s     
+Fine-tuning vs Rusher (fase 2, agg 0.3-0.6) terminado en 4m 44.30s
+
+=================================================================
+STEP: Fine-tuning vs Rusher (fase 3, agg 0.6-1) (evaluate, 50 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 50/50 |    0.1 lotes/s | ETA 0.0s     
+Fine-tuning vs Rusher (fase 3, agg 0.6-1) terminado en 7m 1.11s
+
+=================================================================
+STEP: Evaluación final (evaluate, 50 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 50/50 |    0.4 lotes/s | ETA 0.0s     
+Evaluación final terminado en 2m 18.24s
+
+=================================================================
+STEP: Evaluación vs Rusher (aggression=0.0) (evaluate, 50 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 50/50 |    0.4 lotes/s | ETA 0.0s     
+Evaluación vs Rusher (aggression=0.0) terminado en 2m 10.96s
+
+=================================================================
+STEP: Evaluación vs Rusher (aggression=0.5) (evaluate, 50 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 50/50 |    0.4 lotes/s | ETA 0.0s     
+Evaluación vs Rusher (aggression=0.5) terminado en 2m 6.05s
+
+=================================================================
+STEP: Evaluación vs Rusher (aggression=1.0) (evaluate, 50 lotes de 2048)
+-----------------------------------------------------------------
+[100.0%] Lote 50/50 |    0.4 lotes/s | ETA 0.0s     
+Evaluación vs Rusher (aggression=1.0) terminado en 2m 5.79s
+=================================================================
+                         FINALIZADO
+=================================================================
