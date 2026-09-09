@@ -9,6 +9,7 @@ from typing import Optional, Any, Tuple, Dict
 import torch
 import wandb
 from AI.Environment.abilityData import EffectType
+from AI.Environment.action_mask import compute_action_mask
 from AI.Meta.castle_v import CastleV
 from AI.Meta.shop_heuristics import decidir_compra_batch
 import constants
@@ -64,6 +65,8 @@ class TrainerV:
         self._run(
             batches=self.train_batches, epsilon_turn=0.5, epsilon_sel=None,
             learn_p1=True, learn_p2=True, stats_path=self.path_stats, restore_epsilon=True,
+            profile_cprofile_output=constants.PROFILE_CPROFILE_OUTPUT if constants.PROFILE_CPROFILE else None,
+            profile_torch_this_step=constants.PROFILE_TORCH,
         )
         self._save_if_supported(self.player1, self.pathp1_1, self.pathp1_2)
         self._save_if_supported(self.player2, self.pathp2_1, self.pathp2_2)
@@ -79,6 +82,8 @@ class TrainerV:
             fixed_rusher_aggression=fixed_rusher_aggression,
             fixed_rusher_aggression_min=fixed_rusher_aggression_min,
             fixed_rusher_aggression_max=fixed_rusher_aggression_max,
+            profile_cprofile_output=None,
+            profile_torch_this_step=False,
         )
         self._set_train_mode(self.player1)
         self._set_train_mode(self.player2)
@@ -98,7 +103,8 @@ class TrainerV:
             player.turn_network.train()
 
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon
-             , fixed_rusher_aggression=None, fixed_rusher_aggression_min = None,fixed_rusher_aggression_max = None) -> None:
+             , fixed_rusher_aggression=None, fixed_rusher_aggression_min = None,fixed_rusher_aggression_max = None,
+             profile_cprofile_output=None, profile_torch_this_step=False) -> None:
         save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
         pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
         snapshot_every = max(1, batches // 50)
@@ -122,18 +128,18 @@ class TrainerV:
         profiler_cpu = None
         profiler_torch = None
 
-        if self.profile_cprofile:
+        if self.profile_cprofile and profile_cprofile_output is not None:
             profiler_cpu = cProfile.Profile()
             profiler_cpu.enable()
 
-        if self.profile_torch:
+        if self.profile_torch and profile_torch_this_step:
             profiler_torch = torch.profiler.profile(
                 activities=[torch.profiler.ProfilerActivity.CPU],
                 schedule=torch.profiler.schedule(wait=1, warmup=1, active=self.profile_torch_batches, repeat=1),
                 on_trace_ready=torch.profiler.tensorboard_trace_handler('./profiler_logs'),
-                record_shapes=True,
-                profile_memory=True,
-                with_stack=True,
+                record_shapes=False,  
+                profile_memory=False,  
+                with_stack=False,      
             )
             profiler_torch.start()
 
@@ -247,8 +253,12 @@ class TrainerV:
             
         if profiler_cpu is not None:
             profiler_cpu.disable()
-            profiler_cpu.dump_stats(constants.PROFILE_CPROFILE_OUTPUT)
-            print(f"✅ cProfile guardado en {constants.PROFILE_CPROFILE_OUTPUT}")
+            profiler_cpu.dump_stats(profile_cprofile_output)
+            print(f"✅ cProfile guardado en {profile_cprofile_output}")
+            
+        if profiler_torch is not None:
+            profiler_torch.stop()
+            profiler_torch = None
 
         if batches > 0:
             print()
@@ -327,11 +337,11 @@ class TrainerV:
         p1_abilities_now = self.environment.p1_instance_abilities
         p2_abilities_now = self.environment.p2_instance_abilities
 
-        p1_action_mask_now = self.player1.compute_action_mask(
-            p1_types_now, p1_cd_now, p1_alive_now, p1_opp_types_now, p1_abilities_now,
+        p1_action_mask_now = compute_action_mask(
+            p1_types_now, p1_cd_now, p1_alive_now, p1_opp_types_now, p1_abilities_now,self.environment.target_mask_por_tipo_habilidad
         )
-        p2_action_mask_now = p2_training_player.compute_action_mask(
-            p2_types_now, p2_cd_now, p2_alive_now, p2_opp_types_now, p2_abilities_now,
+        p2_action_mask_now = compute_action_mask(
+            p2_types_now, p2_cd_now, p2_alive_now, p2_opp_types_now, p2_abilities_now,self.environment.target_mask_por_tipo_habilidad
         )
 
         action_p1 = self.player1.turn(

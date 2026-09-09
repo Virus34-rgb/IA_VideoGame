@@ -270,6 +270,8 @@ class MainV:
                 fixed_rusher_aggression=step.rusher_aggression,
                 fixed_rusher_aggression_min=step.rusher_aggression_min,
                 fixed_rusher_aggression_max=step.rusher_aggression_max,
+                profile_cprofile_output=None,
+                profile_torch_this_step=False,
             )
 
             # Guardar modelos si se aprendió
@@ -582,9 +584,9 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
 
 if __name__ == "__main__":
     
-    torch.set_num_threads(6)
-    os.environ["OMP_NUM_THREADS"] = "6"
-    os.environ["MKL_NUM_THREADS"] = "6"
+    torch.set_num_threads(2)
+    os.environ["OMP_NUM_THREADS"] = "2"
+    os.environ["MKL_NUM_THREADS"] = "2"
     # 1. Cargar configuración desde YAML
     yaml_config = load_config_yaml()
 

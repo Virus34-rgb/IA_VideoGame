@@ -6,6 +6,7 @@ from typing import Tuple, Dict, Any, Optional
 
 from AI.Environment.gameState import GameState
 from AI.Environment.resolve_actions import resolveAction
+from AI.Environment.reward_calculator import RewardCalculator
 from AI.Environment.statsV import StatsV
 from AI.Environment.warriorFactory import get_warriors_classes
 from AI.Environment.abilityData import EffectType
@@ -34,6 +35,10 @@ class VectorizedEnvironment:
             self.target_mask_por_tipo_habilidad,
             self.effect_type_por_tipo_habilidad
         )
+        
+        self.reward_calculator = RewardCalculator(constants.REWARD_WEIGHTS,constants.WIN_REWARD,constants.DRAW_PENALTY,
+                                                  constants.TURN_PENALTY_BASE,constants.TURN_PENALTY_MAX,constants.TURN_PENALTY_RAMP_START,
+                                                  constants.TURN_PENALTY_RAMP_TURNS, constants.REWARD_SCALE,constants.DISCOUNT_FACTOR)
 
         self.stats: StatsV = StatsV()
         
@@ -273,13 +278,17 @@ class VectorizedEnvironment:
             ya_terminadas_antes,
         )
         
+        self.p1_deaths += p1_new_deaths
+        self.p2_deaths += p2_new_deaths
+        
+        self._check_end_conditions()
 
-        rewardP1, rewardP2 = self._calculate_rewards(
+        rewardP1, rewardP2 = self.reward_calculator.calculate_rewards(
             damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
             heal_p1, heal_p2, health_diff_before, health_diff_after,
             p1_new_deaths, p2_new_deaths,wasted_heal_p1,wasted_heal_p2,
             wasted_defense_p1,wasted_defense_p2,strategic_movement_p1,strategic_movement_p2,
-            overkill_damage_p1,overkill_damage_p2,kill_confirmed_p1,kill_confirmed_p2,
+            overkill_damage_p1,overkill_damage_p2,kill_confirmed_p1,kill_confirmed_p2,self.winner,self.turn_number
         )
 
         rewardP1 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP1), rewardP1)
@@ -351,57 +360,6 @@ class VectorizedEnvironment:
         norm_health = torch.zeros_like(healths)
         norm_health[alive] = healths[alive] / max_health[alive]
         return norm_health.sum(dim=1)
-
-    def _turn_penalty(self) -> torch.Tensor:
-        turn = self.turn_number.float()
-        exceso = (turn - constants.TURN_PENALTY_RAMP_START).clamp(min=0.0)
-        progresion = (exceso / constants.TURN_PENALTY_RAMP_TURNS).clamp(max=1.0)
-        return constants.TURN_PENALTY_BASE + progresion * (constants.TURN_PENALTY_MAX - constants.TURN_PENALTY_BASE)
-
-    def _reward(self, **components: torch.Tensor) -> torch.Tensor:
-        weighted = sum(constants.REWARD_WEIGHTS[name] * value for name, value in components.items())
-        return (weighted - self._turn_penalty()) / constants.REWARD_SCALE
-
-    def _calculate_rewards(
-        self, damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
-        healed_p1, healed_p2, health_diff_before, health_diff_after, newDeaths_p1, newDeaths_p2,
-        wasted_heal_p1,wasted_heal_p2,wasted_defense_p1,wasted_defense_p2,strategic_movement_p1,strategic_movement_p2,
-        overkill_damage_p1, overkill_damage_p2,kill_confirmed_p1, kill_confirmed_p2
-    ):
-        self.p1_deaths += newDeaths_p1
-        self.p2_deaths += newDeaths_p2
-        self._check_end_conditions()
-
-        gano_p1 = self.winner == 0
-        gano_p2 = self.winner == 1
-        empate = self.winner == 2
-        win_p1 = torch.where(
-            gano_p1, torch.full_like(damage_p1, constants.WIN_REWARD),
-            torch.where(gano_p2, torch.full_like(damage_p1, -constants.WIN_REWARD),
-                torch.where(empate, torch.full_like(damage_p1, -constants.DRAW_PENALTY), torch.zeros_like(damage_p1))),
-        )
-        win_p2 = torch.where(
-            gano_p2, torch.full_like(damage_p1, constants.WIN_REWARD),
-            torch.where(gano_p1, torch.full_like(damage_p1, -constants.WIN_REWARD),
-                torch.where(empate, torch.full_like(damage_p1, -constants.DRAW_PENALTY), torch.zeros_like(damage_p1))),
-        )
-
-        shaping_term_p1 = constants.DISCOUNT_FACTOR * health_diff_after - health_diff_before
-        shaping_term_p2 = -shaping_term_p1
-
-        rewardP1 = self._reward(
-            damage=damage_p1 - damage_p2, deaths=newDeaths_p2 - newDeaths_p1, win=win_p1,
-            blocks=damage_avoided_p1, heal=healed_p1, shaping_weight=shaping_term_p1,
-            wasted_heal = wasted_heal_p1,wasted_defense = wasted_defense_p1,
-            strategic_movement = strategic_movement_p1,kill_confirmed = kill_confirmed_p1, overkill_damage = overkill_damage_p1
-        )
-        rewardP2 = self._reward(
-            damage=damage_p2 - damage_p1, deaths=newDeaths_p1 - newDeaths_p2, win=win_p2,
-            blocks=damage_avoided_p2, heal=healed_p2, shaping_weight=shaping_term_p2,
-            wasted_heal = wasted_heal_p2,wasted_defense = wasted_defense_p2,
-            strategic_movement = strategic_movement_p2,kill_confirmed = kill_confirmed_p2, overkill_damage = overkill_damage_p2
-        )
-        return rewardP1, rewardP2
 
     def _build_static_tables(self) -> None:
         num_types = max(self.warriors_classes.keys()) + 1

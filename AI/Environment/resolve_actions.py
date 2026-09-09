@@ -109,6 +109,33 @@ class resolveAction:
                 effect_type
             )
     
+    def _swap_by_position(self, tensor, pos_a, pos_b, mask):
+        """
+        Intercambia, para las filas donde mask es True, los valores del tensor
+        entre la posición pos_a y pos_b (a lo largo de dim=1). Para las filas
+        donde mask es False, el tensor no cambia.
+        Soporta tensores (N, 3) y (N, 3, K) (K=4 para cooldowns/habilidades).
+        pos_a, pos_b: (N,) long. mask: (N,) bool (se expande internamente).
+        """
+        extra_dims = tensor.dim() - 2   # 0 para (N,3), 1 para (N,3,4)
+        pos_a_idx = pos_a.view(-1, *([1] * (extra_dims + 1)))
+        pos_b_idx = pos_b.view(-1, *([1] * (extra_dims + 1)))
+        if extra_dims == 1:
+            K = tensor.shape[-1]
+            pos_a_idx = pos_a_idx.expand(-1, 1, K)
+            pos_b_idx = pos_b_idx.expand(-1, 1, K)
+            mask_exp = mask.view(-1, 1, 1).expand(-1, 1, K)
+        else:
+            mask_exp = mask.view(-1, 1)
+
+        val_a = tensor.gather(1, pos_a_idx)
+        val_b = tensor.gather(1, pos_b_idx)
+
+        result = tensor.clone()
+        result.scatter_(1, pos_a_idx, torch.where(mask_exp, val_b, val_a))
+        result.scatter_(1, pos_b_idx, torch.where(mask_exp, val_a, val_b))
+        return result
+
     def _resolve_action_movement(
         self, actors, own_disposition, own_health, own_cooldowns,
         own_instance_abilities, own_castle_slots, own_alive, actions_actor, pos,
@@ -117,14 +144,16 @@ class resolveAction:
         mask_movPos = (actions_actor == 5) & (pos != 2)
         mask_movNeg = (actions_actor == 6) & (pos != 0)
         moved = (mask_movPos | mask_movNeg).float()
+        mask_move = mask_movPos | mask_movNeg   # excluyentes entre sí
 
-        pos_destino_pos = (pos + 1).clamp(max=2)
-        pos_destino_neg = (pos - 1).clamp(min=0)
-        
-        new_pos = pos.clone()
-        new_pos = torch.where(mask_movPos, pos + 1, new_pos)  # derecha
-        new_pos = torch.where(mask_movNeg, pos - 1, new_pos)  # izquierda
-        new_pos = new_pos.clamp(0, 2)  # seguridad
+        # Destino único: pos+1 si es movPos, pos-1 si es movNeg, pos si no se mueve
+        # (para las filas que no se mueven, destino==pos y el swap es un no-op).
+        pos_destino = torch.where(
+            mask_movPos, (pos + 1).clamp(max=2),
+            torch.where(mask_movNeg, (pos - 1).clamp(min=0), pos),
+        )
+
+        new_pos = pos_destino.clamp(0, 2)
 
         # Calcular targeted antes y después
         targeted_by_enemy = self._check_if_targeted(
@@ -133,102 +162,25 @@ class resolveAction:
         targeted_by_enemy_post = self._check_if_targeted(
             new_pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
         )
+        strategic_movement = mask_move & targeted_by_enemy & ~targeted_by_enemy_post
 
-        # Solo para los que realmente se mueven y dejan de ser objetivo
-        strategic_movement = (mask_movPos | mask_movNeg) & targeted_by_enemy & ~targeted_by_enemy_post
-    
-        # Intercambiar disposición
-        own_new_disp = own_disposition.clone()
-        origen = own_disposition.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino = own_disposition.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_disp.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino, origen).unsqueeze(1))
-        own_new_disp.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen, destino).unsqueeze(1))
-
-        origen2 = own_new_disp.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino2 = own_new_disp.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_disp_final = own_new_disp.clone()
-        own_new_disp_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino2, origen2).unsqueeze(1))
-        own_new_disp_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen2, destino2).unsqueeze(1))
-
-        # Intercambiar salud
-        own_new_health = own_health.clone()
-        origen_h = own_health.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_h = own_health.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_health.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_h, origen_h).unsqueeze(1))
-        own_new_health.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_h, destino_h).unsqueeze(1))
-
-        origen_h2 = own_new_health.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_h2 = own_new_health.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_health_final = own_new_health.clone()
-        own_new_health_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_h2, origen_h2).unsqueeze(1))
-        own_new_health_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_h2, destino_h2).unsqueeze(1))
-
-        # NUEVO: Intercambiar alive (mismo patrón que salud, pero con own_alive)
-        own_new_alive = own_alive.clone()
-        origen_a = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_a = own_alive.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_alive.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_a, origen_a).unsqueeze(1))
-        own_new_alive.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_a, destino_a).unsqueeze(1))
-
-        origen_a2 = own_new_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_a2 = own_new_alive.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_alive_final = own_new_alive.clone()
-        own_new_alive_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_a2, origen_a2).unsqueeze(1))
-        own_new_alive_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_a2, destino_a2).unsqueeze(1))
-
-        # Intercambiar cooldowns
-        pos_e = pos.view(-1, 1, 1).expand(-1, 1, 4)
-        pos_destino_pos_e = pos_destino_pos.view(-1, 1, 1).expand(-1, 1, 4)
-        pos_destino_neg_e = pos_destino_neg.view(-1, 1, 1).expand(-1, 1, 4)
-        mask_movPos_4 = mask_movPos.view(-1, 1, 1).expand(-1, 1, 4)
-        mask_movNeg_4 = mask_movNeg.view(-1, 1, 1).expand(-1, 1, 4)
-
-        own_new_cd = own_cooldowns.clone()
-        origen_cd = own_cooldowns.gather(1, pos_e)
-        destino_cd = own_cooldowns.gather(1, pos_destino_pos_e)
-        own_new_cd.scatter_(1, pos_e, torch.where(mask_movPos_4, destino_cd, origen_cd))
-        own_new_cd.scatter_(1, pos_destino_pos_e, torch.where(mask_movPos_4, origen_cd, destino_cd))
-
-        origen_cd2 = own_new_cd.gather(1, pos_e)
-        destino_cd2 = own_new_cd.gather(1, pos_destino_neg_e)
-        own_new_cd_final = own_new_cd.clone()
-        own_new_cd_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_cd2, origen_cd2))
-        own_new_cd_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_cd2, destino_cd2))
-
-        # Intercambiar habilidades de instancia
-        own_new_abilities = own_instance_abilities.clone()
-        origen_ab = own_instance_abilities.gather(1, pos_e)
-        destino_ab = own_instance_abilities.gather(1, pos_destino_pos_e)
-        own_new_abilities.scatter_(1, pos_e, torch.where(mask_movPos_4, destino_ab, origen_ab))
-        own_new_abilities.scatter_(1, pos_destino_pos_e, torch.where(mask_movPos_4, origen_ab, destino_ab))
-
-        origen_ab2 = own_new_abilities.gather(1, pos_e)
-        destino_ab2 = own_new_abilities.gather(1, pos_destino_neg_e)
-        own_new_abilities_final = own_new_abilities.clone()
-        own_new_abilities_final.scatter_(1, pos_e, torch.where(mask_movNeg_4, destino_ab2, origen_ab2))
-        own_new_abilities_final.scatter_(1, pos_destino_neg_e, torch.where(mask_movNeg_4, origen_ab2, destino_ab2))
-
-        # Intercambiar castle_slots
-        own_new_castle = own_castle_slots.clone()
-        origen_c = own_castle_slots.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_c = own_castle_slots.gather(1, pos_destino_pos.unsqueeze(1)).squeeze(1)
-        own_new_castle.scatter_(1, pos.unsqueeze(1), torch.where(mask_movPos, destino_c, origen_c).unsqueeze(1))
-        own_new_castle.scatter_(1, pos_destino_pos.unsqueeze(1), torch.where(mask_movPos, origen_c, destino_c).unsqueeze(1))
-
-        origen_c2 = own_new_castle.gather(1, pos.unsqueeze(1)).squeeze(1)
-        destino_c2 = own_new_castle.gather(1, pos_destino_neg.unsqueeze(1)).squeeze(1)
-        own_new_castle_final = own_new_castle.clone()
-        own_new_castle_final.scatter_(1, pos.unsqueeze(1), torch.where(mask_movNeg, destino_c2, origen_c2).unsqueeze(1))
-        own_new_castle_final.scatter_(1, pos_destino_neg.unsqueeze(1), torch.where(mask_movNeg, origen_c2, destino_c2).unsqueeze(1))
+        # Un único swap por campo (mask_move ya cubre pos+ y pos- combinados,
+        # porque pos_destino ya codifica la dirección correcta por fila).
+        own_new_disp = self._swap_by_position(own_disposition, pos, pos_destino, mask_move)
+        own_new_health = self._swap_by_position(own_health, pos, pos_destino, mask_move)
+        own_new_alive = self._swap_by_position(own_alive, pos, pos_destino, mask_move)
+        own_new_cd = self._swap_by_position(own_cooldowns, pos, pos_destino, mask_move)
+        own_new_abilities = self._swap_by_position(own_instance_abilities, pos, pos_destino, mask_move)
+        own_new_castle = self._swap_by_position(own_castle_slots, pos, pos_destino, mask_move)
 
         return (
             moved,
-            own_new_disp_final,
-            own_new_health_final,
-            own_new_cd_final,
-            own_new_abilities_final,
-            own_new_castle_final,
-            own_new_alive_final,
+            own_new_disp,
+            own_new_health,
+            own_new_cd,
+            own_new_abilities,
+            own_new_castle,
+            own_new_alive,
             strategic_movement,
         )
 
@@ -236,64 +188,45 @@ class resolveAction:
         self, actors, ability_pool_idx, enemy_disposition, enemy_health, enemy_alive, enemy_actions,
         enemy_instance_abilities,
     ):
-        would_be_damage = self.damage_por_tipo_habilidad[actors, ability_pool_idx]
-        target_mask = self.target_mask_por_tipo_habilidad[actors, ability_pool_idx]
+        would_be_damage = self.damage_por_tipo_habilidad[actors, ability_pool_idx]        # (N,)
+        target_mask = self.target_mask_por_tipo_habilidad[actors, ability_pool_idx]        # (N,3)
 
         enemy_ability_pool_idx = enemy_instance_abilities.gather(
             2, enemy_actions.clamp(0, 3).unsqueeze(-1)
-        ).squeeze(-1)
-        enemy_effect_type = self.effect_type_por_tipo_habilidad[enemy_disposition, enemy_ability_pool_idx]
-        enemy_es_habilidad = (enemy_actions >= 0) & (enemy_actions <= 3)
+        ).squeeze(-1)                                                                      # (N,3)
+        enemy_effect_type = self.effect_type_por_tipo_habilidad[enemy_disposition, enemy_ability_pool_idx]  # (N,3)
+        enemy_es_habilidad = (enemy_actions >= 0) & (enemy_actions <= 3)                   # (N,3)
 
-        enemy_new_health = enemy_health.clone()
-        damage_total = torch.zeros_like(would_be_damage)
-        avoided_total = torch.zeros_like(would_be_damage)
-        blocks_total = torch.zeros_like(would_be_damage)
-        overkill_damage = torch.zeros_like(would_be_damage)
-        kills_this_action = torch.zeros_like(would_be_damage)
+        es_target = target_mask & enemy_alive[:, :3]                                       # (N,3)
 
-        for slot in range(3):
-            es_target = target_mask[:, slot] & enemy_alive[:, slot]
+        full_block = (enemy_effect_type == EffectType.DEFEND_FULL) & enemy_es_habilidad     # (N,3)
+        half_block = (enemy_effect_type == EffectType.DEFEND_HALF) & enemy_es_habilidad     # (N,3)
 
-            full_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_FULL) & enemy_es_habilidad[:, slot]
-            half_block = (enemy_effect_type[:, slot] == EffectType.DEFEND_HALF) & enemy_es_habilidad[:, slot]
+        dmg = would_be_damage.unsqueeze(1)     # (N,1) -> broadcast contra (N,3)
+        zero = torch.zeros_like(dmg)           # (N,1)
 
-            hit_damage = torch.where(
-                full_block, torch.zeros_like(would_be_damage),
-                torch.where(half_block, would_be_damage / 2, would_be_damage),
-            )
-            avoided = torch.where(
-                full_block, would_be_damage,
-                torch.where(half_block, would_be_damage / 2, torch.zeros_like(would_be_damage)),
-            )
-            blocked_flag = (full_block | half_block).float()
+        hit_damage = torch.where(full_block, zero, torch.where(half_block, dmg / 2, dmg))   # (N,3)
+        avoided = torch.where(full_block, dmg, torch.where(half_block, dmg / 2, zero))       # (N,3)
+        blocked_flag = (full_block | half_block).float()                                    # (N,3)
 
-            hit_damage = torch.where(es_target, hit_damage, torch.zeros_like(hit_damage))
-            avoided = torch.where(es_target, avoided, torch.zeros_like(avoided))
-            blocked_flag = torch.where(es_target, blocked_flag, torch.zeros_like(blocked_flag))
+        hit_damage = torch.where(es_target, hit_damage, torch.zeros_like(hit_damage))
+        avoided = torch.where(es_target, avoided, torch.zeros_like(avoided))
+        blocked_flag = torch.where(es_target, blocked_flag, torch.zeros_like(blocked_flag))
 
-            health_slot_before = enemy_new_health[:, slot]
-            overkill_this_slot = torch.where(
-                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
-                hit_damage - health_slot_before,
-                torch.zeros_like(hit_damage),
-            )
-            overkill_damage += overkill_this_slot
-            
-            kill_this_slot = torch.where(
-                es_target & (health_slot_before > 0) & (hit_damage >= health_slot_before),
-                torch.ones_like(hit_damage),
-                torch.zeros_like(hit_damage),
-            )
-            kills_this_action += kill_this_slot
+        health_before = enemy_health                                                        # (N,3)
+        lethal = es_target & (health_before > 0) & (hit_damage >= health_before)             # (N,3)
+        overkill_per_slot = torch.where(lethal, hit_damage - health_before, torch.zeros_like(hit_damage))
+        kill_per_slot = lethal.float()
 
-            enemy_new_health[:, slot] = torch.where(es_target, health_slot_before - hit_damage, health_slot_before)
-
-            damage_total += hit_damage
-            avoided_total += avoided
-            blocks_total += blocked_flag
-
+        enemy_new_health = torch.where(es_target, health_before - hit_damage, health_before)  # (N,3)
         enemy_new_alive = enemy_alive & (enemy_new_health > 0)
+
+        damage_total = hit_damage.sum(dim=1)
+        avoided_total = avoided.sum(dim=1)
+        blocks_total = blocked_flag.sum(dim=1)
+        overkill_damage = overkill_per_slot.sum(dim=1)
+        kills_this_action = kill_per_slot.sum(dim=1)
+
         return damage_total, blocks_total, enemy_new_health, enemy_new_alive, overkill_damage, kills_this_action
 
     def _resolve_action_self_heal(self, actors, ability_pool_idx, pos, own_health):
@@ -346,46 +279,26 @@ class resolveAction:
         return own_cooldowns.scatter(1, slot_expand, new_actor_cd.unsqueeze(1))
     
     def _check_if_targeted(self, pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive):
+
+        pos = pos.view(-1).to(torch.long)   # (N,)
         N = enemy_disposition.shape[0]
-        device = enemy_disposition.device
-        was_targeted = torch.zeros(N, dtype=torch.bool, device=device)
 
-        # Asegurar pos 1D y tipo long
-        pos = pos.view(-1).to(torch.long)
-        row_idx = torch.arange(N, device=device)
+        alive = enemy_alive                                                    # (N,3)
+        action = enemy_actions                                                 # (N,3)
+        is_attack_action = (action >= 0) & (action <= 3)
+        is_valid = alive & is_attack_action                                    # (N,3)
 
-        for e_slot in range(3):
-            alive = enemy_alive[:, e_slot]                 # (N,)
-            action = enemy_actions[:, e_slot]              # (N,)
-            is_attack_action = (action >= 0) & (action <= 3)
-            is_valid = alive & is_attack_action
+        action_clamped = action.clamp(min=0, max=3)                            # (N,3)
+        ability_idx = enemy_instance_abilities.gather(2, action_clamped.unsqueeze(-1)).squeeze(-1)  # (N,3)
 
-            # Clamp y asegurar 1D
-            action_clamped = action.clamp(min=0, max=3).view(-1)  # (N,)
+        enemy_type = enemy_disposition                                         # (N,3)
 
-            # Extraer ability_idx usando gather, más seguro que indexación directa
-            abilities = enemy_instance_abilities[:, e_slot]       # (N, 4)
-            ability_idx = abilities.gather(1, action_clamped.unsqueeze(1)).squeeze(1)  # (N,)
+        # (num_types, POOL, 3) indexado con (N,3) y (N,3) -> (N,3,3)
+        # dim1 = slot enemigo que ataca, dim2 = posición objetivo de esa habilidad
+        target_mask = self.target_mask_por_tipo_habilidad[enemy_type, ability_idx]  # (N,3,3)
 
-            enemy_type = enemy_disposition[:, e_slot].view(-1)   # (N,)
+        pos_exp = pos.view(N, 1, 1).expand(N, 3, 1)
+        target_mask_for_pos = target_mask.gather(2, pos_exp).squeeze(-1)       # (N,3)
 
-            # Indexar tabla de máscaras: resultado debe ser (N, 3)
-            target_mask = self.target_mask_por_tipo_habilidad[enemy_type, ability_idx]  # (N, 3)
-
-            # Asegurar forma (N, 3) por si acaso
-            if target_mask.dim() == 3:
-                if target_mask.shape[1] == 1:
-                    target_mask = target_mask.squeeze(1)
-                elif target_mask.shape[2] == 1:
-                    target_mask = target_mask.squeeze(2)
-            elif target_mask.dim() == 1:
-                # Caso raro: si devolvió (3,), expandir a (N, 3)
-                target_mask = target_mask.unsqueeze(0).expand(N, -1)
-
-            # Obtener el valor de la máscara para la posición del actor
-            target_mask_for_pos = target_mask[row_idx, pos]  # (N,)
-
-            # Acumular: si algún enemigo ataca a esta posición
-            was_targeted = was_targeted | (is_valid & target_mask_for_pos)
-
-        return was_targeted
+        was_targeted_per_enemy_slot = is_valid & target_mask_for_pos           # (N,3)
+        return was_targeted_per_enemy_slot.any(dim=1)                          # (N,)

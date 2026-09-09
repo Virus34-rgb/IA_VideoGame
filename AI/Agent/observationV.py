@@ -56,11 +56,12 @@ class ObservationV:
         #speed (N,3) normalizado a rango [0,1], 0 si el guerrero está muerto
         #Health (N,3) normalizado a rango [0,1], 0 si el guerrero está muerto
 
+        pl_alive_f = pl_alive.float()
         cd_usable = (pl_cooldowns == 0).float()   #mascara de habilidades disponibles (1 si está disponible, 0 si está en cooldown)
         #tensor (N,3,4) con 1 si la habilidad está disponible y el guerrero está vivo, 0 si está en cooldown o el guerrero está muerto
-        speed = (pl_speed_norm * pl_alive.float()).unsqueeze(-1)
-        health = (pl_health_norm * pl_alive.float()).unsqueeze(-1)
-        cd_usable = cd_usable * pl_alive.unsqueeze(-1).float()
+        speed = (pl_speed_norm * pl_alive_f).unsqueeze(-1)
+        health = (pl_health_norm * pl_alive_f).unsqueeze(-1)
+        cd_usable = cd_usable * pl_alive_f.unsqueeze(-1)
         
         extra_zeros = torch.zeros(N, 3, 2)
         #(N,3,13) = (N,3,6) + (N,3,1) + (N,3,1) + (N,3,2)
@@ -68,8 +69,9 @@ class ObservationV:
         propio = propio.flatten(start_dim=1) #(N, 3*13) = (N,39)
 
         idx_opp = (opp_disposition - 1).clamp(min=0)
+        opp_alive_f = (opp_disposition > 0).float()   # CAMBIADO: reutilizada abajo en pool_opp/cd_opp_usable
         one_hot_opp = torch.nn.functional.one_hot(idx_opp, num_classes=constants.WARRIOR_QUANTITY).float()
-        one_hot_opp = one_hot_opp * (opp_disposition > 0).unsqueeze(-1).float()
+        one_hot_opp = one_hot_opp * opp_alive_f.unsqueeze(-1)
         one_hot_opp = one_hot_opp.flatten(start_dim=1) #(N, 3*WARRIOR_QUANTITY) = (N,15)
 
         pool_onehot = torch.nn.functional.one_hot(own_instance_abilities, num_classes=constants.MAX_POOL_SIZE).float()  # (N,3,4,POOL)
@@ -77,11 +79,12 @@ class ObservationV:
         pool_onehot_flat = pool_onehot.flatten(start_dim=1)             # (N, 3*4*POOL)
         
         pool_opp = torch.nn.functional.one_hot(opp_instance_abilities, num_classes=constants.MAX_POOL_SIZE).float()  # (N,3,4,POOL)
-        pool_opp = pool_opp * (opp_disposition > 0).view(N, 3, 1, 1).float()   # a 0 si el slot está muerto
+        pool_opp = pool_opp * opp_alive_f.view(N, 3, 1, 1)   # a 0 si el slot está muerto (reutiliza opp_alive_f)
         pool_opp_flat = pool_opp.flatten(start_dim=1)             # (N, 3*4*POOL)
         
+        opp_alive_bool = opp_disposition > 0 
         cd_opp_usable = (opp_cooldowns == 0).float()   #mascara de habilidades disponibles (1 si está disponible, 0 si está en cooldown)
-        cd_opp_usable = torch.where((opp_disposition > 0).unsqueeze(-1), cd_opp_usable, torch.zeros_like(cd_opp_usable))
+        cd_opp_usable = torch.where(opp_alive_bool.unsqueeze(-1), cd_opp_usable, torch.zeros_like(cd_opp_usable))
         cd_opp_usable_flat = cd_opp_usable.flatten(start_dim=1)
 
         return torch.cat(

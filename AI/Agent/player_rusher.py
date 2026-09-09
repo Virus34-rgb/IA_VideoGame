@@ -1,6 +1,7 @@
 
 import torch
 
+from AI.Environment.action_mask import compute_action_mask
 import constants
 from AI.Environment.abilityData import EffectType
 
@@ -130,8 +131,9 @@ class PlayerRusherV:
     # ------------------------------------------------------------
     def turn(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
              enemy_disposition, own_instance_abilities):
-        action_mask = self.compute_action_mask(
-            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities,
+        action_mask = compute_action_mask(
+            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities
+            ,self.environment.target_mask_por_tipo_habilidad
         )
         actions = self._decidir_turno(
             action_mask, own_disposition, own_cooldowns, own_alive,
@@ -225,36 +227,6 @@ class PlayerRusherV:
         actions = torch.where(hay_alguna_accion & own_alive, codigo_entorno, torch.full_like(codigo_entorno, -1))
 
         return actions
-
-    # ------------------------------------------------------------
-    # Máscara de acciones válidas — idéntica a PlayerAIV.compute_action_mask
-    # y PlayerNoAIV.compute_action_mask. Duplicada aquí por el mismo motivo:
-    # no depende de ninguna red neuronal, solo de disposición/cooldowns/vida/
-    # habilidades, así que cualquier jugador (humano, IA, scripted) necesita
-    # exactamente la misma información para saber qué puede hacer.
-    # ------------------------------------------------------------
-    def compute_action_mask(self, own_disposition, own_cooldowns, own_alive,
-                             enemy_disposition, own_instance_abilities):
-        N = own_disposition.shape[0]
-        mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
-
-        mask[:, :, :4] &= (own_cooldowns == 0)
-
-        table = self.environment.target_mask_por_tipo_habilidad
-        target_mask_pool = table[own_disposition]
-        idx = own_instance_abilities.unsqueeze(-1).expand(-1, -1, -1, 3)
-        target_mask_full = target_mask_pool.gather(2, idx)
-
-        enemy_ocupado = (enemy_disposition > 0).unsqueeze(1).unsqueeze(1)
-        hay_target_valido = (target_mask_full & enemy_ocupado).any(dim=-1)
-        sin_target = ~hay_target_valido & target_mask_full.any(dim=-1)
-
-        mask[:, :, :4] &= ~sin_target
-
-        mask[:, 0, 5] = False
-        mask[:, 2, 4] = False
-
-        return mask
 
     # ------------------------------------------------------------
     # Auxiliares de draft (para usar dentro de _decidir_seleccion)

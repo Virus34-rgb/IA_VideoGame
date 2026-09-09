@@ -118,6 +118,21 @@ class NoisyLinear(nn.Linear):
             self.weight_epsilon.copy_(epsilon_out.outer(epsilon_in))
             if self.bias_mu is not None:
                 self.bias_epsilon.copy_(epsilon_out)
+            self._refresh_cache()
+
+    @torch.no_grad()
+    def _refresh_cache(self) -> None:
+        """Recalcula y cachea el peso/bias efectivo tras cambiar mu/sigma/epsilon.
+        Evita recomputar weight_mu + weight_sigma*weight_epsilon en cada forward()."""
+        if self.training:
+            self._cached_weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
+            if self.bias_mu is not None:
+                self._cached_bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
+            else:
+                self._cached_bias = None
+        else:
+            self._cached_weight = self.weight_mu
+            self._cached_bias = self.bias_mu if self.bias_mu is not None else None
 
     @torch.no_grad()
     def _scale_noise(self, size: Union[int, torch.Size, Sequence]) -> torch.Tensor:
@@ -128,23 +143,12 @@ class NoisyLinear(nn.Linear):
 
     @property
     def weight(self) -> torch.Tensor:
-        if self.training:
-            # If in training mode, sample the noise.
-            return self.weight_mu + self.weight_sigma * self.weight_epsilon
-        else:
-            return self.weight_mu
+        return self._cached_weight
 
     @property
     def bias(self) -> Optional[torch.Tensor]:
-        if self.bias_mu is not None:
-            if self.training:
-                # If in training mode, sample the noise.
-                return self.bias_mu + self.bias_sigma * self.bias_epsilon
-            else:
-                return self.bias_mu
-        else:
-            return None
-        
+        return self._cached_bias
+    
     @torch.no_grad()
     def clamp_sigma(self, min_sigma: float) -> None:
         """Recorta weight_sigma/bias_sigma a un mínimo absoluto, para evitar
@@ -152,6 +156,7 @@ class NoisyLinear(nn.Linear):
         self.weight_sigma.data.clamp_(min=min_sigma)
         if self.bias_sigma is not None:
             self.bias_sigma.data.clamp_(min=min_sigma)
+        self._refresh_cache()
 
     @torch.no_grad()
     def mean_abs_sigma(self) -> float:

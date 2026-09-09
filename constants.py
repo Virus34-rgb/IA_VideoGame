@@ -68,7 +68,7 @@ SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
 SELECTION_REPLAY_DATA = 131_072 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
 TURN_REPLAY_DATA = 65_536     # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
-BATCH_SIZE = 128                   # Tamaño del batch de replay
+BATCH_SIZE = 256                 # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
 COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
@@ -112,8 +112,8 @@ POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de
 # ============================================================
 # Replay y priorización (PER)
 # ============================================================
-SELECTION_REPLAYS_PER_BATCH = 144 # Número de replays de selección por lote
-TURN_REPLAYS_PER_BATCH = 480       # Número de replays de turno por lote
+SELECTION_REPLAYS_PER_BATCH = 72 # Número de replays de selección por lote
+TURN_REPLAYS_PER_BATCH = 240       # Número de replays de turno por lote
 
 ALPHA = 0.8                       # Factor de priorización (0=uniforme, 1=máxima prioridad)
 BETA_START = 0.4                  # Factor de importancia inicial (para IS weights)
@@ -130,6 +130,7 @@ DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (pa
 NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma
 SIGMA_MIN = 0.05   # suelo mínimo para weight_sigma/bias_sigma de las NoisyLinear
 RESET_IN_DECISIONS = False
+USE_TORCH_COMPILE = False
 
 # ============================================================
 # ELO

@@ -9,6 +9,7 @@ from AI.Agent.turnNetwork import TurnNetwork
 from AI.Agent.selectionNetwork import SelectionNetwork
 from AI.Agent.replayMemoryAN import ReplayMemoryAN
 from AI.Agent.replayMemoryPM import ReplayMemoryPM
+from AI.Environment.action_mask import compute_action_mask
 import constants
 
 
@@ -32,6 +33,14 @@ class PlayerAIV:
         self.target_turn_network: TurnNetwork = TurnNetwork(sigma_init=constants.NOISY_SIGMA_INIT)
         self.target_turn_network.load_state_dict(self.turn_network.state_dict())
         self.optimizer_turn = torch.optim.Adam(self.turn_network.parameters(), lr=constants.TURN_LEARNING_RATE,foreach=True)
+        
+        if constants.USE_TORCH_COMPILE:
+            self.turn_network = torch.compile(
+                self.turn_network, mode="reduce-overhead", fullgraph=False,
+            )
+            self.selection_network = torch.compile(
+                self.selection_network, mode="reduce-overhead", fullgraph=False,
+            )
 
         if use_replay:
             self.replay_memory_sel = ReplayMemoryPM(
@@ -66,11 +75,12 @@ class PlayerAIV:
         )
 
     def replay_selection(self) -> Optional[float]:
-        self.selection_network.reset_noise()
-        self.target_selection_network.reset_noise()
 
         if len(self.replay_memory_sel) < constants.BATCH_SIZE:
             return None
+        
+        self.selection_network.reset_noise()
+        self.target_selection_network.reset_noise()
 
         self.replayed_selection += 1
         #batch: Data, tree_indices: np.ndarray de los índices dentro de sum_tree, weights: np.ndarray de pesos dentro de la red 
@@ -106,12 +116,13 @@ class PlayerAIV:
         return loss.item()
 
     def replay_turn(self) -> Optional[float]:
-        self.turn_network.reset_noise()
-        self.target_turn_network.reset_noise()
+
 
         if len(self.replay_memory_turn) < constants.BATCH_SIZE:
             return None
-
+        self.turn_network.reset_noise()
+        self.target_turn_network.reset_noise()
+        
         self.replayed_turn += 1
         batch, tree_indices, weights = self.replay_memory_turn.sample(constants.BATCH_SIZE)
         weights = torch.from_numpy(weights).float()
@@ -235,8 +246,8 @@ class PlayerAIV:
             self.turn_network.reset_noise()
 
         obs = batch_encoded_obs.float() #conviertes el estado a float32 (antes float16) para que la red lo pueda procesar
-        action_mask = self.compute_action_mask(own_disposition, own_cooldowns, own_alive,
-                                       enemy_disposition, own_instance_abilities)
+        action_mask = compute_action_mask(own_disposition, own_cooldowns, own_alive,
+                                       enemy_disposition, own_instance_abilities,self.environment.target_mask_por_tipo_habilidad)
         with torch.inference_mode():
             logits = self.turn_network(obs,action_mask = action_mask) #obtenemos los qvalues de la red para los estados actuales
         #Enmascaras los q-values para seleccionar unicamente acciones validas
@@ -258,46 +269,11 @@ class PlayerAIV:
         actions = torch.where(hay_valida, codigo, torch.full_like(codigo, -1))# si no hay ninguna acción valida para un guerrero y posición, se marca como -1 (ninguna acción)
         return actions #N,3
 
-    def compute_action_mask(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities):
-        """
-        Calcula la máscara booleana de acciones válidas (N, 3, 6), sin aplicarla a
-        ningún logit. Separado de mask_turn para poder calcularla una única vez en
-        el momento de recolección y reutilizarla desde el replay buffer, en vez de
-        recalcularla en cada sample de replay_turn/_multi_agent_double_dqn_target.
-        """
-        N = own_disposition.shape[0] #cantidad de partidas
-        mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone() # (N, 3, 6) bool, inicialmente todas las acciones son válidas para guerreros vivos
-
-        mask[:, :, :4] &= (own_cooldowns == 0) # si los cooldowns son mayores que 0, se deshabilitan las acciones de ataque (0-3)
-
-        table = self.environment.target_mask_por_tipo_habilidad          # (num_types, POOL, 3)
-        #Para cada partida, para cada guerrero, obtenemos la máscara de objetivos válidos según el tipo de habilidad del guerrero
-        target_mask_pool = table[own_disposition]                        # (N, 3, POOL, 3)
-        idx = own_instance_abilities.unsqueeze(-1).expand(-1, -1, -1, 3)  # (N, 3, 4, 3)
-        #para cada geurrero de cada paritda, obtemeos de own_instance_abilities el indice de la habilidad que tiene, 
-        # y con ese indice obtenemos de target_mask_pool la máscara de objetivos válidos para esa habilidad
-        #target_mask_pool [:,:,idx,:]
-        target_mask_full = target_mask_pool.gather(2, idx)                # (N, 3, 4, 3) PARTIDAS/POSICION/HABILIDAD/OBJETIVO
-        
-        #enemy_disposition es (N,3) con los tipos de guerreros enemigos (0 para muertos, 1..5 para vivos)
-        #Despues (N,3,1,1) para poder compararlo con target_mask_full
-        enemy_ocupado = (enemy_disposition > 0).unsqueeze(1).unsqueeze(1)
-        #Si alguno es true, significa que hay al menos un objetivo válido para esa habilidad y guerrero
-        hay_target_valido = (target_mask_full & enemy_ocupado).any(dim=-1)
-        #no hay target válido si no hay ningún objetivo válido para esa habilidad y guerrero
-        sin_target = ~hay_target_valido & target_mask_full.any(dim=-1)
-
-        mask[:, :, :4] &= ~sin_target
-
-        mask[:, 0, 5] = False # Slot 0 (front) → no puede moverse a la derecha (acción 5)
-        mask[:, 2, 4] = False  # Slot 2 (back)  → no puede moverse a la izquierda (acción 4)
-
-        return mask   # (N, 3, 6) bool
-
     def mask_turn(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities, logits):
         """Wrapper de compatibilidad: calcula la máscara y la aplica a logits."""
         N = own_disposition.shape[0]
-        mask = self.compute_action_mask(own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities)
+        mask = compute_action_mask(own_disposition, own_cooldowns, own_alive, enemy_disposition, 
+                                   own_instance_abilities,self.environment.target_mask_por_tipo_habilidad)
         mask_flat = mask.view(N, 18) #Transforma de (N,3,6) a (N,18) para poder aplicarla a los logits de la red
         return logits.masked_fill(~mask_flat, float("-inf"))
 
@@ -360,6 +336,8 @@ class PlayerAIV:
         network.clamp_sigma(constants.SIGMA_MIN)   # NUEVO: evita colapso de exploración
         replayed = getattr(self, replayed_counter_attr)
         if replayed % constants.COPY_DQN == 0:
+            if hasattr(network, '_orig_mod'):
+                network = network._orig_mod
             target_network.load_state_dict(network.state_dict())
 
     def _multi_agent_double_dqn_target(self, batch, next_states, rewards, dones):
@@ -400,6 +378,7 @@ class PlayerAIV:
                 "replay_memory": replay_memory.state_dict(), "elo": self.elo,
             }, path)
 
+    #Al cargar un modelo se tiene que resetear el noise para reiniciar el weight y bias catcheado
     def load_model(self, path1: str, path2: str) -> None:
         for path, (net, target_net, opt, replay_memory, eps_attr, replayed_attr) in zip((path1, path2), self._network_specs()):
             checkpoint = torch.load(path, weights_only=False)

@@ -6,6 +6,7 @@ import tkinter as tk
 import numpy as np
 import torch
 
+from AI.Environment.action_mask import compute_action_mask
 import constants
 
 
@@ -51,37 +52,6 @@ class PlayerGUIV:
         cd_txt = f"cd={ability.turn_cd}" if ability.turn_cd > 0 else "sin cd"
         return f"{ability.name}\n({tipo_efecto}, {detalle}, {cd_txt})"
 
-    # ------------------------------------------------------------
-    # Máscara de acciones válidas — idéntica a PlayerAIV.compute_action_mask.
-    # NUEVO: antes turn() decidía qué botones mostrar solo con cd[hab]==0 y
-    # slot<2/slot>0, sin comprobar si una habilidad de ataque tiene algún
-    # objetivo enemigo válido. Esto permitía mostrar botones que el entorno
-    # luego trataría como "sin efecto" (target_mask sin coincidencia), dando
-    # una experiencia distinta a la que ve la red. Duplicada aquí porque su
-    # lógica no depende de ninguna red neuronal, solo de disposición/
-    # cooldowns/vida/habilidades — el humano necesita la misma información.
-    # ------------------------------------------------------------
-    def compute_action_mask(self, own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities):
-        N = own_disposition.shape[0]
-        mask = own_alive.unsqueeze(-1).expand(N, 3, 6).clone()
-
-        mask[:, :, :4] &= (own_cooldowns == 0)
-
-        table = self.environment.target_mask_por_tipo_habilidad
-        target_mask_pool = table[own_disposition]
-        idx = own_instance_abilities.unsqueeze(-1).expand(-1, -1, -1, 3)
-        target_mask_full = target_mask_pool.gather(2, idx)
-
-        enemy_ocupado = (enemy_disposition > 0).unsqueeze(1).unsqueeze(1)
-        hay_target_valido = (target_mask_full & enemy_ocupado).any(dim=-1)
-        sin_target = ~hay_target_valido & target_mask_full.any(dim=-1)
-
-        mask[:, :, :4] &= ~sin_target
-
-        mask[:, 0, 5] = False
-        mask[:, 2, 4] = False
-
-        return mask
 
     def reset_noise(self):
         # NUEVO: no-op. No hay NoisyLinear en un jugador humano; se añade solo
@@ -200,8 +170,8 @@ class PlayerGUIV:
             w.destroy()
 
         # NUEVO: máscara real de acciones válidas (N,3,6), igual que ve la red.
-        action_mask = self.compute_action_mask(
-            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities
+        action_mask = compute_action_mask(
+            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities,self.environment.target_mask_por_tipo_habilidad   
         )
 
         # ------------------------------------------------------------
