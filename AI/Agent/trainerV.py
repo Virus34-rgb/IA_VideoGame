@@ -1,6 +1,7 @@
 """
 Entrenador para Castle Game.
 """
+import cProfile
 import os
 import time
 from typing import Optional, Any, Tuple, Dict
@@ -24,6 +25,7 @@ class TrainerV:
         self, player1, player2,playerRusher, environment, opponent_pool,
         train_batches, eval_batches, pathp1_1, pathp1_2, pathp2_1, pathp2_2,
         path_stats, path_stats2, logger=None, snapshot_every=1000, progress_every=1,
+        profile_cprofile=False, profile_torch=False, profile_torch_batches=3
     ) -> None:
         self.player1 = player1
         self.player2 = player2
@@ -31,6 +33,9 @@ class TrainerV:
         self.environment = environment
         self.N = environment.N
         self.opponent_pool = opponent_pool
+        self.profile_cprofile= profile_cprofile
+        self.profile_torch = profile_torch
+        self.profile_torch_batches = profile_torch_batches
 
         self.train_batches = train_batches
         self.eval_batches = eval_batches
@@ -113,6 +118,24 @@ class TrainerV:
         self._opponent_from_pool_mask = torch.zeros(self.N, dtype=torch.bool)
         self._opponent_rusher_mask = torch.zeros(self.N,dtype=torch.bool)
         self._grouped_opponents = {}
+        
+        profiler_cpu = None
+        profiler_torch = None
+
+        if self.profile_cprofile:
+            profiler_cpu = cProfile.Profile()
+            profiler_cpu.enable()
+
+        if self.profile_torch:
+            profiler_torch = torch.profiler.profile(
+                activities=[torch.profiler.ProfilerActivity.CPU],
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=self.profile_torch_batches, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler('./profiler_logs'),
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+            )
+            profiler_torch.start()
 
         for batch_idx in range(batches):
             if (learn_p1 or learn_p2) and not is_rusher_step and batch_idx != 0 and batch_idx % save_every == 0:
@@ -138,6 +161,14 @@ class TrainerV:
                     self.playerRusher.set_aggression(self._sample_rusher_aggression(self.N))
 
             self._run_batch(batch_idx, learn_p1, learn_p2, p2_training_player, batches)
+            
+            # Actualizar el scheduler de torch profiler
+            if profiler_torch is not None:
+                profiler_torch.step()
+                # Detener después de los batches activos
+                if batch_idx >= (1 + 1 + self.profile_torch_batches - 1):
+                    profiler_torch.stop()
+                    profiler_torch = None
             
             if learn_p1 and hasattr(self.player1, "update_epsilon"):
                 self.player1.update_epsilon(n_games=self.N)
@@ -213,6 +244,11 @@ class TrainerV:
                 )
 
             self._print_progress(batch_idx, batches, start_time)
+            
+        if profiler_cpu is not None:
+            profiler_cpu.disable()
+            profiler_cpu.dump_stats(constants.PROFILE_CPROFILE_OUTPUT)
+            print(f"✅ cProfile guardado en {constants.PROFILE_CPROFILE_OUTPUT}")
 
         if batches > 0:
             print()

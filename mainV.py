@@ -7,6 +7,7 @@ hiperparámetros (usando RunSpec).
 """
 import math
 import os
+import pstats
 import random
 import re
 import shutil
@@ -163,13 +164,15 @@ class MainV:
         return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
     def run(self) -> None:
-        """Ejecuta todos los pasos definidos y genera gráficos finales."""
         self.setup()
         for step in self.steps:
             self._run_step(step)
         self.logger.flush_loss_buffer()
         self._print_summary()
         self.logger.plot_progress(show=False)
+        
+        if constants.PROFILE_CPROFILE:
+            self._print_profile_stats()
 
     # ------------------------------------------------------------
     # Ejecución de un paso individual
@@ -225,6 +228,9 @@ class MainV:
             path_stats=self.config.stats_path,
             path_stats2=stats2_path_for_step,   # FIX: antes step.stats_path a pelo (podia ser None sin más fallback)
             logger=self.logger,
+            profile_cprofile=constants.PROFILE_CPROFILE,
+            profile_torch=constants.PROFILE_TORCH,
+            profile_torch_batches=constants.PROFILE_TORCH_BATCHES,
         )
 
         start_time = time.time()
@@ -543,6 +549,30 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         ))
 
     return steps
+
+def _print_profile_stats(self):
+    """Carga el archivo de perfil de cProfile y muestra las estadísticas."""
+    profile_path = constants.PROFILE_CPROFILE_OUTPUT
+    if not os.path.exists(profile_path):
+        print("⚠️ No se encontró archivo de perfil de cProfile.")
+        return
+
+    print("\n" + "=" * 70)
+    print("                    ESTADÍSTICAS DE PERFIL (cProfile)")
+    print("=" * 70)
+
+    stats = pstats.Stats(profile_path)
+    
+    print("\n🔹 TOP 40 POR TIEMPO ACUMULADO (cumulative)")
+    print("-" * 70)
+    stats.sort_stats("cumulative").print_stats(40)
+
+    print("\n🔹 TOP 40 POR TIEMPO PROPIO (tottime)")
+    print("-" * 70)
+    stats.sort_stats("tottime").print_stats(40)
+
+    print("\n" + "=" * 70)
+    print("✅ Análisis de perfil completado.")
 
 
 # ================================================================
