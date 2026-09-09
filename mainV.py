@@ -337,6 +337,30 @@ class MainV:
         if minutes > 0:
             return f"{minutes}m {secs:.2f}s"
         return f"{secs:.2f}s"
+    
+    def _print_profile_stats(self):
+        """Carga el archivo de perfil de cProfile y muestra las estadísticas."""
+        profile_path = constants.PROFILE_CPROFILE_OUTPUT
+        if not os.path.exists(profile_path):
+            print("⚠️ No se encontró archivo de perfil de cProfile.")
+            return
+
+        print("\n" + "=" * 70)
+        print("                    ESTADÍSTICAS DE PERFIL (cProfile)")
+        print("=" * 70)
+
+        stats = pstats.Stats(profile_path)
+        
+        print("\n🔹 TOP 40 POR TIEMPO ACUMULADO (cumulative)")
+        print("-" * 70)
+        stats.sort_stats("cumulative").print_stats(40)
+
+        print("\n🔹 TOP 40 POR TIEMPO PROPIO (tottime)")
+        print("-" * 70)
+        stats.sort_stats("tottime").print_stats(40)
+
+        print("\n" + "=" * 70)
+        print("✅ Análisis de perfil completado.")
 
 
 # ================================================================
@@ -550,29 +574,6 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
 
     return steps
 
-def _print_profile_stats(self):
-    """Carga el archivo de perfil de cProfile y muestra las estadísticas."""
-    profile_path = constants.PROFILE_CPROFILE_OUTPUT
-    if not os.path.exists(profile_path):
-        print("⚠️ No se encontró archivo de perfil de cProfile.")
-        return
-
-    print("\n" + "=" * 70)
-    print("                    ESTADÍSTICAS DE PERFIL (cProfile)")
-    print("=" * 70)
-
-    stats = pstats.Stats(profile_path)
-    
-    print("\n🔹 TOP 40 POR TIEMPO ACUMULADO (cumulative)")
-    print("-" * 70)
-    stats.sort_stats("cumulative").print_stats(40)
-
-    print("\n🔹 TOP 40 POR TIEMPO PROPIO (tottime)")
-    print("-" * 70)
-    stats.sort_stats("tottime").print_stats(40)
-
-    print("\n" + "=" * 70)
-    print("✅ Análisis de perfil completado.")
 
 
 # ================================================================
