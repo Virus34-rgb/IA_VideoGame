@@ -7,5 +7,6 @@ logs/
 
 *.csv
 *.log
+*.rar
 
 wandb/
