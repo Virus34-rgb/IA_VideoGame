@@ -138,6 +138,16 @@ class PlayerNoAIV:
             actions[pos] = elegido
 
         return torch.tensor([actions], dtype=torch.long)
+    
+    def turn_with_mask(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+                   enemy_disposition, own_instance_abilities,
+                   precomputed_action_mask=None):
+        """PlayerNoAIV calcula su propia máscara en turn(). Ignoramos la
+        precomputada para no duplicar lógica de lectura de input."""
+        return self.turn(
+            batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+            enemy_disposition, own_instance_abilities,
+        )
 
     def reset_noise(self):
         pass  # no aplica: no hay NoisyLinear en un jugador humano

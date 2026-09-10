@@ -71,7 +71,13 @@ class OpponentProfileTracker:
         p1_move_taken = self.environment.p1_movements.float()
         p1_dmg_dealt = self.environment.p1_damage
         p1_dmg_recv = self.environment.p2_damage
-
+        mismatch = p1_atk_taken > p1_atk_opp
+        if mismatch.any():
+            idx = mismatch.nonzero(as_tuple=True)[0][:3]  # solo las 3 primeras para no saturar consola
+            print(f"[DEBUG PROFILE] P1 atk_taken > atk_opp en partidas {idx.tolist()}: "
+                  f"taken={p1_atk_taken[idx].tolist()} opp={p1_atk_opp[idx].tolist()} "
+                  f"turno={self.environment.turn_number[idx].tolist()}")
+            
         p2_es_ataque, p2_es_def = self._ability_type_masks(p2_types_now, p2_abilities_now)
         p2_atk_valid = p2_action_mask_now[:, :, :4] & p2_es_ataque
         p2_def_valid = p2_action_mask_now[:, :, :4] & p2_es_def
@@ -96,17 +102,17 @@ class OpponentProfileTracker:
     def _compute_profile(self, old_profile, atk_taken, atk_opp, def_taken, def_opp, move_taken, move_opp, dmg_dealt, dmg_recv):
         decay = constants.PROFILE_EMA_DECAY
 
-        new_aggression = torch.where(atk_opp > 0, atk_taken / atk_opp.clamp(min=1), old_profile[:, 0])
-        aggression = decay * new_aggression + (1 - decay) * old_profile[:, 0]
+        new_aggression = torch.where(atk_opp > 0, (atk_taken / atk_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 0])
+        aggression = (decay * new_aggression + (1 - decay) * old_profile[:, 0]).clamp(0.0, 1.0)
 
-        new_movement = torch.where(move_opp > 0, move_taken / move_opp.clamp(min=1), old_profile[:, 1])
-        movement_freq = decay * new_movement + (1 - decay) * old_profile[:, 1]
+        new_movement = torch.where(move_opp > 0, (move_taken / move_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 1])
+        movement_freq = (decay * new_movement + (1 - decay) * old_profile[:, 1]).clamp(0.0, 1.0)
 
-        new_defense = torch.where(def_opp > 0, def_taken / def_opp.clamp(min=1), old_profile[:, 2])
-        defense_usage = decay * new_defense + (1 - decay) * old_profile[:, 2]
+        new_defense = torch.where(def_opp > 0, (def_taken / def_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 2])
+        defense_usage = (decay * new_defense + (1 - decay) * old_profile[:, 2]).clamp(0.0, 1.0)
 
         damage_ratio_raw = dmg_dealt / dmg_recv.clamp(min=1)
-        new_damage_ratio = damage_ratio_raw / (damage_ratio_raw + 1.0)
-        damage_ratio = decay * new_damage_ratio + (1 - decay) * old_profile[:, 3]
+        new_damage_ratio = damage_ratio_raw / (damage_ratio_raw + 1.0)   # ya acotado a (0,1) por construcción matemática
+        damage_ratio = (decay * new_damage_ratio + (1 - decay) * old_profile[:, 3]).clamp(0.0, 1.0)
 
         return torch.stack([aggression, movement_freq, defense_usage, damage_ratio], dim=-1)

@@ -130,16 +130,24 @@ class PlayerRusherV:
     # Turno de combate
     # ------------------------------------------------------------
     def turn(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
-             enemy_disposition, own_instance_abilities):
-        action_mask = compute_action_mask(
-            own_disposition, own_cooldowns, own_alive, enemy_disposition, own_instance_abilities
-            ,self.environment.target_mask_por_tipo_habilidad
-        )
+             enemy_disposition, own_instance_abilities,precomputed_action_mask):
+        action_mask = precomputed_action_mask
         actions = self._decidir_turno(
             action_mask, own_disposition, own_cooldowns, own_alive,
             enemy_disposition, own_instance_abilities,
         )
         return actions
+    
+    def turn_with_mask(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+                   enemy_disposition, own_instance_abilities,
+                   precomputed_action_mask=None):
+        """Compatibilidad con TrainerV: ignora la máscara precomputada porque
+        PlayerRusherV la recalcula internamente en turn() a partir de sus propias
+        tablas de entorno (que son las mismas que usa el entorno real)."""
+        return self.turn(
+            batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+            enemy_disposition, own_instance_abilities,precomputed_action_mask
+        )
 
     def _decidir_turno(self, action_mask, own_disposition, own_cooldowns, own_alive,
                         enemy_disposition, own_instance_abilities):

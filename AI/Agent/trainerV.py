@@ -19,10 +19,9 @@ from AI.Agent.choose_state import ChooseStateV
 from AI.Agent.nstep_buffer import NStepBuffer
 from AI.Agent.observationV import ObservationV
 from AI.Agent.eloRating import EloRating
-from AI.Environment.abilitySampling import sample_abilities_batch_all_types
 from AI.Agent.opponent_assignment import OpponentAssignmentService
 from AI.Agent.opponent_profile_tracker import OpponentProfileTracker
-
+from AI.Logging.stats_report_writer import StatsReportWriter
 
 class TrainerV:
     def __init__(
@@ -255,8 +254,8 @@ class TrainerV:
         if batches > 0:
             print()
 
-        self.environment.stats.guardar_stats(
-            stats_path, self.environment.warriors_classes,
+        StatsReportWriter.write(
+            stats_path, self.environment.stats, self.environment.warriors_classes,
             p1_elo=self.player1.elo, p2_elo=p2_training_player.elo, pool_elos=self.opponent_pool.elos,
         )
 

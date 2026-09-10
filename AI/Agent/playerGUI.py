@@ -266,6 +266,17 @@ class PlayerGUIV:
             self.root.update_idletasks()
 
         return torch.tensor(self.actions, dtype=torch.long).unsqueeze(0)
+    
+    def turn_with_mask(self, batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+                   enemy_disposition, own_instance_abilities,
+                   precomputed_action_mask=None):
+        """La GUI recalcula la máscara al construir los botones. Ignoramos
+        la precomputada para que la GUI siga mostrando exactamente lo que
+        ella misma considera válido."""
+        return self.turn(
+            batch_encoded_obs, own_disposition, own_cooldowns, own_alive,
+            enemy_disposition, own_instance_abilities,
+        )
 
     # ---------- Métodos internos ----------
     def _init_root(self):

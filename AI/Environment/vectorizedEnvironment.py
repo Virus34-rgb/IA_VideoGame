@@ -7,7 +7,7 @@ from typing import Tuple, Dict, Any, Optional
 from AI.Environment.gameState import GameState
 from AI.Environment.resolve_actions import resolveAction
 from AI.Environment.reward_calculator import RewardCalculator
-from AI.Environment.statsV import StatsV
+from AI.Logging.stats_accumulator import StatsAccumulator
 from AI.Environment.warriorFactory import get_warriors_classes
 from AI.Environment.abilityData import EffectType
 import constants
@@ -40,7 +40,7 @@ class VectorizedEnvironment:
                                                   constants.TURN_PENALTY_BASE,constants.TURN_PENALTY_MAX,constants.TURN_PENALTY_RAMP_START,
                                                   constants.TURN_PENALTY_RAMP_TURNS, constants.REWARD_SCALE,constants.DISCOUNT_FACTOR)
 
-        self.stats: StatsV = StatsV()
+        self.stats: StatsAccumulator = StatsAccumulator()
         
         self.reset()
 
@@ -371,7 +371,9 @@ class VectorizedEnvironment:
         damage_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.float)
         turn_cd_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)
         target_mask_por_tipo_habilidad = torch.zeros(num_types, num_abilities, num_slots, dtype=torch.bool)
-        effect_type_por_tipo_habilidad = torch.zeros(num_types, num_abilities, dtype=torch.long)
+        effect_type_por_tipo_habilidad = torch.full(
+            (num_types, num_abilities), fill_value=-1, dtype=torch.long
+        )
 
         for warrior_id, warrior_data in self.warriors_classes.items():
             max_health_por_tipo[warrior_id] = warrior_data.max_health

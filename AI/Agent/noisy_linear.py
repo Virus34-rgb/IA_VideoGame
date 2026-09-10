@@ -162,3 +162,11 @@ class NoisyLinear(nn.Linear):
     def mean_abs_sigma(self) -> float:
         """Media de |sigma| de esta capa, para logging/diagnóstico."""
         return self.weight_sigma.data.abs().mean().item()
+    
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                          missing_keys, unexpected_keys, error_msgs):
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+        self._refresh_cache()
