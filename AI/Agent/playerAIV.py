@@ -105,9 +105,6 @@ class PlayerAIV:
     def turn_with_mask(self, *args, **kwargs):
         return self._policy.turn_with_mask(*args, **kwargs)
 
-    def compute_action_mask(self, *args, **kwargs):
-        return self._policy.compute_action_mask(*args, **kwargs)
-
     def update_epsilon(self, n_games: int = 1) -> None:
         self._policy.update_epsilon(n_games)
 

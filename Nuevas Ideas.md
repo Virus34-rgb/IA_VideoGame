@@ -269,3 +269,13 @@ Presenta tus recomendaciones usando estrictamente una tabla con las siguientes c
 
 | Mecánica Recomendada | Impacto en Aprendizaje (Alto/Medio) | Coste en Tiempo de Ejecución (Alto/Medio/Bajo) | Coste de Implementación (Complejo/Medio/Fácil) | Justificación Breve |
 | :--- | :--- | :--- | :--- | :--- |
+
+Solo quiero que hagas una evaluación del estado del proyecto, el archivo es un resumen de cosas que se han dejado por hacer. Pero no es extremadamente relevante. En el estado del proyecto quiero que seas realmente honesto respecto a:
+-Limpieza del código y responabilidades individuales de las clases
+-Capacidad de aprendizaje de la IA, entorno de entrenamiento adecuado, pesos de las recompensas bien calculadas.
+-Cosas a implementar ya sean a nivel de aprendizaje o a nivel de mecánicas en el videojuego
+-Posibles optimizaciones a nivel de eficiencia temporal y de entrenamiento
+-Configuraciones del entrono que no este realizando
+-Cosas importantes de deep learning (pytorch) que no este realizando
+-Cosas que tengo qeu implementar (incluidas las del resumen) y lista de prioridades.
+Quiero honestidad, no asumas que mi código es perfecto, busca cualquier tipo de error, cosa mejorable, cosa inutil, código muerto, y dimelo. 

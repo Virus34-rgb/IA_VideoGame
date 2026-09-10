@@ -634,20 +634,6 @@ class TrainerV:
             self._profile_tracker.p1_profile,
         )
         return obs1, obs2
-    
-    def _ability_type_masks(self, disposition, instance_abilities):
-        """(N,3,4) bool — para cada uno de los 4 botones de habilidad de cada
-        slot, si esa habilidad concreta (según el tipo de guerrero y el pool
-        equipado) es de tipo ATAQUE o de tipo DEFENSA/CURA. No mira si el
-        botón es jugable ahora mismo (eso lo aporta action_mask por fuera)."""
-        tipo_expand = disposition.unsqueeze(-1).expand(-1, -1, 4)
-        effect_type = self.environment.effect_type_por_tipo_habilidad[tipo_expand, instance_abilities]
-        es_ataque = effect_type == EffectType.ATTACK
-        es_defensa_cura = (
-            (effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF) |
-            (effect_type == EffectType.SELF_HEAL) | (effect_type == EffectType.TEAM_HEAL)
-        )
-        return es_ataque, es_defensa_cura
 
     def _update_profile_accumulators(
         self, p1_types_now, p1_abilities_now, p1_action_mask_now, p1_alive_now,
@@ -657,37 +643,6 @@ class TrainerV:
             p1_types_now, p1_abilities_now, p1_action_mask_now, p1_alive_now,
             p2_types_now, p2_abilities_now, p2_action_mask_now, p2_alive_now,
         )
-
-    def _compute_profile(self, old_profile, atk_taken, atk_opp, def_taken, def_opp, move_taken, move_opp, dmg_dealt, dmg_recv):
-        """EMA turno a turno. Si el denominador de oportunidad de este turno es 0
-        (nadie tuvo esa opción disponible), no hay observación nueva y se mantiene
-        el valor anterior sin mezclar — evita contaminar la EMA con NaN por 0/0."""
-        decay = constants.PROFILE_EMA_DECAY
-
-        new_aggression = torch.where(atk_opp > 0, atk_taken / atk_opp.clamp(min=1), old_profile[:, 0])
-        aggression = decay * new_aggression + (1 - decay) * old_profile[:, 0]
-
-        new_movement = torch.where(move_opp > 0, move_taken / move_opp.clamp(min=1), old_profile[:, 1])
-        movement_freq = decay * new_movement + (1 - decay) * old_profile[:, 1]
-
-        new_defense = torch.where(def_opp > 0, def_taken / def_opp.clamp(min=1), old_profile[:, 2])
-        defense_usage = decay * new_defense + (1 - decay) * old_profile[:, 2]
-
-        damage_ratio_raw = dmg_dealt / dmg_recv.clamp(min=1)
-        new_damage_ratio = damage_ratio_raw / (damage_ratio_raw + 1.0)
-        damage_ratio = decay * new_damage_ratio + (1 - decay) * old_profile[:, 3]
-
-        return torch.stack([aggression, movement_freq, defense_usage, damage_ratio], dim=-1)
-    
-    def _estimate_aggression_prior(self, disposition, instance_abilities):
-        damage = self.environment.damage_por_tipo_habilidad[disposition.unsqueeze(-1),instance_abilities]
-        effect_type = self.environment.effect_type_por_tipo_habilidad[disposition.unsqueeze(-1),instance_abilities]
-        attack_mask = effect_type == EffectType.ATTACK
-        attack_damage = damage * attack_mask
-        total_damage = attack_damage.sum(dim=(1,2))
-        prior = total_damage / constants.PROFILE_DAMAGE_POTENTIAL_REF
-        prior = prior.clamp(0.0, 1.0)
-        return prior
 
     def _turn_mixed_opponent(self, obs2_tensor, from_pool, grouped_opponents, p2_training_player,p2_action_mask_now):
         actions = p2_training_player.turn_with_mask(

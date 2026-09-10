@@ -123,16 +123,25 @@ class NoisyLinear(nn.Linear):
     @torch.no_grad()
     def _refresh_cache(self) -> None:
         """Recalcula y cachea el peso/bias efectivo tras cambiar mu/sigma/epsilon.
-        Evita recomputar weight_mu + weight_sigma*weight_epsilon en cada forward()."""
+        Evita recomputar weight_mu + weight_sigma*weight_epsilon en cada forward().
+
+        Usa object.__setattr__ en vez de self.x = ... para evitar que nn.Module
+        registre estas referencias como parámetros cuando training=False (en ese
+        caso _cached_weight apunta a weight_mu, que SÍ es un Parameter, y
+        nn.Module.__setattr__ lo metería en _parameters — corrompiendo el módulo
+        para futuras asignaciones)."""
         if self.training:
-            self._cached_weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
+            cached_weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
             if self.bias_mu is not None:
-                self._cached_bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
+                cached_bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
             else:
-                self._cached_bias = None
+                cached_bias = None
         else:
-            self._cached_weight = self.weight_mu
-            self._cached_bias = self.bias_mu if self.bias_mu is not None else None
+            cached_weight = self.weight_mu
+            cached_bias = self.bias_mu if self.bias_mu is not None else None
+
+        object.__setattr__(self, "_cached_weight", cached_weight)
+        object.__setattr__(self, "_cached_bias", cached_bias)
 
     @torch.no_grad()
     def _scale_noise(self, size: Union[int, torch.Size, Sequence]) -> torch.Tensor:

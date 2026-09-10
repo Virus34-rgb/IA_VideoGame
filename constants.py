@@ -71,7 +71,7 @@ TURN_REPLAY_DATA = 65_536     # Capacidad del buffer de turno Estandar 150000 pa
 BATCH_SIZE = 256                 # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
-COPY_DQN = 50                     # Frecuencia de copia a target network (en pasos de replay)
+COPY_DQN = 50                    # Frecuencia de copia a target network (en pasos de replay)
 
 # ============================================================
 # Juego - Recompensas
