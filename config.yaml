@@ -3,12 +3,12 @@
 # ============================================================
 
 VERSION: 2
-RUN_NAME_SUFFIX: "TiempoDefinitive2"
+RUN_NAME_SUFFIX: "TiempoDefinitive4"
 N_BATCH: 2048
 TRAIN_EPISODES: 100
 EVAL_EPISODES: 10
 SEED: 42
-PROFILE_CPROFILE : true          # Activa cProfile (global)
+PROFILE_CPROFILE : false       # Activa cProfile (global)
 PROFILE_TORCH : false            # Activa torch.profiler (solo primeros batches)
 PROFILE_TORCH_BATCHES : 3        # Número de batches a perfilar con torch
 PROFILE_CPROFILE_OUTPUT : "optimizedAll2.prof"
