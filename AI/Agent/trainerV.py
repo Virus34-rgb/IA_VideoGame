@@ -698,7 +698,7 @@ class TrainerV:
         rusher_mask_3 = self._opponent_assignment.rusher_mask.unsqueeze(-1)
         actions_rusher = self.playerRusher.turn(obs2_tensor, self.environment.p2_disposition, self.environment.p2_cooldowns,
             self.environment.p2_alive, self.environment.p1_disposition,
-            self.environment.p2_instance_abilities,)
+            self.environment.p2_instance_abilities,p2_action_mask_now)
         
         actions = torch.where(rusher_mask_3,actions_rusher,actions)
 

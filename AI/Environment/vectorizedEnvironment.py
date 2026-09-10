@@ -203,7 +203,7 @@ class VectorizedEnvironment:
                 new_own_cd, new_own_alive, new_enemy_alive,
                 new_own_abilities, ability_pool_idx,
                 new_own_castle,wasted_heal,defense_wasted,strategic_movement,
-                overkill_damage,kill_confirmed,ability_type
+                overkill_damage,kill_confirmed, mask_ataque_real, mask_defend_real, mask_cura_real
             ) = self.resolver.resolve_action(
                 pos, actor_type, own_disp, enemy_disp, own_health, enemy_health,
                 own_cooldowns, own_alive, enemy_alive, actor_action, enemy_actions,
@@ -243,16 +243,16 @@ class VectorizedEnvironment:
             kill_confirmed_p1 += kill_confirmed * es_p1.float()
             kill_confirmed_p2 += kill_confirmed * (~es_p1).float()
             
-            self.p1_attacks += es_p1 & (ability_type == EffectType.ATTACK)
+            self.p1_attacks  += es_p1 & mask_ataque_real
+            self.p1_defenses += es_p1 & mask_defend_real
+            self.p1_healed   += es_p1 & mask_cura_real
             self.p1_movements += es_p1 & (moved > 0)
-            self.p1_defenses += es_p1 & ((ability_type == EffectType.DEFEND_FULL) | (ability_type == EffectType.DEFEND_HALF))
-            self.p1_healed += es_p1 & ((ability_type == EffectType.SELF_HEAL) | (ability_type == EffectType.TEAM_HEAL))
             self.p1_damage += torch.where(es_p1, dmg, torch.zeros_like(dmg))
             
-            self.p2_attacks += ~es_p1 & (ability_type == EffectType.ATTACK)
+            self.p2_attacks  += ~es_p1 & mask_ataque_real
+            self.p2_defenses += ~es_p1 & mask_defend_real
+            self.p2_healed   += ~es_p1 & mask_cura_real
             self.p2_movements += ~es_p1 & (moved > 0)
-            self.p2_defenses += ~es_p1 & ((ability_type == EffectType.DEFEND_FULL) | (ability_type == EffectType.DEFEND_HALF))
-            self.p2_healed += ~es_p1 & ((ability_type == EffectType.SELF_HEAL) | (ability_type == EffectType.TEAM_HEAL))
             self.p2_damage += torch.where(~es_p1, dmg, torch.zeros_like(dmg))
 
             self.stats.accumulate_movements(moved, es_p1, ~ya_terminadas_antes)

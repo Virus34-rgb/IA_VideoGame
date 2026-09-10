@@ -66,9 +66,9 @@ class OpponentProfileTracker:
         p1_atk_opp = p1_atk_valid.any(dim=-1).sum(dim=-1).float()
         p1_def_opp = p1_def_valid.any(dim=-1).sum(dim=-1).float()
         p1_move_opp = p1_alive_now.sum(dim=-1).float()
-        p1_atk_taken = self.environment.p1_attacks.float()
-        p1_def_taken = self.environment.p1_defenses.float()
-        p1_move_taken = self.environment.p1_movements.float()
+        p1_atk_taken = torch.minimum(self.environment.p1_attacks.float(), p1_atk_opp)
+        p1_def_taken = torch.minimum(self.environment.p1_defenses.float(), p1_def_opp)
+        p1_move_taken = torch.minimum(self.environment.p1_movements.float(), p1_move_opp)
         p1_dmg_dealt = self.environment.p1_damage
         p1_dmg_recv = self.environment.p2_damage
         mismatch = p1_atk_taken > p1_atk_opp
@@ -84,9 +84,9 @@ class OpponentProfileTracker:
         p2_atk_opp = p2_atk_valid.any(dim=-1).sum(dim=-1).float()
         p2_def_opp = p2_def_valid.any(dim=-1).sum(dim=-1).float()
         p2_move_opp = p2_alive_now.sum(dim=-1).float()
-        p2_atk_taken = self.environment.p2_attacks.float()
-        p2_def_taken = self.environment.p2_defenses.float()
-        p2_move_taken = self.environment.p2_movements.float()
+        p2_atk_taken = torch.minimum(self.environment.p1_attacks.float(), p2_atk_opp)
+        p2_def_taken = torch.minimum(self.environment.p1_defenses.float(), p2_def_opp)
+        p2_move_taken = torch.minimum(self.environment.p1_movements.float(), p2_move_opp)
         p2_dmg_dealt = self.environment.p2_damage
         p2_dmg_recv = self.environment.p1_damage
 

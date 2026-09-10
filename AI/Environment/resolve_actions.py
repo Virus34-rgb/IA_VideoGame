@@ -99,6 +99,8 @@ class resolveAction:
                     pos, enemy_disposition, enemy_actions, enemy_instance_abilities, enemy_alive
                 )
                 defense_wasted = (mask_defend & ~was_targeted).float()
+                
+            mask_cura = mask_self_heal | mask_team_heal
             
             return (
                 damage, damage_avoided, blocked, moved, heal,
@@ -106,7 +108,7 @@ class resolveAction:
                 own_cd_new, own_new_alive, enemy_alive_final,
                 own_abilities_new, ability_pool_idx,
                 own_new_castle,wasted_heal,defense_wasted,strategic_movement,overkill_damage,kill_confirmed,
-                effect_type
+                mask_ataque, mask_defend, mask_cura
             )
     
     def _swap_by_position(self, tensor, pos_a, pos_b, mask):
