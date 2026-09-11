@@ -108,6 +108,8 @@ class TrainerV:
         snapshot_every = max(1, batches // 50)
 
         start_time = time.time()
+        
+        backup_epsilons = self._set_epsilons(epsilon_turn, epsilon_sel)
 
         p2_training_player = self.player2
         is_rusher_step = p2_training_player is self.playerRusher
@@ -253,6 +255,9 @@ class TrainerV:
 
         if batches > 0:
             print()
+            
+        if restore_epsilon:
+            self._restore_epsilons(backup_epsilons)
 
         StatsReportWriter.write(
             stats_path, self.environment.stats, self.environment.warriors_classes,
@@ -547,10 +552,21 @@ class TrainerV:
             reward_acum = reward_acum[valid]
 
         if s1.shape[0] > 0:
-            rewards = reward_acum
-            player.remember_selection_batch(s1, a1, rewards, s2, torch.zeros(s1.shape[0], dtype=torch.bool))
-            player.remember_selection_batch(s2, a2, rewards, s3, torch.zeros(s2.shape[0], dtype=torch.bool))
-            player.remember_selection_batch(s3, a3, rewards, None, torch.ones(s3.shape[0], dtype=torch.bool))
+            rewards_terminal = reward_acum
+            rewards_intermediate = torch.zeros_like(reward_acum)
+
+            player.remember_selection_batch(
+                s1, a1, rewards_intermediate, s2,
+                torch.zeros(s1.shape[0], dtype=torch.bool),
+            )
+            player.remember_selection_batch(
+                s2, a2, rewards_intermediate, s3,
+                torch.zeros(s2.shape[0], dtype=torch.bool),
+            )
+            player.remember_selection_batch(
+                s3, a3, rewards_terminal, None,
+                torch.ones(s3.shape[0], dtype=torch.bool),
+            )
 
         for _ in range(constants.SELECTION_REPLAYS_PER_BATCH):
             loss = player.replay_selection()

@@ -145,6 +145,9 @@ class VectorizedEnvironment:
         order, actor_alive_inicio = self._get_turn_order()
         p1_alive_inicio = actor_alive_inicio[:, :3]
         p2_alive_inicio = actor_alive_inicio[:, 3:]
+        
+        pos_actual_p1 = torch.arange(3, device=self.p1_disposition.device).expand(self.N, 3).clone()
+        pos_actual_p2 = torch.arange(3, device=self.p2_disposition.device).expand(self.N, 3).clone()
 
         damage_p1 = torch.zeros(self.N)
         damage_p2 = torch.zeros(self.N)
@@ -173,8 +176,17 @@ class VectorizedEnvironment:
         for position in range(6):
             actor_idx = order[:, position]
             player = actor_idx // 3
-            pos = actor_idx % 3
+            pos_original = actor_idx % 3
             es_p1 = (player == 0)
+
+            # posición física actual del actor (no el slot original) ──
+            pos_actual_player = pos_actual_p1 if es_p1.any() else pos_actual_p2
+            # Seleccionar el tracker correcto por fila:
+            pos = torch.where(
+                es_p1,
+                pos_actual_p1.gather(1, pos_original.unsqueeze(1)).squeeze(1),
+                pos_actual_p2.gather(1, pos_original.unsqueeze(1)).squeeze(1),
+            )
 
             player_mask = es_p1.unsqueeze(1)
             player_mask_3 = player_mask.unsqueeze(-1)
@@ -184,7 +196,7 @@ class VectorizedEnvironment:
             own_health = torch.where(player_mask, self.p1_healths, self.p2_healths)
             enemy_health = torch.where(player_mask, self.p2_healths, self.p1_healths)
             own_actions = torch.where(player_mask, actionsp1, actionsp2)
-            actor_action = own_actions.gather(1, pos.unsqueeze(1)).squeeze(1)
+            actor_action = own_actions.gather(1, pos_original.unsqueeze(1)).squeeze(1)
             enemy_actions = torch.where(player_mask, actionsp2, actionsp1)
             own_alive = torch.where(player_mask, self.p1_alive, self.p2_alive)
             enemy_alive = torch.where(player_mask, self.p2_alive, self.p1_alive)
@@ -192,6 +204,7 @@ class VectorizedEnvironment:
             own_instance_abilities = torch.where(player_mask_3, self.p1_instance_abilities, self.p2_instance_abilities)
             enemy_instance_abilities = torch.where(player_mask_3, self.p2_instance_abilities, self.p1_instance_abilities)
             actor_type = own_disp.gather(1, pos.unsqueeze(1)).squeeze(1)
+            
 
             # Obtener castle_slots del actor y enemigo
             own_castle_slots = torch.where(player_mask, self.p1_castle_slots, self.p2_castle_slots)
@@ -223,6 +236,48 @@ class VectorizedEnvironment:
             self.p2_instance_abilities = torch.where(~player_mask_3, new_own_abilities, self.p2_instance_abilities)
             self.p1_castle_slots = torch.where(player_mask, new_own_castle, self.p1_castle_slots)
             self.p2_castle_slots = torch.where(~player_mask, new_own_castle, self.p2_castle_slots)
+    
+            # ── Actualizar trackers de posición por identidad ──
+            mask_movPos = (actor_action == 5)
+            mask_movNeg = (actor_action == 6)
+            mask_move = mask_movPos | mask_movNeg
+
+            if mask_move.any():
+                pos_destino_actual = torch.where(
+                    mask_movPos, (pos + 1).clamp(max=2),
+                    torch.where(mask_movNeg, (pos - 1).clamp(min=0), pos),
+                )
+
+                # Construir el mapeo inverso: slot_at_position[i, p] = slot s tal que pos_actual[i, s] == p
+                arange_3 = torch.arange(3, device=pos_actual_p1.device).expand(self.N, 3).clone()
+                slot_at_position_p1 = torch.zeros_like(pos_actual_p1)
+                slot_at_position_p1.scatter_(1, pos_actual_p1, arange_3)
+                slot_at_position_p2 = torch.zeros_like(pos_actual_p2)
+                slot_at_position_p2.scatter_(1, pos_actual_p2, arange_3)
+
+                # Slot del guerrero que está en pos_destino_actual (el "otro" que va a intercambiar)
+                slot_other_p1 = slot_at_position_p1.gather(1, pos_destino_actual.unsqueeze(1)).squeeze(1)
+                slot_other_p2 = slot_at_position_p2.gather(1, pos_destino_actual.unsqueeze(1)).squeeze(1)
+
+                # --- P1 ---
+                mask_p1_move = es_p1 & mask_move
+                cur_at_slot = pos_actual_p1.gather(1, pos_original.unsqueeze(1)).squeeze(1)
+                new_at_slot = torch.where(mask_p1_move, pos_destino_actual, cur_at_slot)
+                pos_actual_p1.scatter_(1, pos_original.unsqueeze(1), new_at_slot.unsqueeze(1))
+
+                cur_at_other = pos_actual_p1.gather(1, slot_other_p1.unsqueeze(1)).squeeze(1)
+                new_at_other = torch.where(mask_p1_move, pos, cur_at_other)
+                pos_actual_p1.scatter_(1, slot_other_p1.unsqueeze(1), new_at_other.unsqueeze(1))
+
+                # --- P2 ---
+                mask_p2_move = (~es_p1) & mask_move
+                cur_at_slot = pos_actual_p2.gather(1, pos_original.unsqueeze(1)).squeeze(1)
+                new_at_slot = torch.where(mask_p2_move, pos_destino_actual, cur_at_slot)
+                pos_actual_p2.scatter_(1, pos_original.unsqueeze(1), new_at_slot.unsqueeze(1))
+
+                cur_at_other = pos_actual_p2.gather(1, slot_other_p2.unsqueeze(1)).squeeze(1)
+                new_at_other = torch.where(mask_p2_move, pos, cur_at_other)
+                pos_actual_p2.scatter_(1, slot_other_p2.unsqueeze(1), new_at_other.unsqueeze(1))
 
             damage_p1 += dmg * es_p1.float()
             damage_p2 += dmg * (~es_p1).float()
@@ -295,6 +350,7 @@ class VectorizedEnvironment:
         rewardP2 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP2), rewardP2)
         self._debug_kill_p1 = kill_confirmed_p1.clone()
         self._debug_kill_p2 = kill_confirmed_p2.clone()
+    
         return self.get_state(), rewardP1, rewardP2, self.ended
 
 

@@ -61,7 +61,7 @@ class AgentTrainer:
             td_errors = torch.nan_to_num(td_errors, nan=1.0, posinf=10.0, neginf=10.0)
 
         loss = self._loss_function(q_selected, target, weights)
-        self._optimize_step(loss, self.optimizer_sel, self.selection_network, self.target_selection_network, "replayed_selection")
+        self._optimize_step(loss, self.optimizer_sel, self.selection_network, self.target_selection_network, "replayed_selection",constants.COPY_DQN_SEL)
         self.replay_memory_sel.update_priorities(tree_indices, td_errors.detach().cpu().numpy())
         return loss.item()
 
@@ -99,7 +99,7 @@ class AgentTrainer:
             td_errors = torch.nan_to_num(td_errors, nan=1.0, posinf=10.0, neginf=10.0)
 
         loss = self._loss_function(q_selected, target, weights)
-        self._optimize_step(loss, self.optimizer_turn, self.turn_network, self.target_turn_network, "replayed_turn")
+        self._optimize_step(loss, self.optimizer_turn, self.turn_network, self.target_turn_network, "replayed_turn",constants.COPY_DQN_TURN)
         self.replay_memory_turn.update_priorities(tree_indices, td_errors.detach().cpu().numpy())
         return loss.item()
 
@@ -108,14 +108,14 @@ class AgentTrainer:
         loss = nn.SmoothL1Loss(reduction="none")(input, target)
         return (loss * weights).mean()
 
-    def _optimize_step(self, loss, optimizer, network, target_network, replayed_counter_attr):
+    def _optimize_step(self, loss, optimizer, network, target_network, replayed_counter_attr,copy_dqn):
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(network.parameters(), constants.GRAD_CLIP_MAX_NORM)
         optimizer.step()
         network.clamp_sigma(constants.SIGMA_MIN)
         replayed = getattr(self, replayed_counter_attr)
-        if replayed % constants.COPY_DQN == 0:
+        if replayed % copy_dqn == 0:
             if hasattr(network, '_orig_mod'):
                 network = network._orig_mod
             target_network.load_state_dict(network.state_dict())

@@ -67,11 +67,13 @@ EPSILON_RESIDUAL = 0.01
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
 SELECTION_REPLAY_DATA = 131_072 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
-TURN_REPLAY_DATA = 65_536     # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
+TURN_REPLAY_DATA = 65_536    # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 256                 # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
 COPY_DQN = 50                    # Frecuencia de copia a target network (en pasos de replay)
+COPY_DQN_SEL = 50
+COPY_DQN_TURN = 50
 
 # ============================================================
 # Juego - Recompensas
@@ -93,7 +95,7 @@ REWARD_WEIGHTS = {
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
 TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización empieza a crecer
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
-TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
+TURN_PENALTY_MAX = 25             # Penalización de turno una vez alcanzado el techo (cerca del límite)
 WIN_REWARD = 1000               # Recompensa base por ganar la partida
 REWARD_SCALE = 100.0
 DRAW_PENALTY = 200                # Penalización por resultado en empate (20% de WIN_REWARD)

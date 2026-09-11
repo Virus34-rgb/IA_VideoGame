@@ -3,11 +3,11 @@
 # ============================================================
 
 VERSION: 2
-RUN_NAME_SUFFIX: "Base5"
+RUN_NAME_SUFFIX: "TURN_PENALTY2_1"
 N_BATCH: 2048
 TRAIN_EPISODES: 50
 EVAL_EPISODES: 10
-SEED: 42
+SEED: 44
 PROFILE_CPROFILE : false       # Activa cProfile (global)
 PROFILE_TORCH : false            # Activa torch.profiler (solo primeros batches)
 PROFILE_TORCH_BATCHES : 3        # Número de batches a perfilar con torch
@@ -15,7 +15,7 @@ PROFILE_CPROFILE_OUTPUT : "optimizedAll2.prof"
 
 RUN_RUSHER_FINETUNE: false
 RUSHER_FINETUNE_EPISODES: 5
-RUSHER_OPPONENT_PERCENTAGE: 0.3
+RUSHER_OPPONENT_PERCENTAGE: 0.0
 RUN_RUSHER_TESTS: true
 RUSHER_TEST_EPISODES: 10
 RUSHER_TEST_EPSILON: 0.00
