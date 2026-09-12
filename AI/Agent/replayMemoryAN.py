@@ -136,3 +136,7 @@ class ReplayMemoryAN:
         self.memory.size = state["size"]
         self.max_priority = state["max_priority"]
         self.storage.load_state_dict(state["storage"])
+        
+    def priority_stats(self) -> dict:
+        """Percentiles de prioridad del buffer. Ver SumTree.priority_stats."""
+        return self.memory.priority_stats()

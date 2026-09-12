@@ -103,8 +103,16 @@ class TrainerV:
     def _run(self, batches, epsilon_turn, epsilon_sel, learn_p1, learn_p2, stats_path, restore_epsilon
              , fixed_rusher_aggression=None, fixed_rusher_aggression_min = None,fixed_rusher_aggression_max = None,
              profile_cprofile_output=None, profile_torch_this_step=False) -> None:
-        save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
-        pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
+        if constants.SAVE_EVERY_ABSOLUTE is not None:
+            save_every = max(1, int(constants.SAVE_EVERY_ABSOLUTE))
+        else:
+            save_every = max(1, int(batches * constants.SAVE_MODEL_FRACTION))
+
+        if constants.POOL_EVERY_ABSOLUTE is not None:
+            pool_every = max(1, int(constants.POOL_EVERY_ABSOLUTE))
+        else:
+            pool_every = max(1, int(batches * constants.POOL_RANGE_FRACTION))
+            
         snapshot_every = max(1, batches // 50)
 
         start_time = time.time()
@@ -204,6 +212,11 @@ class TrainerV:
                         self.opponent_pool.update_elo(cp_id, new_elo2)
 
             if self.logger and (learn_p1 or learn_p2) and snapshot_every and batch_idx % snapshot_every == 0:
+                per_stats = {}
+                if hasattr(self.player1, "priority_stats"):
+                    per_stats["p1"] = self.player1.priority_stats()
+                if hasattr(p2_training_player, "priority_stats"):
+                    per_stats["p2"] = p2_training_player.priority_stats()
                 if constants.USE_WANDB:
                     partidas = max(self.environment.stats.partidas, 1)
                     wandb.log({
@@ -222,7 +235,12 @@ class TrainerV:
                             "elo/pool_mean": sum(pool_elos) / len(pool_elos),
                             "elo/pool_max": max(pool_elos),
                         }, step=batch_idx)
-                        
+                    if per_stats:
+                        for player in ("p1", "p2"):
+                            for buf in ("turn", "sel"):
+                                stats = per_stats.get(player, {}).get(buf, {})
+                                for k, v in stats.items():
+                                    wandb.log({f"per/{player}_{buf}_{k}": v}, step=batch_idx)  
                 sigmas = {"sel_p1": None, "turn_p1": None, "sel_p2": None, "turn_p2": None}
                 if hasattr(self.player1, "mean_sigmas"):
                     p1_sigmas = self.player1.mean_sigmas()
@@ -240,6 +258,7 @@ class TrainerV:
                     sigmas=sigmas,
                     profile_p1=self._profile_tracker.p1_profile.mean(dim=0).tolist(),
                     profile_p2=self._profile_tracker.p2_profile.mean(dim=0).tolist(),
+                    per_stats=per_stats,
                 )
 
             self._print_progress(batch_idx, batches, start_time)
@@ -350,7 +369,11 @@ class TrainerV:
                                               self._opponent_assignment.grouped_opponents, p2_training_player,
                                               p2_action_mask_now)
 
-        state, reward1, reward2, ended = self.environment.turn(action_p1, action_p2)
+        state, reward1, reward2, ended = self.environment.turn(
+            action_p1, action_p2,
+            opp_aggression_p1=self._profile_tracker.p2_profile[:, 0],
+            opp_aggression_p2=self._profile_tracker.p1_profile[:, 0],
+        )
         
         self._update_profile_accumulators(
             p1_types_now, p1_abilities_now, p1_action_mask_now, p1_alive_now,

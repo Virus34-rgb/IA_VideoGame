@@ -1,13 +1,10 @@
 """
 Lógica de entrenamiento (replay + optimización) para un agente PlayerAIV.
-Extraído de PlayerAIV: replay_turn, replay_selection, _optimize_step,
-_multi_agent_double_dqn_target, _loss_function, update_beta.
+Se recibe como argumento todos los objetos relativos a las redes neuronales,
+se guardan como referencia (no son una copia).
+Tiene dos atributos propios: replayed_selection y replayed_turn, los cuales
+marcan la cantidad de veces que se ha hecho un replay en una red neuronal
 
-Diseño: replayed_selection/replayed_turn SÍ viven aquí como self.X propios,
-porque son estado intrínseco de "cuánto ha entrenado este colaborador" -- a
-diferencia de epsilon/elo (categoría B en PlayerAIV), estos contadores no
-tienen ningún otro consumidor fuera de la lógica de replay/optimización y del
-guardado de checkpoints (que los LEE via propiedad, no los posee).
 """
 from typing import Optional
 import torch
@@ -31,12 +28,20 @@ class AgentTrainer:
 
         self.replayed_selection: int = 0
         self.replayed_turn: int = 0
-        self._turn_offsets = torch.tensor([0, 6, 12])
+        self._turn_offsets = torch.tensor([0, 6, 12]) # Offset creado al principio para evitar creación en cada bucle
 
     def replay_selection(self) -> Optional[float]:
+        """
+        Implementa el replay de la red neuronal de selección de personajes. Se usan casos de selección
+        anteriores y se calcula la perdida de recompensa que se produce (diferencia entre recompensa obtenida y estimada).
+        Tras esto se realiza un paso de optimización para cambiar los valores de los q-values segun la perdida.
+        Returns:
+            Optional[float]: el valor de la perdida
+        """
         if len(self.replay_memory_sel) < constants.BATCH_SIZE:
             return None
-
+        
+        #Reset del ruido de la noisy network para que no afecte a la replay
         self.selection_network.reset_noise()
         self.target_selection_network.reset_noise()
 

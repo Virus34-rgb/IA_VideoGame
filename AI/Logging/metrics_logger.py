@@ -55,6 +55,27 @@ class SnapshotRecord:
     profile_p2_defense: float = 0.5
     profile_p2_dmgratio: float = 0.5
     timestamp: float = field(default_factory=time.time)
+    # PER priority stats (buffers de turno)
+    per_turn_p1_min: float = 0.0
+    per_turn_p1_p50: float = 0.0
+    per_turn_p1_p90: float = 0.0
+    per_turn_p1_max: float = 0.0
+    per_turn_p1_mean: float = 0.0
+    per_turn_p2_min: float = 0.0
+    per_turn_p2_p50: float = 0.0
+    per_turn_p2_p90: float = 0.0
+    per_turn_p2_max: float = 0.0
+    per_turn_p2_mean: float = 0.0
+    per_sel_p1_min: float = 0.0
+    per_sel_p1_p50: float = 0.0
+    per_sel_p1_p90: float = 0.0
+    per_sel_p1_max: float = 0.0
+    per_sel_p1_mean: float = 0.0
+    per_sel_p2_min: float = 0.0
+    per_sel_p2_p50: float = 0.0
+    per_sel_p2_p90: float = 0.0
+    per_sel_p2_max: float = 0.0
+    per_sel_p2_mean: float = 0.0
 
 
 class MetricsLogger:
@@ -142,6 +163,7 @@ class MetricsLogger:
         sigmas: dict = None,
         profile_p1: list = None,
         profile_p2: list = None,
+        per_stats: dict = None
     ) -> None:
         """
         Registra un snapshot de progreso (métricas y Elo).
@@ -174,6 +196,10 @@ class MetricsLogger:
         sigmas = sigmas or {}
         profile_p1 = profile_p1 or [0.5, 0.5, 0.5, 0.5]
         profile_p2 = profile_p2 or [0.5, 0.5, 0.5, 0.5]
+        
+        per_stats = per_stats or {}
+        def _get(player, buf, key):
+            return per_stats.get(player, {}).get(buf, {}).get(key, 0.0)
 
         record = SnapshotRecord(
             episode=episode,
@@ -202,6 +228,26 @@ class MetricsLogger:
             profile_p2_movement=profile_p2[1],
             profile_p2_defense=profile_p2[2],
             profile_p2_dmgratio=profile_p2[3],
+            per_turn_p1_min=_get("p1", "turn", "min"),
+            per_turn_p1_p50=_get("p1", "turn", "p50"),
+            per_turn_p1_p90=_get("p1", "turn", "p90"),
+            per_turn_p1_max=_get("p1", "turn", "max"),
+            per_turn_p1_mean=_get("p1", "turn", "mean"),
+            per_turn_p2_min=_get("p2", "turn", "min"),
+            per_turn_p2_p50=_get("p2", "turn", "p50"),
+            per_turn_p2_p90=_get("p2", "turn", "p90"),
+            per_turn_p2_max=_get("p2", "turn", "max"),
+            per_turn_p2_mean=_get("p2", "turn", "mean"),
+            per_sel_p1_min=_get("p1", "sel", "min"),
+            per_sel_p1_p50=_get("p1", "sel", "p50"),
+            per_sel_p1_p90=_get("p1", "sel", "p90"),
+            per_sel_p1_max=_get("p1", "sel", "max"),
+            per_sel_p1_mean=_get("p1", "sel", "mean"),
+            per_sel_p2_min=_get("p2", "sel", "min"),
+            per_sel_p2_p50=_get("p2", "sel", "p50"),
+            per_sel_p2_p90=_get("p2", "sel", "p90"),
+            per_sel_p2_max=_get("p2", "sel", "max"),
+            per_sel_p2_mean=_get("p2", "sel", "mean"),
         )
         self._append_csv(self.snapshot_path, record, self._snapshot_header_written)
         self._snapshot_header_written = True

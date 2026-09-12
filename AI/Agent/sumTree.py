@@ -105,3 +105,26 @@ class SumTree:
 
     def __len__(self) -> int:
         return self.size
+    
+    def priority_stats(self) -> dict:
+        """
+        Percentiles y estadísticos de las prioridades almacenadas en las hojas.
+        Solo considera las hojas válidas (`size` primeras posiciones del buffer
+        circular; el resto son ceros del buffer preasignado).
+
+        Returns:
+            dict con min/p25/p50/p75/p90/max/mean de las prioridades.
+        """
+        if self.size == 0:
+            return {"min": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0,
+                    "p90": 0.0, "max": 0.0, "mean": 0.0}
+        leaves = self.tree[self.capacity - 1: self.capacity - 1 + self.size]
+        return {
+            "min": float(numpy.min(leaves)),
+            "p25": float(numpy.percentile(leaves, 25)),
+            "p50": float(numpy.percentile(leaves, 50)),
+            "p75": float(numpy.percentile(leaves, 75)),
+            "p90": float(numpy.percentile(leaves, 90)),
+            "max": float(numpy.max(leaves)),
+            "mean": float(numpy.mean(leaves)),
+        }

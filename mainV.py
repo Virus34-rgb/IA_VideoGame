@@ -38,6 +38,7 @@ except ImportError:
     wandb_setup = None
     print("Advertencia: wandb_setup no encontrado. Desactivando wandb.")
 
+
 def set_seed(seed: Optional[int]) -> None:
     """Fija las semillas de torch, numpy y random para reproducibilidad.
     Si seed es None, no hace nada (comportamiento no determinista, por defecto)."""
@@ -46,6 +47,7 @@ def set_seed(seed: Optional[int]) -> None:
     torch.manual_seed(seed)
     numpy.random.seed(seed)
     random.seed(seed)
+
 
 class MainV:
     """
@@ -116,7 +118,7 @@ class MainV:
         # Inicializar logger (CSV)
         self.logger = MetricsLogger(
             output_dir=self.log_dir,
-            run_name = run_nameA,
+            run_name=run_nameA,
         )
         self.logger.dump_config(
             constants,
@@ -159,7 +161,7 @@ class MainV:
 
         self._print_configuration()
 
-    def sanitize_filename(self,name: str) -> str:
+    def sanitize_filename(self, name: str) -> str:
         """Reemplaza caracteres no válidos en nombres de archivo por '_'."""
         return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
@@ -170,7 +172,7 @@ class MainV:
         self.logger.flush_loss_buffer()
         self._print_summary()
         self.logger.plot_progress(show=False)
-        
+
         if constants.PROFILE_CPROFILE:
             self._print_profile_stats()
 
@@ -226,7 +228,7 @@ class MainV:
             pathp2_1=self.config.path_p2_sel,
             pathp2_2=self.config.path_p2_turn,
             path_stats=self.config.stats_path,
-            path_stats2=stats2_path_for_step,   # FIX: antes step.stats_path a pelo (podia ser None sin más fallback)
+            path_stats2=stats2_path_for_step,
             logger=self.logger,
             profile_cprofile=constants.PROFILE_CPROFILE,
             profile_torch=constants.PROFILE_TORCH,
@@ -242,7 +244,7 @@ class MainV:
                 trainer.train()
             else:
                 trainer.evaluate(fixed_rusher_aggression=step.rusher_aggression)
-                
+
         else:
             # Modo personalizado con flags explícitos
             default_learn = step.action == "train"
@@ -339,7 +341,7 @@ class MainV:
         if minutes > 0:
             return f"{minutes}m {secs:.2f}s"
         return f"{secs:.2f}s"
-    
+
     def _print_profile_stats(self):
         """Carga el archivo de perfil de cProfile y muestra las estadísticas."""
         profile_path = constants.PROFILE_CPROFILE_OUTPUT
@@ -352,7 +354,7 @@ class MainV:
         print("=" * 70)
 
         stats = pstats.Stats(profile_path)
-        
+
         print("\n🔹 TOP 40 POR TIEMPO ACUMULADO (cumulative)")
         print("-" * 70)
         stats.sort_stats("cumulative").print_stats(40)
@@ -393,6 +395,7 @@ def load_config_yaml(path: str = "config.yaml") -> dict:
         config = yaml.safe_load(f)
     return config
 
+
 def run_single(
     config: RunConfig,
     run_spec: RunSpec,
@@ -410,7 +413,7 @@ def run_single(
         Tuple (log_dir, version_name) del run ejecutado.
     """
     # Guardar valores originales de constantes para restaurarlos después
-    if run_spec.seed is not None and constants.SEED != 'None':
+    if run_spec.seed is not None and constants.SEED is not None:
         set_seed(run_spec.seed)
 
     original_values = {}
@@ -484,7 +487,7 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
             episodes=config.train_episodes,
             opponent_factory=PlayerAIV,
         ))
-        
+
         if constants.RUN_RUSHER_FINETUNE:
             finetune_stats = (config.stats_rusher_finetune_low, config.stats_rusher_finetune_medium, config.stats_rusher_finetune_hight)
             for phase_idx, (fraction, agg_min, agg_max) in enumerate(constants.RUSHER_FINETUNE_PHASES):
@@ -505,8 +508,6 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
         steps.append(TrainingStep(
             name="Evaluación final",
             action="evaluate",
-            # FIX (bug 2): quitado el "()" — config.stats2_path es una @property.
-            # Se deja explicito (aunque sea igual al fallback) por claridad.
             stats_path=config.stats2_path,
             episodes=config.eval_episodes,
             opponent_factory=PlayerAIV,
@@ -577,22 +578,585 @@ def build_steps(config: RunConfig) -> List[TrainingStep]:
     return steps
 
 
+# ================================================================
+# MULTI-SEED + COMPARACIÓN CON BASELINE
+# ================================================================
+# Las constantes MULTI_SEED_* vienen de constants.py / config.yaml.
+
+
+def _parse_stats_file(path: str) -> dict:
+    """
+    Extrae {nombre_metrica: valor_numerico} de un archivo stats.txt.
+    Acepta líneas tipo:
+        "Partidas:                  40960"
+        "Victorias P1:              26911 (65.70%)"
+        "Victorias IA:              12490 -> 0.6098"
+    """
+    import re as _re
+    metrics = {}
+    if not os.path.exists(path):
+        return metrics
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.rstrip()
+            if ":" not in line:
+                continue
+            name, rest = line.split(":", 1)
+            name = name.strip()
+            if not name or name.startswith("-") or name.startswith("="):
+                continue
+            nums = _re.findall(r"[-+]?\d+(?:\.\d+)?", rest)
+            if not nums:
+                continue
+            try:
+                vals = [float(x) for x in nums]
+            except ValueError:
+                continue
+            metrics[name] = vals[0]
+            if len(vals) >= 2:
+                # Segunda cifra: útil para "12490 -> 0.6098" y "26911 (65.70%)"
+                metrics[f"{name} (2nd)"] = vals[1]
+    return metrics
+
+
+def _find_seed_dirs(parent_dir: str, suffix_filter: str | None = None) -> List[str]:
+    """
+    Devuelve las subcarpetas de `parent_dir` que corresponden a una seed.
+    Reconoce dos layouts:
+      1. Nuevo: 'parent_dir/s42/', 'parent_dir/s43/', ...  (subcarpetas directas)
+      2. Antiguo: 'parent_dir/IAV*_s42/', '..._s43/', ... (carpetas hermanas)
+    Si `suffix_filter` se pasa, solo aplica al layout 2.
+    """
+    import glob
+    candidates: List[str] = []
+
+    # Layout 1: subcarpetas directas s<num>
+    candidates += glob.glob(os.path.join(parent_dir, "s[0-9]*"))
+
+    # Layout 2: IAV*_s<num> (compatibilidad con carpetas antiguas)
+    if suffix_filter:
+        pattern = os.path.join(parent_dir, f"IAV*_{suffix_filter}_s[0-9]*")
+    else:
+        pattern = os.path.join(parent_dir, "IAV*_s[0-9]*")
+    candidates += glob.glob(pattern)
+
+    valid = []
+    for p in candidates:
+        base = os.path.basename(os.path.normpath(p))
+        if re.fullmatch(r"s\d+", base) or re.search(r"_s\d+$", base):
+            valid.append(p)
+
+    def _extract_seed(p):
+        base = os.path.basename(os.path.normpath(p))
+        m = re.fullmatch(r"s(\d+)", base) or re.search(r"_s(\d+)$", base)
+        return int(m.group(1)) if m else 0
+
+    seen = set()
+    unique = []
+    for p in valid:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return sorted(unique, key=_extract_seed)
+
+def _load_stats_entry(run_dir: str, label: str) -> dict:
+    """
+    Carga stats2.txt y stats_rusher_*.txt de `run_dir`. `label` es la etiqueta
+    corta que aparecerá como nombre de columna (p. ej. 's42', 'base', 'b1').
+    """
+    entry = {"seed": label, "main": {}, "rusher_0": {}, "rusher_05": {}, "rusher_1": {}}
+    for fname in ("stats2.txt", "stats.txt"):
+        p = os.path.join(run_dir, fname)
+        if os.path.exists(p):
+            entry["main"] = _parse_stats_file(p)
+            break
+    for tag, fname in (("rusher_0", "stats_rusher_aggr_0.txt"),
+                       ("rusher_05", "stats_rusher_aggr_05.txt"),
+                       ("rusher_1", "stats_rusher_aggr_1.txt")):
+        p = os.path.join(run_dir, fname)
+        if os.path.exists(p):
+            entry[tag] = _parse_stats_file(p)
+    return entry
+def _load_baseline_entries(baseline_dir) -> tuple[list, bool]:
+    """
+    Devuelve (lista_de_entries, es_multi).
+
+    Acepta:
+      - None → ([], False)
+      - str apuntando a un fichero de stats → un único entry
+      - str apuntando a una carpeta con stats2.txt → un único entry
+      - str apuntando a una carpeta que contiene subcarpetas IAV*_s<seed> →
+        un entry por cada subcarpeta encontrada
+      - list/tuple de str, cada uno con un run distinto → un entry por elemento
+    """
+    if baseline_dir is None:
+        return [], False
+
+    # ---------- Lista explícita de rutas ----------
+    if isinstance(baseline_dir, (list, tuple)):
+        entries = []
+        for i, path in enumerate(baseline_dir):
+            if not os.path.exists(path):
+                print(f"[compare] Baseline path no existe: {path}")
+                continue
+            name = os.path.basename(os.path.normpath(path))
+            m = re.search(r"_s(\d+)$", name)
+            label = f"s{m.group(1)}" if m else f"b{i+1}"
+            entries.append(_load_stats_entry(path, label))
+        return entries, len(entries) > 1
+
+    # ---------- Ruta única ----------
+    if not os.path.exists(baseline_dir):
+        print(f"[compare] Baseline no existe: {baseline_dir}")
+        return [], False
+
+    if os.path.isfile(baseline_dir):
+        entry = {"seed": "base", "main": _parse_stats_file(baseline_dir),
+                 "rusher_0": {}, "rusher_05": {}, "rusher_1": {}}
+        return [entry], False
+
+    # ¿Carpeta contenedora con subcarpetas IAV*_s<seed>?
+    seed_subdirs = _find_seed_dirs(baseline_dir)
+    if seed_subdirs:
+        entries = []
+        for sd in seed_subdirs:
+            name = os.path.basename(sd)
+            # Acepta tanto "s42" (layout nuevo) como "IAV..._s42" (layout antiguo)
+            m = re.fullmatch(r"s(\d+)", name) or re.search(r"_s(\d+)$", name)
+            short = f"s{m.group(1)}" if m else name
+            entries.append(_load_stats_entry(sd, short))
+        return entries, True
+
+    # Carpeta de un solo run
+    entry = _load_stats_entry(baseline_dir, "base")
+    return [entry], False
+
+def compare_seeds_against_baseline(
+    seeds_dir: str,
+    baseline_dir=None,
+    output_json: str | None = None,
+    output_txt: str | None = None,
+    suffix_filter: str | None = None,
+) -> str:
+    """
+    Compara stats por seed contra uno o varios baselines.
+
+    Layout de columnas:
+      Métrica | BL_s42 | BL_s43 | BL_s44 | BL_μ | NW_s42 | NW_s43 | NW_s44 | NW_μ | Δμ
+    donde:
+      - BL_* son los baselines (una columna por seed encontrada).
+      - NW_* son las seeds nuevas.
+      - BL_μ / NW_μ son medias y solo aparecen si hay ≥2 seeds en el grupo.
+      - Δμ = NW_μ − BL_μ, solo si ambos grupos tienen ≥2 seeds.
+    """
+    import json
+
+    # --- Cargar seeds nuevas ---
+    new_entries = []
+    for sd in _find_seed_dirs(seeds_dir, suffix_filter=suffix_filter):
+        name = os.path.basename(sd)
+        m = re.search(r"_s(\d+)$", name)
+        short = f"s{m.group(1)}" if m else name
+        new_entries.append(_load_stats_entry(sd, short))
+
+    if not new_entries:
+        msg = f"[compare] No se encontraron subcarpetas IAV*_s<seed> en {seeds_dir}"
+        if output_txt:
+            with open(output_txt, "w", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        else:
+            print(msg)
+        return msg
+
+    # --- Cargar baselines ---
+    baseline_entries, baseline_is_multi = _load_baseline_entries(baseline_dir)
+
+    # --- Métricas a comparar ---
+    key_metrics = [
+        ("main",      "Win ratio P1 (sin empates)",      "{:.2f}"),
+        ("main",      "Turnos medios por partida",       "{:.2f}"),
+        ("main",      "Elo P1",                          "{:.1f}"),
+        ("main",      "Elo P2",                          "{:.1f}"),
+        ("main",      "Daño por sobrekill medio P1",     "{:.2f}"),
+        ("main",      "Kill confirmed medio P1",         "{:.2f}"),
+        ("main",      "Defensas desperdiciadas P1",      "{:.2f}"),
+        ("main",      "Movimientos estratégicos P1 (%)", "{:.2f}"),
+        ("rusher_0",  "Victorias IA vs rusher 0.0",      "{:.4f}"),
+        ("rusher_05", "Victorias IA vs rusher 0.5",      "{:.4f}"),
+        ("rusher_1",  "Victorias IA vs rusher 1.0",      "{:.4f}"),
+    ]
+
+    n_bl = len(baseline_entries)
+    n_nw = len(new_entries)
+    show_bl_mean = n_bl >= 2
+    show_nw_mean = n_nw >= 2
+    show_delta = show_bl_mean and show_nw_mean
+
+    # --- Cabeceras de columna en orden ---
+    col_headers: List[str] = []
+    for e in baseline_entries:
+        col_headers.append(f"BL_{e['seed']}")
+    if show_bl_mean:
+        col_headers.append("BL_μ")
+    for e in new_entries:
+        col_headers.append(f"NW_{e['seed']}")
+    if show_nw_mean:
+        col_headers.append("NW_μ")
+    if show_delta:
+        col_headers.append("Δμ")
+
+    n_val_cols = len(col_headers)
+
+    # --- Construir matriz de valores formateados: filas × columnas ---
+    table_rows: List[List[str]] = []  # una lista por métrica
+    mean_rows: List[List[str]] = []   # solo si show_*_mean
+
+    def _fmt(value, fmt):
+        return fmt.format(value) if value is not None else "N/A"
+
+    def _get(entry, section, name):
+        src = entry["main"] if section == "main" else entry[section]
+        return src.get(name)
+
+    for section, name, fmt in key_metrics:
+        row = []
+        # Baselines
+        bl_vals = []
+        for e in baseline_entries:
+            v = _get(e, section, name)
+            bl_vals.append(v)
+            row.append(_fmt(v, fmt))
+        if show_bl_mean:
+            nums = [v for v in bl_vals if v is not None]
+            row.append(_fmt(sum(nums) / len(nums) if nums else None, fmt))
+        # Nuevas
+        nw_vals = []
+        for e in new_entries:
+            v = _get(e, section, name)
+            nw_vals.append(v)
+            row.append(_fmt(v, fmt))
+        if show_nw_mean:
+            nums = [v for v in nw_vals if v is not None]
+            row.append(_fmt(sum(nums) / len(nums) if nums else None, fmt))
+        # Delta de medias
+        if show_delta:
+            bl_nums = [v for v in bl_vals if v is not None]
+            nw_nums = [v for v in nw_vals if v is not None]
+            if bl_nums and nw_nums:
+                delta = sum(nw_nums) / len(nw_nums) - sum(bl_nums) / len(bl_nums)
+                row.append(fmt.format(delta))
+            else:
+                row.append("N/A")
+        table_rows.append(row)
+
+    # --- Calcular anchos de columna dinámicos ---
+    metric_width = max(
+        len("Métrica"),
+        max((len(name) for _, name, _ in key_metrics), default=0),
+    ) + 2
+    value_widths = []
+    for j, h in enumerate(col_headers):
+        content_max = max((len(r[j]) for r in table_rows), default=0)
+        value_widths.append(max(len(h), content_max) + 2)
+
+    # --- Construir líneas de la tabla ---
+    lines: List[str] = []
+
+    def _border(left, mid, right, fill="─"):
+        parts = [fill * metric_width] + [fill * w for w in value_widths]
+        return left + mid.join(parts) + right
+
+    def _row(cells):
+        # cells[0] = métrica (izquierda), resto = valores (derecha)
+        parts = [f" {cells[0]:<{metric_width - 1}}"]
+        for i, c in enumerate(cells[1:]):
+            parts.append(f" {c:>{value_widths[i] - 1}}")
+        return "│" + "│".join(parts) + "│"
+
+    total_width = sum([metric_width] + value_widths) + n_val_cols + 1
+
+    # Cabecera decorativa
+    lines.append(_border("┌", "┬", "┐"))
+    title = f"COMPARACIÓN MULTI-SEED vs BASELINE  (baseline: {n_bl} seed(s), nuevo: {n_nw} seed(s))"
+    if len(title) > total_width - 3:
+        title = title[: total_width - 6] + "..."
+    lines.append(f"│ {title:<{total_width - 3}} │")
+    prueba_actual = f"NW source: {seeds_dir}"
+    lines.append(f"│ {prueba_actual:<{total_width - 3}} │")
+    if baseline_dir:
+        bl_label = baseline_dir if isinstance(baseline_dir, str) else f"{len(baseline_dir)} rutas"
+        bl_text = f"Baseline source: {bl_label}"
+        if len(bl_text) > total_width - 4:
+            bl_text = bl_text[: total_width - 7] + "..."
+        lines.append(f"│ {bl_text:<{total_width - 3}} │")
+    lines.append(_border("├", "┼", "┤"))
+
+    # Fila de encabezado
+    lines.append(_row(["Métrica"] + col_headers))
+    lines.append(_border("├", "┼", "┤"))
+
+    # Filas de métricas
+    for (section, name, fmt), row in zip(key_metrics, table_rows):
+        lines.append(_row([name] + row))
+
+    lines.append(_border("└", "┴", "┘"))
+
+    report_text = "\n".join(lines)
+
+    if output_txt:
+        os.makedirs(os.path.dirname(output_txt), exist_ok=True)
+        with open(output_txt, "w", encoding="utf-8") as f:
+            f.write(report_text + "\n")
+    else:
+        print(report_text)
+
+    if output_json:
+        with open(output_json, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "baseline_entries": baseline_entries,
+                    "new_entries": new_entries,
+                    "baseline_source": baseline_dir if isinstance(baseline_dir, str) else list(baseline_dir or []),
+                },
+                f, indent=2,
+            )
+
+    return report_text
+def append_experiment_log_entry(
+    log_path: str,
+    new_entries: list,
+    config,
+    overrides: dict | None = None,
+    baseline_dir=None,
+        ) -> None:
+        """
+        Añade una fila a docs/experiment_log.csv con las medias de las seeds
+        recién corridas. Crea el fichero con cabecera si no existe. Evita duplicar
+        filas con el mismo (suffix, lotes, seeds).
+
+        Parámetros:
+            log_path: ruta del csv (p. ej. "docs/experiment_log.csv").
+            new_entries: lista de dicts como los que devuelve _load_stats_entry.
+            config: RunConfig con .suffix, .train_episodes, .base_path.
+            overrides: dict con constantes cambiadas respecto al baseline (opcional).
+            baseline_dir: str | list | None. Solo se usa para el campo 'baseline'.
+        """
+        import csv
+        import datetime
+
+        if not new_entries:
+            return
+
+        # --- Medias sobre seeds ---
+        def _mean(key, section="main"):
+            vals = []
+            for e in new_entries:
+                v = e.get(section, {}).get(key)
+                if v is not None:
+                    vals.append(v)
+            return sum(vals) / len(vals) if vals else None
+
+        win_self = _mean("Win ratio P1 (sin empates)")
+        wr_00 = _mean("Victorias IA (2nd)", "rusher_0")
+        wr_05 = _mean("Victorias IA (2nd)", "rusher_05")
+        wr_10 = _mean("Victorias IA (2nd)", "rusher_1")
+
+        # --- Veredicto derivado (cualitativo, se puede sobreescribir luego) ---
+        # Comparamos solo self-play porque es la métrica más ruidosa y la más
+        # correlacionada con "vale la pena adoptar esto".
+        veredicto = "referencia"
+        if baseline_dir is not None:
+            bl_entries, _ = _load_baseline_entries(baseline_dir)
+            if bl_entries:
+                bl_self = [e["main"].get("Win ratio P1 (sin empates)") for e in bl_entries]
+                bl_self = [v for v in bl_self if v is not None]
+                if bl_self and win_self is not None:
+                    delta = win_self - (sum(bl_self) / len(bl_self))
+                    if delta >= 3.0:
+                        veredicto = "positivo"
+                    elif delta <= -3.0:
+                        veredicto = "negativo"
+                    else:
+                        veredicto = "neutro"
+
+        # --- Id, seeds, artefactos ---
+        seeds = [e["seed"].replace("s", "") for e in new_entries]
+        seeds_str = ";".join(seeds)
+
+        exp_id = (constants.EXPERIMENT_ID or "").strip()
+        if not exp_id:
+            # Autoincremento: leemos el csv si existe
+            next_n = 1
+            if os.path.exists(log_path):
+                with open(log_path, "r", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    next(reader, None)  # header
+                    for row in reader:
+                        if row and row[0].startswith("EXP-"):
+                            try:
+                                n = int(row[0].split("-")[1])
+                                next_n = max(next_n, n + 1)
+                            except (IndexError, ValueError):
+                                pass
+            exp_id = f"EXP-{next_n:04d}"
+
+        # --- Deduplicación simple: mismo suffix + lotes + seeds → no añadir ---
+        dedup_key = (config.suffix, config.train_episodes, seeds_str)
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        if (row["suffix"], int(row["lotes"]), row["seeds"]) == dedup_key:
+                            print(f"[exp-log] Ya existe fila para {dedup_key}, se omite.")
+                            return
+                    except (KeyError, ValueError):
+                        continue
+
+        # --- Overrides como string compacto ---
+        if overrides:
+            ov_str = ";".join(f"{k}={v}" for k, v in overrides.items())
+        else:
+            ov_str = ""
+
+        # --- Baseline como string ---
+        if baseline_dir is None:
+            bl_str = ""
+        elif isinstance(baseline_dir, (list, tuple)):
+            bl_str = ";".join(baseline_dir)
+        else:
+            bl_str = str(baseline_dir)
+
+        # --- Artefactos: rutas de las carpetas de las seeds ---
+        artefactos = ";".join(
+            os.path.join(config.base_path, f"s{s}") for s in seeds
+        )
+
+        # --- Escribir ---
+        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        write_header = not os.path.exists(log_path)
+
+        row = {
+            "id": exp_id,
+            "fecha": datetime.date.today().isoformat(),
+            "objetivo": constants.EXPERIMENT_OBJETIVO,
+            "suffix": config.suffix,
+            "baseline": bl_str,
+            "overrides": ov_str,
+            "seeds": seeds_str,
+            "lotes": config.train_episodes,
+            "winrate_self": f"{win_self:.2f}" if win_self is not None else "",
+            "wr_rusher_00": f"{wr_00:.4f}" if wr_00 is not None else "",
+            "wr_rusher_05": f"{wr_05:.4f}" if wr_05 is not None else "",
+            "wr_rusher_10": f"{wr_10:.4f}" if wr_10 is not None else "",
+            "veredicto": veredicto,
+            "nota": constants.EXPERIMENT_NOTA,
+            "artefactos": artefactos,
+        }
+
+        with open(log_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+
+        print(f"[exp-log] Añadida fila {exp_id} a {log_path}")
+        
+def run_multi_seed(base_config, seeds, baseline_dir=None):
+    """
+    Ejecuta el pipeline completo para cada seed en `seeds`. Cada seed se guarda
+    en una subcarpeta 's<seed>/' DENTRO de la carpeta base del experimento.
+
+    Estructura resultante:
+        models/IAV{version}_{suffix}/
+        ├── s42/
+        │   ├── P1/  P2/
+        │   ├── stats.txt  stats2.txt  stats_rusher_*.txt
+        │   └── ...
+        ├── s43/
+        ├── s44/
+        ├── comparison_report.txt
+        └── comparison_report.json
+    """
+    import time as _time
+
+    base_root = base_config.base_path         # models/IAV2_TRPD_200K (sin _sX)
+    os.makedirs(base_root, exist_ok=True)
+
+    print("=" * 70)
+    print(f"MODO MULTI-SEED  |  seeds = {seeds}")
+    print(f"Directorio raíz: {base_root}")
+    print("=" * 70)
+
+    for seed in seeds:
+        seed_dir = os.path.join(base_root, f"s{seed}")   # models/.../s42
+        os.makedirs(seed_dir, exist_ok=True)
+
+        # Mismo suffix y version que la config base; el override fuerza que
+        # base_path (y por tanto p1_path, stats_path, etc.) apunten a la
+        # subcarpeta de esta seed.
+        seed_config = RunConfig(
+            version=base_config.version,
+            train_episodes=base_config.train_episodes,
+            eval_episodes=base_config.eval_episodes,
+            suffix=base_config.suffix,
+            base_dir=base_config.base_dir,
+            base_path_override=seed_dir,
+        )
+
+        print(f"\n{'#' * 65}\n# SEED {seed} → {seed_dir}\n{'#' * 65}")
+
+        # Fijar seed en constants (por si algún módulo lo lee)
+        constants.SEED = seed
+        set_seed(seed)
+
+        steps = build_steps(seed_config)
+        n_efectivo = (1 if constants.HUMAN_OPPONENT != "none"
+                        or constants.PLAY_AGAINST_AI else constants.N_BATCH)
+
+        t0 = _time.time()
+        MainV(seed_config, steps, N=n_efectivo).run()
+        elapsed = _time.time() - t0
+        print(f"[seed {seed}] terminado en {MainV._format_time(elapsed)}")
+
+    # Comparación: las seeds viven dentro de base_root, y el reporte va a la
+    # raíz del experimento (también base_root).
+    compare_seeds_against_baseline(
+        seeds_dir=base_root,
+        baseline_dir=baseline_dir,
+        output_txt=os.path.join(base_root, "comparison_report.txt"),
+        output_json=os.path.join(base_root, "comparison_report.json"),
+        suffix_filter=None,   # nuevo layout: se buscan subcarpetas 'sN'
+    )
+    print(f"[compare] Reporte guardado en {os.path.join(base_root, 'comparison_report.txt')}")
+        # --- Registrar en el log maestro ---
+    new_entries = []
+    for sd in _find_seed_dirs(base_root, suffix_filter=None):
+        name = os.path.basename(sd)
+        m = re.search(r"_s(\d+)$", name) or re.fullmatch(r"s(\d+)", name)
+        short = f"s{m.group(1)}" if m else name
+        new_entries.append(_load_stats_entry(sd, short))
+
+    append_experiment_log_entry(
+        log_path=constants.EXPERIMENT_LOG_PATH,
+        new_entries=new_entries,
+        config=base_config,
+        overrides=constants.EXPERIMENT_OVERRIDES if hasattr(constants, "EXPERIMENT_OVERRIDES") else None,
+        baseline_dir=baseline_dir,
+    )
+    
 
 # ================================================================
 # PUNTO DE ENTRADA
 # ================================================================
 
 if __name__ == "__main__":
-    
     torch.set_num_threads(2)
     os.environ["OMP_NUM_THREADS"] = "2"
     os.environ["MKL_NUM_THREADS"] = "2"
-    # 1. Cargar configuración desde YAML
+
     yaml_config = load_config_yaml()
-
-    # 2. Sobrescribir constants con los valores del YAML
     NON_CONSTANT_YAML_KEYS = {"comparisons"}
-
     for key, value in yaml_config.items():
         if key in NON_CONSTANT_YAML_KEYS:
             continue
@@ -600,16 +1164,16 @@ if __name__ == "__main__":
             setattr(constants, key, value)
         else:
             print(f"Advertencia: {key} no existe en constants, se omite")
-    # 3. Crear configuración del run
+
     config = RunConfig(
         version=constants.VERSION,
         train_episodes=constants.TRAIN_EPISODES,
         eval_episodes=constants.EVAL_EPISODES,
-        suffix=constants.RUN_NAME_SUFFIX,   # <--- NUEVO
+        suffix=constants.RUN_NAME_SUFFIX,
     )
 
-    # 4. Ejecutar comparación o run simple
     if constants.RUN_COMPARISON and "comparisons" in yaml_config:
+        # Modo comparación de RunSpecs (sin cambios)
         run_specs = []
         for comp in yaml_config["comparisons"]:
             run_specs.append(RunSpec(
@@ -618,13 +1182,22 @@ if __name__ == "__main__":
                 train_batches=comp.get("train_batches", constants.TRAIN_EPISODES),
                 eval_batches=comp.get("eval_batches", constants.EVAL_EPISODES),
                 constants_overrides=comp.get("overrides", {}),
-                seed=comp.get("seed", constants.SEED),   # NUEVO: usa la seed del run o la global como fallback
-                # player_class se puede añadir si se quiere, pero por ahora no
+                seed=comp.get("seed", constants.SEED),
             ))
         run_comparison(config, run_specs)
+
+    elif constants.MULTI_SEED_ENABLED:
+        run_multi_seed(
+            config,
+            constants.MULTI_SEED_LIST,
+            baseline_dir=constants.MULTI_SEED_BASELINE,
+        )
+
     else:
-        if(constants.SEED is not None and constants.SEED != 'None'):
+        # Comportamiento original: una seed
+        if constants.SEED is not None and constants.SEED != 'None':
             set_seed(constants.SEED)
         steps = build_steps(config)
-        n_efectivo = 1 if constants.HUMAN_OPPONENT != "none" or constants.PLAY_AGAINST_AI else constants.N_BATCH
+        n_efectivo = (1 if constants.HUMAN_OPPONENT != "none"
+                        or constants.PLAY_AGAINST_AI else constants.N_BATCH)
         MainV(config, steps, N=n_efectivo).run()

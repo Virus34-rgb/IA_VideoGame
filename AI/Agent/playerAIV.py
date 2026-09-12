@@ -142,3 +142,12 @@ class PlayerAIV:
         self._checkpoint.save_model_inference_only(
             path1, path2, epsilons=(self.epsilon_sel, self.epsilon_turn), elo=self.elo,
         )
+        
+    def priority_stats(self) -> dict:
+        """Devuelve percentiles de prioridad de los buffers de turno y selección."""
+        out = {}
+        if self.replay_memory_turn is not None:
+            out["turn"] = self.replay_memory_turn.priority_stats()
+        if self.replay_memory_sel is not None:
+            out["sel"] = self.replay_memory_sel.priority_stats()
+        return out

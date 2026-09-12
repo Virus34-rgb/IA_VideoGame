@@ -25,9 +25,9 @@ class resolveAction:
         ):
             actor_alive_now = own_alive.gather(1, pos.unsqueeze(1)).squeeze(1)
     
-            own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1)
-            ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0, 3).unsqueeze(1)).squeeze(1)
-            effect_type = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx]
+            own_slot_abilities = own_instance_abilities.gather(1, pos.view(-1, 1, 1).expand(-1, 1, 4)).squeeze(1) #(N,4)
+            ability_pool_idx = own_slot_abilities.gather(1, actions_actor.clamp(0, 3).unsqueeze(1)).squeeze(1) #(N,)
+            effect_type = self.effect_type_por_tipo_habilidad[actors, ability_pool_idx] # (N,)
     
             es_habilidad = (actions_actor >= 0) & (actions_actor <= 3)
     
@@ -38,7 +38,7 @@ class resolveAction:
             mask_defend = es_habilidad & ((effect_type == EffectType.DEFEND_FULL) | (effect_type == EffectType.DEFEND_HALF)) & actor_alive_now
             mask_ataque = es_habilidad & (effect_type == EffectType.ATTACK) & actor_alive_now
     
-            moved, new_disp_mov, new_health_mov, new_cd_mov, new_abilities_mov, new_castle_mov, new_alive_mov,strategic_movement = self._resolve_action_movement(
+            moved, new_disp_mov, new_health_mov, new_cd_mov,new_abilities_mov, new_castle_mov, new_alive_mov,strategic_movement = self._resolve_action_movement(
                 actors, own_disposition, own_health, own_cooldowns, own_instance_abilities, 
                 own_castle_slots, own_alive, actions_actor, pos,
                 enemy_disposition, enemy_alive, enemy_actions, enemy_instance_abilities,

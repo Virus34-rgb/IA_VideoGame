@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import os
 import re
+from typing import Optional
 
 
 @dataclass
@@ -10,9 +11,12 @@ class RunConfig:
     eval_episodes: int = 5000
     suffix: str = ""   # <--- NUEVO
     base_dir: str = field(default_factory=lambda: os.path.dirname(os.path.abspath(__file__)))
+    base_path_override: Optional[str] = None   # ← NUEVO
 
     @property
     def base_path(self):
+        if self.base_path_override:            # ← NUEVO
+            return self.base_path_override
         if self.suffix:
             clean_suffix = self.sanitize_filename(self.suffix)
             folder = f"IAV{self.version}_{clean_suffix}"

@@ -36,9 +36,19 @@ class VectorizedEnvironment:
             self.effect_type_por_tipo_habilidad
         )
         
-        self.reward_calculator = RewardCalculator(constants.REWARD_WEIGHTS,constants.WIN_REWARD,constants.DRAW_PENALTY,
-                                                  constants.TURN_PENALTY_BASE,constants.TURN_PENALTY_MAX,constants.TURN_PENALTY_RAMP_START,
-                                                  constants.TURN_PENALTY_RAMP_TURNS, constants.REWARD_SCALE,constants.DISCOUNT_FACTOR)
+        self.reward_calculator = RewardCalculator(
+            constants.REWARD_WEIGHTS,
+            constants.WIN_REWARD,
+            constants.DRAW_PENALTY,
+            constants.TURN_PENALTY_BASE,
+            constants.TURN_PENALTY_MAX,
+            constants.TURN_PENALTY_RAMP_START,
+            constants.TURN_PENALTY_RAMP_TURNS,
+            constants.REWARD_SCALE,
+            constants.DISCOUNT_FACTOR,
+            constants.WASTED_DEFENSE_WEIGHT_MAX_AGGRO,
+            constants.STRATEGIC_MOVEMENT_WEIGHT_MAX_AGGRO,
+        )
 
         self.stats: StatsAccumulator = StatsAccumulator()
         
@@ -113,26 +123,44 @@ class VectorizedEnvironment:
         self, warrior1, pos1, warrior2, pos2, selected,
         health1, health2, abilities1, abilities2,
     ) -> None:
+        """_summary_
+
+        Args:
+            warrior1 (_type_): tensor(N,) valores del 1-WARRIOR_QUANTITY
+            pos1 (_type_): tensor(N,) valores del 0-2
+            warrior2 (_type_): idem
+            pos2 (_type_): idem
+            selected (_type_): N cantidad de seleciones anteriores realizadas (0-2)
+            health1 (_type_): (N,) vida máxima de los guerreros seleccionados
+            health2 (_type_): idem
+            abilities1 (_type_): (N,4,) Las 4 habilidades de cada guerrero con ids del 1-MAX_POOL_SIZE
+            abilities2 (_type_): idem
+        """
         if selected == 0:
             self.p1_initialWarrior[self.indices] = warrior1
             self.p2_initialWarrior[self.indices] = warrior2
             self.p1_initialPosition[self.indices] = pos1
             self.p2_initialPosition[self.indices] = pos2
 
+        #(N,3,)[index dim 0, index dim 1] = (N,)
         self.p1_disposition[self.indices, pos1] = warrior1
         self.p2_disposition[self.indices, pos2] = warrior2
         self.p1_healths[self.indices, pos1] = health1
         self.p2_healths[self.indices, pos2] = health2
         self.p1_alive[self.indices, pos1] = warrior1 > 0
         self.p2_alive[self.indices, pos2] = warrior2 > 0
+        #(N,3,4)[index dim 0, index dim 1] = (N,4)
         self.p1_instance_abilities[self.indices, pos1] = abilities1
         self.p2_instance_abilities[self.indices, pos2] = abilities2
 
         self.stats.accumulate_warrior_use(warrior1, warrior2)
 
-    def turn(self, actionsp1: torch.Tensor, actionsp2: torch.Tensor):
+    def turn(self, actionsp1: torch.Tensor, actionsp2: torch.Tensor,opp_aggression_p1=None, opp_aggression_p2=None):
+        """"""
+        
         self.turn_number += 1
 
+        #p1_alive -> (N,3,). p1_cooldowns -> (N,3,4,)
         self.p1_cooldowns = torch.where(
             self.p1_alive.unsqueeze(-1), (self.p1_cooldowns - 1).clamp(min=0), self.p1_cooldowns,
         )
@@ -170,17 +198,15 @@ class VectorizedEnvironment:
         
         self.reset_proffile_stats()
         
-        p1_health_before = self._normalized_team_health(self.p1_healths, self.p1_disposition)
-        p2_health_before = self._normalized_team_health(self.p2_healths, self.p2_disposition)
+        p1_health_before = self._normalized_team_health(self.p1_healths, self.p1_disposition) # (1)
+        p2_health_before = self._normalized_team_health(self.p2_healths, self.p2_disposition) # (1)
 
         for position in range(6):
-            actor_idx = order[:, position]
-            player = actor_idx // 3
+            actor_idx = order[:, position] #(N,)
+            player = actor_idx // 3 # 0->2 p1 3->5 p2
             pos_original = actor_idx % 3
             es_p1 = (player == 0)
 
-            # posición física actual del actor (no el slot original) ──
-            pos_actual_player = pos_actual_p1 if es_p1.any() else pos_actual_p2
             # Seleccionar el tracker correcto por fila:
             pos = torch.where(
                 es_p1,
@@ -195,9 +221,18 @@ class VectorizedEnvironment:
             enemy_disp = torch.where(player_mask, self.p2_disposition, self.p1_disposition)
             own_health = torch.where(player_mask, self.p1_healths, self.p2_healths)
             enemy_health = torch.where(player_mask, self.p2_healths, self.p1_healths)
+            
             own_actions = torch.where(player_mask, actionsp1, actionsp2)
             actor_action = own_actions.gather(1, pos_original.unsqueeze(1)).squeeze(1)
-            enemy_actions = torch.where(player_mask, actionsp2, actionsp1)
+
+            arange_3 = torch.arange(3, device=pos_actual_p1.device).expand(self.N, 3).clone()
+            slot_at_position_p1 = torch.zeros_like(pos_actual_p1)
+            slot_at_position_p1.scatter_(1, pos_actual_p1, arange_3) #pasas de postion at slot a slot at position
+            slot_at_position_p2 = torch.zeros_like(pos_actual_p2)
+            slot_at_position_p2.scatter_(1, pos_actual_p2, arange_3)
+            slot_at_position_enemy = torch.where(player_mask, slot_at_position_p2, slot_at_position_p1)
+            enemy_actions = torch.where(player_mask, actionsp2, actionsp1).gather(1, slot_at_position_enemy)    
+            
             own_alive = torch.where(player_mask, self.p1_alive, self.p2_alive)
             enemy_alive = torch.where(player_mask, self.p2_alive, self.p1_alive)
             own_cooldowns = torch.where(player_mask_3, self.p1_cooldowns, self.p2_cooldowns)
@@ -247,13 +282,6 @@ class VectorizedEnvironment:
                     mask_movPos, (pos + 1).clamp(max=2),
                     torch.where(mask_movNeg, (pos - 1).clamp(min=0), pos),
                 )
-
-                # Construir el mapeo inverso: slot_at_position[i, p] = slot s tal que pos_actual[i, s] == p
-                arange_3 = torch.arange(3, device=pos_actual_p1.device).expand(self.N, 3).clone()
-                slot_at_position_p1 = torch.zeros_like(pos_actual_p1)
-                slot_at_position_p1.scatter_(1, pos_actual_p1, arange_3)
-                slot_at_position_p2 = torch.zeros_like(pos_actual_p2)
-                slot_at_position_p2.scatter_(1, pos_actual_p2, arange_3)
 
                 # Slot del guerrero que está en pos_destino_actual (el "otro" que va a intercambiar)
                 slot_other_p1 = slot_at_position_p1.gather(1, pos_destino_actual.unsqueeze(1)).squeeze(1)
@@ -341,9 +369,12 @@ class VectorizedEnvironment:
         rewardP1, rewardP2 = self.reward_calculator.calculate_rewards(
             damage_p1, damage_p2, damage_avoided_p1, damage_avoided_p2,
             heal_p1, heal_p2, health_diff_before, health_diff_after,
-            p1_new_deaths, p2_new_deaths,wasted_heal_p1,wasted_heal_p2,
-            wasted_defense_p1,wasted_defense_p2,strategic_movement_p1,strategic_movement_p2,
-            overkill_damage_p1,overkill_damage_p2,kill_confirmed_p1,kill_confirmed_p2,self.winner,self.turn_number
+            p1_new_deaths, p2_new_deaths, wasted_heal_p1, wasted_heal_p2,
+            wasted_defense_p1, wasted_defense_p2, strategic_movement_p1, strategic_movement_p2,
+            overkill_damage_p1, overkill_damage_p2, kill_confirmed_p1, kill_confirmed_p2,
+            self.winner, self.turn_number,
+            opp_aggression_p1=opp_aggression_p1,
+            opp_aggression_p2=opp_aggression_p2,
         )
 
         rewardP1 = torch.where(ya_terminadas_antes, torch.zeros_like(rewardP1), rewardP1)

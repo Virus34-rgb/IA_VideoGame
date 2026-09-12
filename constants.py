@@ -7,7 +7,7 @@ Agrupadas por área: juego, meta-juego, IA, recompensas, replay, etc.
 # ============================================================
 # Juego - Reglas básicas
 # ============================================================
-WARRIOR_QUANTITY = 5              # Número de tipos de guerreros
+WARRIOR_QUANTITY = 5              
 
 # ============================================================
 # Pool de habilidades por instancia
@@ -67,13 +67,15 @@ EPSILON_RESIDUAL = 0.01
 SELECTION_LEARNING_RATE = 0.0001  # Learning rate para red de selección
 TURN_LEARNING_RATE = 0.0001       # Learning rate para red de turno
 SELECTION_REPLAY_DATA = 131_072 # Capacidad del buffer de selección Estandar 150000 parapruebas nocutrnas 80000
-TURN_REPLAY_DATA = 65_536    # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
+TURN_REPLAY_DATA = 262_144 # Capacidad del buffer de turno Estandar 150000 parapruebas nocutrnas 40000
 BATCH_SIZE = 256                 # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
 COPY_DQN = 50                    # Frecuencia de copia a target network (en pasos de replay)
 COPY_DQN_SEL = 50
-COPY_DQN_TURN = 50
+COPY_DQN_TURN = 150
+SAVE_EVERY_ABSOLUTE = 10
+POOL_EVERY_ABSOLUTE = 5
 
 # ============================================================
 # Juego - Recompensas
@@ -95,13 +97,24 @@ REWARD_WEIGHTS = {
 TURN_PENALTY_BASE = 2             # Penalización de turno en fase inicial (turnos <= RAMP_START)
 TURN_PENALTY_RAMP_START = 4.5      # Turno a partir del cual la penalización empieza a crecer
 TURN_PENALTY_RAMP_TURNS = 12      # Turnos que tarda en pasar de BASE a MAX (rampa lineal)
-TURN_PENALTY_MAX = 25             # Penalización de turno una vez alcanzado el techo (cerca del límite)
+TURN_PENALTY_MAX = 35             # Penalización de turno una vez alcanzado el techo (cerca del límite)
 WIN_REWARD = 1000               # Recompensa base por ganar la partida
 REWARD_SCALE = 100.0
 DRAW_PENALTY = 200                # Penalización por resultado en empate (20% de WIN_REWARD)
 
 MAX_TURNS = 20                    # Límite de turnos por partida
 MAX_DEATHS_PER_TEAM = 3           # Muertes máximas por equipo (3 = todos los guerreros)
+
+# ============================================================
+# Reward shaping condicional al perfil del rival
+# ============================================================
+# Flag explícito. False → pesos constantes (NACT, comportamiento actual).
+# True  → interpolación por agresividad (linea cerrada negativamente).
+USE_PROFILE_CONDITIONED_REWARD = False
+
+# Solo se usan si USE_PROFILE_CONDITIONED_REWARD=True
+WASTED_DEFENSE_WEIGHT_MAX_AGGRO = -1.5
+STRATEGIC_MOVEMENT_WEIGHT_MAX_AGGRO = 9.0
 
 # ============================================================
 # Pool de oponentes
@@ -131,7 +144,7 @@ USE_DUELING_DQN = True            # Usar arquitectura Dueling en TurnNetwork
 DELETE_DIRECTORIES = True         # Eliminar directorios antiguos al iniciar (para limpieza)
 NOISY_SIGMA_INIT = 0.5   # Valor inicial de la desviación sigma
 SIGMA_MIN = 0.05   # suelo mínimo para weight_sigma/bias_sigma de las NoisyLinear
-RESET_IN_DECISIONS = False
+RESET_IN_DECISIONS = True
 USE_TORCH_COMPILE = False
 
 # ============================================================
@@ -186,3 +199,22 @@ RUSHER_FINETUNE_PHASES = [(0.15,0.0,0.3),(0.35,0.3,0.6),(0.5,0.6,1)]
 
 PROFILE_EMA_DECAY = 0.7
 PROFILE_DAMAGE_POTENTIAL_REF = 75 # ROGUE (POSION GASS 7 * 3) + WIZARD (FIREBALL 7*3) + CÑREIC (HOLY NOVA 9*3)
+
+# ============================================================
+# Multi-seed (orquestación de varios runs con seeds distintas)
+# ============================================================
+MULTI_SEED_ENABLED = False            # True → ignora SEED y usa MULTI_SEED_LIST
+MULTI_SEED_LIST = [42, 43, 44]        # Semillas a ejecutar en orden
+MULTI_SEED_BASELINE = None            # Ruta relativa a una carpeta con
+                                      # stats2.txt y stats_rusher_aggr_*.txt,
+                                      # o None para no comparar.
+
+# ============================================================
+# Log maestro de experimentos
+# ============================================================
+EXPERIMENT_LOG_PATH = "docs/experiment_log.csv"
+EXPERIMENT_ID = ""             # ej. "EXP-0012"; vacío → autoincrementa
+EXPERIMENT_OBJETIVO = ""       # ej. "buffer 200k con RESET=True"
+EXPERIMENT_NOTA = ""           # ej. "seed 43 excluida, outlier"
+EXPERIMENT_OVERRIDES = None    # dict con los overrides aplicados sobre el baseline,
+                                # ej. {"TURN_REPLAY_DATA": 200_000}
