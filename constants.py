@@ -74,8 +74,6 @@ GRAD_CLIP_MAX_NORM = 1.0
 COPY_DQN = 50                    # Frecuencia de copia a target network (en pasos de replay)
 COPY_DQN_SEL = 50
 COPY_DQN_TURN = 150
-SAVE_EVERY_ABSOLUTE = 10
-POOL_EVERY_ABSOLUTE = 5
 
 # ============================================================
 # Juego - Recompensas
@@ -123,6 +121,8 @@ MAX_MODELS = 50                   # Número máximo de snapshots en la pool
 SAVE_MODEL_FRACTION = 0.05        # Fracción de lotes tras la cual guardar un snapshot
 POOL_RANGE_FRACTION = 0.01        # Fracción de lotes tras la cual refrescar la asignación de pool
 POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de la pool
+SAVE_EVERY_ABSOLUTE = 10
+POOL_EVERY_ABSOLUTE = 5
 
 # ============================================================
 # Replay y priorización (PER)
@@ -130,7 +130,7 @@ POOL_PORCENTAGE = 0.3             # Porcentaje de partidas que usan oponentes de
 SELECTION_REPLAYS_PER_BATCH = 72 # Número de replays de selección por lote
 TURN_REPLAYS_PER_BATCH = 240       # Número de replays de turno por lote
 
-ALPHA = 0.8                       # Factor de priorización (0=uniforme, 1=máxima prioridad)
+ALPHA = 0.8                      # Factor de priorización (0=uniforme, 1=máxima prioridad)
 BETA_START = 0.4                  # Factor de importancia inicial (para IS weights)
 BETA_END = 1.0                    # Factor de importancia final
 BETA_DECAY_RATE = 0.9999          # Decaimiento de beta por replay
@@ -212,9 +212,17 @@ MULTI_SEED_BASELINE = None            # Ruta relativa a una carpeta con
 # ============================================================
 # Log maestro de experimentos
 # ============================================================
+# Log maestro de experimentos
+# ============================================================
+EXPERIMENT_LOG_ENABLED = True   # Flag maestro: False = no se escribe CSV ni informe .md
 EXPERIMENT_LOG_PATH = "docs/experiment_log.csv"
+EXPERIMENT_REPORTS_DIR = "docs/experiments"   # carpeta con un .md por EXP_ID
 EXPERIMENT_ID = ""             # ej. "EXP-0012"; vacío → autoincrementa
 EXPERIMENT_OBJETIVO = ""       # ej. "buffer 200k con RESET=True"
+EXPERIMENT_HIPOTESIS = ""      # ej. "COPY_DQN_TURN=150 explica la caida de winrate"
+EXPERIMENT_CONFUSORES = ""     # ej. "save_every distinto entre BASE_50/100/200"
+EXPERIMENT_CONCLUSION = ""     # rellenar a mano tras revisar el resultado
+EXPERIMENT_SIGUIENTE_PASO = "" # ej. "confirmar con seeds 7 y 91"
 EXPERIMENT_NOTA = ""           # ej. "seed 43 excluida, outlier"
 EXPERIMENT_OVERRIDES = None    # dict con los overrides aplicados sobre el baseline,
                                 # ej. {"TURN_REPLAY_DATA": 200_000}

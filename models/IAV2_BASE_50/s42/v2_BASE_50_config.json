@@ -1,6 +1,6 @@
 {
   "run_name": "v2_BASE_50",
-  "timestamp": 1789231110.926422,
+  "timestamp": 1789390489.8380854,
   "constants": {
     "ABILITIES_PER_WARRIOR": 4,
     "ALPHA": 0.8,
@@ -25,14 +25,20 @@
     "EPSILON_TURN_DECAY": 0.99,
     "EPSILON_TURN_MIN": 0.05,
     "ESTANDAR_ELO": 150,
-    "EVAL_EPISODES": 20,
-    "EXPERIMENT_ID": "EXP_00",
+    "EVAL_EPISODES": 10,
+    "EXPERIMENT_CONCLUSION": "",
+    "EXPERIMENT_CONFUSORES": "",
+    "EXPERIMENT_HIPOTESIS": "500K no terminaba de funcionar con 100 lotes ",
+    "EXPERIMENT_ID": "",
+    "EXPERIMENT_LOG_ENABLED": false,
     "EXPERIMENT_LOG_PATH": "docs/experiment_log.csv",
-    "EXPERIMENT_NOTA": "Se establece TRD a 200k fijo",
-    "EXPERIMENT_OBJETIVO": "BASE_50, save_every=10, pool_every=5 (calendario absoluto)",
+    "EXPERIMENT_NOTA": "",
+    "EXPERIMENT_OBJETIVO": "Base con TRD  a 500K ",
     "EXPERIMENT_OVERRIDES": {
-      "TURN_REPLAY_DATA": 262144
+      "TURN_REPLAY_DATA=500k": null
     },
+    "EXPERIMENT_REPORTS_DIR": "docs/experiments",
+    "EXPERIMENT_SIGUIENTE_PASO": "Rehacer las bases",
     "GOLD_INICIAL": 250,
     "GOLD_NORM_REF": 500,
     "GOLD_POR_BATALLA": 100,
@@ -131,7 +137,7 @@
       ]
     ],
     "RUSHER_OPPONENT_PERCENTAGE": 0.0,
-    "RUSHER_TEST_EPISODES": 20,
+    "RUSHER_TEST_EPISODES": 10,
     "RUSHER_TEST_EPSILON": 0.0,
     "SAVE_EVERY_ABSOLUTE": 10,
     "SAVE_MODEL_FRACTION": 0.05,
@@ -174,22 +180,22 @@
       {
         "name": "Evaluación final",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 10
       },
       {
         "name": "Evaluación vs Rusher (aggression=0.0)",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 10
       },
       {
         "name": "Evaluación vs Rusher (aggression=0.5)",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 10
       },
       {
         "name": "Evaluación vs Rusher (aggression=1.0)",
         "action": "evaluate",
-        "episodes": 20
+        "episodes": 10
       }
     ]
   }
