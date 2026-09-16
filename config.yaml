@@ -2,13 +2,13 @@
 # Configuración del proyecto Castle Game
 # ============================================================
 
-VERSION: 2
-RUN_NAME_SUFFIX: "Eval_ALPHA_0.4_RUSHER"
-TRAIN_EPISODES: 200
+VERSION: 3
+RUN_NAME_SUFFIX: "100_RUSHER_FINETUNE_40_LOTES"
+TRAIN_EPISODES: 100
 EVAL_EPISODES: 20
 SEED: 42
 PROFILE_CPROFILE : false       # Activa cProfile (global)
-PROFILE_TORCH : false            # Activa torch.profiler (solo primeros batches)
+PROFILE_TORCH : false            # Activa torch.profiler (solo primWeros batches)
 PROFILE_TORCH_BATCHES : 3        # Número de batches a perfilar con torch
 PROFILE_CPROFILE_OUTPUT : "optimizedAll2.prof"
 
@@ -17,23 +17,23 @@ PROFILE_CPROFILE_OUTPUT : "optimizedAll2.prof"
 # ============================================================
 MULTI_SEED_ENABLED: true
 MULTI_SEED_LIST: [42,43,44]
-MULTI_SEED_BASELINE: models\IAV2_BASE_200
+MULTI_SEED_BASELINE: models\IAV3_50_RUSHER_PORCENTAGE
 
 EXPERIMENT_LOG_ENABLED : True   # Flag maestro: False = no se escribe CSV ni informe .md
 EXPERIMENT_LOG_PATH : "docs/experiment_log.csv"
 EXPERIMENT_REPORTS_DIR : "docs/experiments"   # carpeta con un .md por EXP_ID
 EXPERIMENT_ID : ""             # ej. "EXP-0012"; vacío → autoincrementa
-EXPERIMENT_OBJETIVO : "BASE con ALPHA = 0.6 FINESTEP"       # ej. "buffer 200k con RESET=True"
-EXPERIMENT_HIPOTESIS : "La variable de prioridad tan alta perjudica el aprendizaje contra rusher "      # ej. "COPY_DQN_TURN=150 explica la caida de winrate"
+EXPERIMENT_OBJETIVO : "Observar si ahora el finetune con rusher ayuda al aprendizaje"       # ej. "buffer 200k con RESET=True"
+EXPERIMENT_HIPOTESIS : "El cacheo de las redes noisy es lo que perjudicó el aprendizaje con rusher finetune "      # ej. "COPY_DQN_TURN=150 explica la caida de winrate"
 EXPERIMENT_CONFUSORES : ""     # ej. "save_every distinto entre BASE_50/100/200"
 EXPERIMENT_CONCLUSION : ""     # rellenar a mano tras revisar el resultado
-EXPERIMENT_SIGUIENTE_PASO : "Evaluar con ALPHA = 0.4 o evaluar con rusher 0.3 y rusher train steps" # ej. "confirmar con seeds 7 y 91"
+EXPERIMENT_SIGUIENTE_PASO : "Evaluar con RUSHER_FINETUNE -> 200 Lotes + 60 fine tune" # ej. "confirmar con seeds 7 y 91"
 EXPERIMENT_NOTA : ""           # ej. "seed 43 excluida, outlier"
-EXPERIMENT_OVERRIDES : {ALPHA : 0.4}     # dict con los overrides aplicados sobre el baseline,
+EXPERIMENT_OVERRIDES : {RUN_RUSHER_FINETUNE: true,RUSHER_FINETUNE_EPISODES: 40}     # dict con los overrides aplicados sobre el baseline,
                                 # ej. {"TURN_REPLAY_DATA": 200_000}
 
-RUN_RUSHER_FINETUNE: false
-RUSHER_FINETUNE_EPISODES: 100
+RUN_RUSHER_FINETUNE: true
+RUSHER_FINETUNE_EPISODES: 40
 RUSHER_OPPONENT_PERCENTAGE: 0.3
 RUN_RUSHER_TESTS: true
 RUSHER_TEST_EPISODES: 20

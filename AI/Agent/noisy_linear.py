@@ -1,3 +1,19 @@
+"""
+Noisy Linear Layer with parametric noise.
+
+Implementación basada en:
+  https://github.com/ray-project/ray/blob/ray-2.22.0/rllib/algorithms/dqn/torch/torch_noisy_linear.py
+  "Noisy Networks for Exploration", https://arxiv.org/abs/1706.10295v3
+
+Esta versión NO cachea los pesos efectivos: `weight` y `bias` se computan
+en cada forward. El cacheo previo tenía un bug crítico — el decorador
+`@torch.no_grad()` en `_refresh_cache` sacaba los pesos efectivos del grafo
+de cómputo y ningún gradiente llegaba a `weight_mu`/`weight_sigma`. La capa
+final de la red nunca aprendía.
+
+El coste de recomputar (una suma y un producto por forward) es despreciable
+frente al matmul que viene después, así que no merece la pena cachear.
+"""
 import math
 import torch
 from torch import nn
@@ -7,31 +23,21 @@ DEVICE_TYPING = Union[torch.device, str, int]
 
 
 class NoisyLinear(nn.Linear):
-    """Noisy Linear Layer.
-    https://github.com/ray-project/ray/blob/ray-2.22.0/rllib/algorithms/dqn/torch/torch_noisy_linear.py
-    Presented in "Noisy Networks for Exploration",
-    https://arxiv.org/abs/1706.10295v3, implemented in relation to
-    `torchrl`'s `NoisyLinear` layer.
+    """
+    Capa lineal con ruido gaussiano factorizado añadido a los pesos.
 
-    A Noisy Linear Layer is a linear layer with parametric noise added to
-    the weights. This induced stochasticity can be used in RL networks for
-    the agent's policy to aid efficient exploration. The parameters of the
-    noise are learned with gradient descent along with any other remaining
-    network weights. Factorized Gaussian noise is the type of noise usually
-    employed.
-
+    Añade estocasticidad paramétrica a la red. Los parámetros del ruido
+    (mu y sigma) se aprenden por gradient descent junto al resto de pesos.
+    El ruido se re-muestrea llamando a `reset_noise()` (típicamente una vez
+    por decisión o por lote, según `constants.RESET_IN_DECISIONS`).
 
     Args:
-        in_features: Input features dimension.
-        out_features: Out features dimension.
-        bias: If `True`, a bias term will be added to the matrix
-            multiplication: `Ax + b`. Defaults to `True`.
-        device: Device of the layer. Defaults to `"cpu"`.
-        dtype: `dtype` of the parameters. Defaults to `None` (default `torch`
-            `dtype`).
-        std_init: Initial value of the Gaussian standard deviation before
-            optimization. Defaults to `0.1`.
-
+        in_features: Dimensión de entrada.
+        out_features: Dimensión de salida.
+        bias: Si `True`, añade bias. Default `True`.
+        device: Device del layer. Default `None` (CPU).
+        dtype: dtype de los parámetros. Default `None` (default de torch).
+        std_init: Desviación estándar inicial del ruido. Default `0.1`.
     """
 
     def __init__(
@@ -95,56 +101,29 @@ class NoisyLinear(nn.Linear):
             self.bias_mu = None
         self.reset_parameters()
         self.reset_noise()
-        self.training = True
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        # Use initialization for factorized noisy linear layers.
+        """Inicialización estándar de NoisyLinear (factorized Gaussian)."""
         mu_range = 1 / math.sqrt(self.in_features)
-        # Initialize weight distribution parameters.
         self.weight_mu.data.uniform_(-mu_range, mu_range)
         self.weight_sigma.data.fill_(self.std_init / math.sqrt(self.in_features))
-        # If bias is used initial these parameters, too.
         if self.bias_mu is not None:
-            self.bias_mu.data.zero_()  # (-mu_range, mu_range)
+            self.bias_mu.data.zero_()
             self.bias_sigma.data.fill_(self.std_init / math.sqrt(self.out_features))
 
     @torch.no_grad()
     def reset_noise(self) -> None:
-        with torch.no_grad():
-            # Use factorized noise for better performance.
-            epsilon_in = self._scale_noise(self.in_features)
-            epsilon_out = self._scale_noise(self.out_features)
-            self.weight_epsilon.copy_(epsilon_out.outer(epsilon_in))
-            if self.bias_mu is not None:
-                self.bias_epsilon.copy_(epsilon_out)
-            self._refresh_cache()
-
-    @torch.no_grad()
-    def _refresh_cache(self) -> None:
-        """Recalcula y cachea el peso/bias efectivo tras cambiar mu/sigma/epsilon.
-        Evita recomputar weight_mu + weight_sigma*weight_epsilon en cada forward().
-
-        Usa object.__setattr__ en vez de self.x = ... para evitar que nn.Module
-        registre estas referencias como parámetros cuando training=False (en ese
-        caso _cached_weight apunta a weight_mu, que SÍ es un Parameter, y
-        nn.Module.__setattr__ lo metería en _parameters — corrompiendo el módulo
-        para futuras asignaciones)."""
-        if self.training:
-            cached_weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
-            if self.bias_mu is not None:
-                cached_bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
-            else:
-                cached_bias = None
-        else:
-            cached_weight = self.weight_mu
-            cached_bias = self.bias_mu if self.bias_mu is not None else None
-
-        object.__setattr__(self, "_cached_weight", cached_weight)
-        object.__setattr__(self, "_cached_bias", cached_bias)
+        """Re-muestrea los tensores epsilon (factorized Gaussian noise)."""
+        epsilon_in = self._scale_noise(self.in_features)
+        epsilon_out = self._scale_noise(self.out_features)
+        self.weight_epsilon.copy_(epsilon_out.outer(epsilon_in))
+        if self.bias_mu is not None:
+            self.bias_epsilon.copy_(epsilon_out)
 
     @torch.no_grad()
     def _scale_noise(self, size: Union[int, torch.Size, Sequence]) -> torch.Tensor:
+        """Ruido gaussiano escalado: sign(x) * sqrt(|x|)."""
         if isinstance(size, int):
             size = (size,)
         x = torch.randn(*size, device=self.weight_mu.device)
@@ -152,30 +131,32 @@ class NoisyLinear(nn.Linear):
 
     @property
     def weight(self) -> torch.Tensor:
-        return self._cached_weight
+        """
+        Peso efectivo, computado en cada acceso para que el backward
+        propague gradiente a weight_mu/weight_sigma.
+        """
+        if not self.training:
+            return self.weight_mu
+        return self.weight_mu + self.weight_sigma * self.weight_epsilon
 
     @property
     def bias(self) -> Optional[torch.Tensor]:
-        return self._cached_bias
-    
+        """Bias efectivo, computado en cada acceso. Mismo criterio que weight."""
+        if self.bias_mu is None:
+            return None
+        if not self.training:
+            return self.bias_mu
+        return self.bias_mu + self.bias_sigma * self.bias_epsilon
+
     @torch.no_grad()
     def clamp_sigma(self, min_sigma: float) -> None:
-        """Recorta weight_sigma/bias_sigma a un mínimo absoluto, para evitar
+        """Recorta weight_sigma/bias_sigma a un mínimo absoluto para evitar
         que el optimizador los colapse hacia 0 (y con ello, la exploración)."""
         self.weight_sigma.data.clamp_(min=min_sigma)
         if self.bias_sigma is not None:
             self.bias_sigma.data.clamp_(min=min_sigma)
-        self._refresh_cache()
 
     @torch.no_grad()
     def mean_abs_sigma(self) -> float:
         """Media de |sigma| de esta capa, para logging/diagnóstico."""
         return self.weight_sigma.data.abs().mean().item()
-    
-    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
-                          missing_keys, unexpected_keys, error_msgs):
-        super()._load_from_state_dict(
-            state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
-        )
-        self._refresh_cache()

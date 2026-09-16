@@ -54,7 +54,7 @@ _(ninguno -- rellenar EXPERIMENT_CONFUSORES)_
 
 ## Conclusión y siguiente paso
 
-Descartado
+Descartado, se ha encontrado un error grave en el proyecto, actualmente noisy_linear no actualiza sus valores en memoria, por lo que solo aprenden el resto de capas de la red neuronal.
 
 Evaluar con ALPHA = 0.4 o evaluar con rusher 0.3 y rusher train steps
 

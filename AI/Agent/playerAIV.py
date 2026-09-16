@@ -68,11 +68,6 @@ class PlayerAIV:
     def epsilon_sel(self, v): self._policy.epsilon_sel = v
 
     @property
-    def epsilon_turn(self): return self._policy.epsilon_turn
-    @epsilon_turn.setter
-    def epsilon_turn(self, v): self._policy.epsilon_turn = v
-
-    @property
     def replayed_selection(self): return self._trainer.replayed_selection
     @property
     def replayed_turn(self): return self._trainer.replayed_turn
@@ -122,14 +117,14 @@ class PlayerAIV:
     def save_model(self, path1: str, path2: str) -> None:
         self._checkpoint.save_model(
             path1, path2,
-            epsilons=(self.epsilon_sel, self.epsilon_turn),
+            epsilons=(self.epsilon_sel, self.epsilon_sel),
             replayed_counts=(self._trainer.replayed_selection, self._trainer.replayed_turn),
             elo=self.elo,
         )
 
     def load_model(self, path1: str, path2: str) -> None:
         result = self._checkpoint.load_model(path1, path2)
-        self.epsilon_sel, self.epsilon_turn = result["epsilons"]
+        self.epsilon_sel, self.epsilon_sel = result["epsilons"]
         self._trainer.replayed_selection, self._trainer.replayed_turn = result["replayed_counts"]
         self.elo = result["elo"]
 

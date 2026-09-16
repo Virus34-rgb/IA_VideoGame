@@ -246,14 +246,12 @@ class PlayerGUIV:
             # action_mask[0, slot, 4]/[0, slot, 5], que ya codifica exactamente
             # las mismas restricciones de borde (mask[:,0,5]=False, mask[:,2,4]
             # =False) desde el único punto de verdad compartido con la red.
-            if action_mask[0, slot, 5]:
+            if action_mask[0, slot, 5]:   # mov-
+                btn = tk.Button(frame, text="← Mover izquierda", 
+                                command=lambda s=slot: self._set_action(s, 6))
+            if action_mask[0, slot, 4]:   # mov+
                 btn = tk.Button(frame, text="→ Mover derecha",
                                 command=lambda s=slot: self._set_action(s, 5))
-                btn.pack(side=tk.LEFT, padx=2)
-            if action_mask[0, slot, 4]:
-                btn = tk.Button(frame, text="← Mover izquierda",
-                                command=lambda s=slot: self._set_action(s, 6))
-                btn.pack(side=tk.LEFT, padx=2)
 
         # Botón de confirmación
         self.confirm_btn = tk.Button(self.root, text="✅ Confirmar turno",

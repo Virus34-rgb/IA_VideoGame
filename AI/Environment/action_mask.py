@@ -32,7 +32,7 @@ def compute_action_mask(own_disposition, own_cooldowns, own_alive, enemy_disposi
 
     mask[:, :, :4] &= ~sin_target
 
-    mask[:, 0, 5] = False # Slot 0 (front) → no puede moverse a la derecha (acción 5)
-    mask[:, 2, 4] = False  # Slot 2 (back)  → no puede moverse a la izquierda (acción 4)
+    mask[:, 0, 5] = False  # Slot 0 (frontera izquierda): no puede ir hacia posiciones menores.
+    mask[:, 2, 4] = False  # Slot 2 (frontera derecha):   no puede ir hacia posiciones mayores.
 
     return mask   # (N, 3, 6) bool

@@ -24,7 +24,6 @@ class AIPolicy:
         self.turn_network = turn_network
 
         self.epsilon_sel: float = constants.EPSILON_SELECTION
-        self.epsilon_turn: float = constants.EPSILON_TURN
         self.epsilon_residual: float = constants.EPSILON_RESIDUAL
 
     def selection(self, batch_encoded_states, disposition, opp_initial_warrior, castle_alive=None, already_used=None, castle_types=None):
@@ -135,9 +134,7 @@ class AIPolicy:
 
     def update_epsilon(self, n_games: int = 1) -> None:
         decay_sel = constants.EPSILON_SEL_DECAY ** n_games
-        decay_turn = constants.EPSILON_TURN_DECAY ** n_games
         self.epsilon_sel = max(constants.EPSILON_SEL_MIN, self.epsilon_sel * decay_sel)
-        self.epsilon_turn = max(constants.EPSILON_TURN_MIN, self.epsilon_turn * decay_turn)
 
     def reset_noise(self):
         self.selection_network.reset_noise()

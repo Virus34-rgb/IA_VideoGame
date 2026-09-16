@@ -94,9 +94,13 @@ class AgentTrainer:
         offsets = self._turn_offsets
         actions_global = actions_b + offsets
         q_selected = qvalues.gather(1, actions_global)
-        q_selected = q_selected * warrior_mask.float()
+        # Mascara efectiva: vivo Y con al menos una acción válida. Sin esto, slots
+        # vivos sin acción válida (todas en CD, flancos ocupados) contribuían con un
+        # Q-value del botón 0 que nunca fue elegido.
+        hay_valida = current_action_mask.any(dim=-1)  # (B, 3)
+        q_selected = q_selected * (warrior_mask & hay_valida).float()
         q_selected = q_selected.sum(dim=1)
-
+        
         target = self._multi_agent_double_dqn_target(batch, next_states, rewards, dones)
 
         with torch.inference_mode():
@@ -143,10 +147,9 @@ class AgentTrainer:
 
             target_qvalues = self.target_turn_network(next_states, action_mask=next_action_mask)
             next_qvalues = target_qvalues.gather(1, next_actions)
-
             next_warrior_mask = batch.next_alive
-            next_qvalues = (next_qvalues * next_warrior_mask.float()).sum(dim=1)
-
+            next_hay_valida = next_action_mask.any(dim=-1)
+            next_qvalues = (next_qvalues * (next_warrior_mask & next_hay_valida).float()).sum(dim=1)
             return rewards + (constants.DISCOUNT_FACTOR ** constants.N_STEP) * next_qvalues * (~dones)
 
     @staticmethod

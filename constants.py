@@ -54,11 +54,8 @@ TURN_STATE_DIM = 58 + 24 * MAX_POOL_SIZE + 12 + 4   # +4: perfil de oponente (ag
 # IA - Parámetros de exploración (epsilon-greedy)
 # ============================================================
 EPSILON_SELECTION = 0.5           # Épsilon inicial para selección de equipo
-EPSILON_TURN = 0.5                # Épsilon inicial para acciones de turno
 EPSILON_SEL_MIN = 0.05            # Épsilon mínimo para selección
-EPSILON_TURN_MIN = 0.05           # Épsilon mínimo para turno
 EPSILON_SEL_DECAY = 0.99      # Decaimiento por lote para selección
-EPSILON_TURN_DECAY = 0.99      # Decaimiento por lote para turno
 EPSILON_RESIDUAL = 0.01
 
 # ============================================================
@@ -71,7 +68,6 @@ TURN_REPLAY_DATA = 262_144 # Capacidad del buffer de turno Estandar 150000 parap
 BATCH_SIZE = 256                 # Tamaño del batch de replay
 DISCOUNT_FACTOR = 0.95            # Factor de descuento (gamma)
 GRAD_CLIP_MAX_NORM = 1.0
-COPY_DQN = 50                    # Frecuencia de copia a target network (en pasos de replay)
 COPY_DQN_SEL = 50
 COPY_DQN_TURN = 150
 

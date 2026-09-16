@@ -60,55 +60,38 @@ class OpponentProfileTracker:
         self, p1_types_now, p1_abilities_now, p1_action_mask_now, p1_alive_now,
         p2_types_now, p2_abilities_now, p2_action_mask_now, p2_alive_now,
     ):
-        p1_es_ataque, p1_es_def = self._ability_type_masks(p1_types_now, p1_abilities_now)
-        p1_atk_valid = p1_action_mask_now[:, :, :4] & p1_es_ataque
-        p1_def_valid = p1_action_mask_now[:, :, :4] & p1_es_def
-        p1_atk_opp = p1_atk_valid.any(dim=-1).sum(dim=-1).float()
-        p1_def_opp = p1_def_valid.any(dim=-1).sum(dim=-1).float()
-        p1_move_opp = p1_alive_now.sum(dim=-1).float()
-        p1_atk_taken = torch.minimum(self.environment.p1_attacks.float(), p1_atk_opp)
-        p1_def_taken = torch.minimum(self.environment.p1_defenses.float(), p1_def_opp)
-        p1_move_taken = torch.minimum(self.environment.p1_movements.float(), p1_move_opp)
+        p1_alive_count = p1_alive_now.sum(dim=-1).float().clamp(min=1.0)
+        p1_atk_taken = self.environment.p1_attacks.float()
+        p1_def_taken = self.environment.p1_defenses.float()
+        p1_move_taken = self.environment.p1_movements.float()
         p1_dmg_dealt = self.environment.p1_damage
         p1_dmg_recv = self.environment.p2_damage
-        mismatch = p1_atk_taken > p1_atk_opp
-        if mismatch.any():
-            idx = mismatch.nonzero(as_tuple=True)[0][:3]  # solo las 3 primeras para no saturar consola
-            print(f"[DEBUG PROFILE] P1 atk_taken > atk_opp en partidas {idx.tolist()}: "
-                  f"taken={p1_atk_taken[idx].tolist()} opp={p1_atk_opp[idx].tolist()} "
-                  f"turno={self.environment.turn_number[idx].tolist()}")
             
-        p2_es_ataque, p2_es_def = self._ability_type_masks(p2_types_now, p2_abilities_now)
-        p2_atk_valid = p2_action_mask_now[:, :, :4] & p2_es_ataque
-        p2_def_valid = p2_action_mask_now[:, :, :4] & p2_es_def
-        p2_atk_opp = p2_atk_valid.any(dim=-1).sum(dim=-1).float()
-        p2_def_opp = p2_def_valid.any(dim=-1).sum(dim=-1).float()
-        p2_move_opp = p2_alive_now.sum(dim=-1).float()
-        p2_atk_taken = torch.minimum(self.environment.p1_attacks.float(), p2_atk_opp)
-        p2_def_taken = torch.minimum(self.environment.p1_defenses.float(), p2_def_opp)
-        p2_move_taken = torch.minimum(self.environment.p1_movements.float(), p2_move_opp)
+        p2_alive_count = p2_alive_now.sum(dim=-1).float().clamp(min=1.0)
+        p2_atk_taken = self.environment.p2_attacks.float()
+        p2_def_taken = self.environment.p2_defenses.float()
+        p2_move_taken = self.environment.p2_movements.float()
         p2_dmg_dealt = self.environment.p2_damage
         p2_dmg_recv = self.environment.p1_damage
 
         self._p1_profile = self._compute_profile(
-            self._p1_profile, p1_atk_taken, p1_atk_opp, p1_def_taken, p1_def_opp,
-            p1_move_taken, p1_move_opp, p1_dmg_dealt, p1_dmg_recv,
+            self._p1_profile, p1_atk_taken, p1_alive_count, p1_def_taken, p1_alive_count,
+            p1_move_taken, p1_alive_count, p1_dmg_dealt, p1_dmg_recv,
         )
         self._p2_profile = self._compute_profile(
-            self._p2_profile, p2_atk_taken, p2_atk_opp, p2_def_taken, p2_def_opp,
-            p2_move_taken, p2_move_opp, p2_dmg_dealt, p2_dmg_recv,
+            self._p2_profile, p2_atk_taken, p2_alive_count, p2_def_taken, p2_alive_count,
+            p2_move_taken, p2_alive_count, p2_dmg_dealt, p2_dmg_recv,
         )
 
     def _compute_profile(self, old_profile, atk_taken, atk_opp, def_taken, def_opp, move_taken, move_opp, dmg_dealt, dmg_recv):
         decay = constants.PROFILE_EMA_DECAY
+        
+        new_aggression = (atk_taken / atk_opp).clamp(0.0, 1.0)
+        new_movement   = (move_taken / move_opp).clamp(0.0, 1.0)
+        new_defense    = (def_taken / def_opp).clamp(0.0, 1.0)
 
-        new_aggression = torch.where(atk_opp > 0, (atk_taken / atk_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 0])
         aggression = (decay * new_aggression + (1 - decay) * old_profile[:, 0]).clamp(0.0, 1.0)
-
-        new_movement = torch.where(move_opp > 0, (move_taken / move_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 1])
         movement_freq = (decay * new_movement + (1 - decay) * old_profile[:, 1]).clamp(0.0, 1.0)
-
-        new_defense = torch.where(def_opp > 0, (def_taken / def_opp.clamp(min=1)).clamp(0.0, 1.0), old_profile[:, 2])
         defense_usage = (decay * new_defense + (1 - decay) * old_profile[:, 2]).clamp(0.0, 1.0)
 
         damage_ratio_raw = dmg_dealt / dmg_recv.clamp(min=1)
