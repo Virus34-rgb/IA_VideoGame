@@ -2,6 +2,14 @@
 Modo comparación de runs (RunSpec): ejecuta varias configuraciones con
 overrides de constants.py distintos y superpone sus curvas de progreso.
 Extraído de mainV.py.
+
+TrainingContext:
+  run_single() construye un TrainingContext DESPUÉS de aplicar los overrides
+  de RunSpec sobre el módulo constants, y lo propaga a MainV. Esto garantiza
+  que cualquier colaborador que lea BATCH_SIZE/COPY_DQN/etc. a través del
+  context reciba los valores EFECTIVOS de este run concreto, no los del
+  momento de import del módulo (que es lo que rompía el patrón
+  `from constants import X`).
 """
 import os
 from dataclasses import dataclass, field
@@ -13,6 +21,7 @@ import constants
 from AI.Agent.orchestration.main_runner import MainV
 from AI.Agent.orchestration.seed_utils import set_seed
 from AI.Agent.orchestration.step_builder import build_steps
+from AI.Agent.training.training_context import TrainingContext
 from AI.Logging.metrics_logger import MetricsLogger
 from config import RunConfig
 
@@ -52,14 +61,23 @@ def run_single(
     # valores vía `import constants; constants.X`, así que esto SÍ se
     # propaga -- SALVO en los sitios que hagan `from constants import X`
     # (ese patrón queda inmune al setattr porque ya capturó el valor en el
-    # momento del import). Usar AI.Logging.constants_diff.compute_diff() al
-    # final de un experimento para detectar overrides que no se propagaron.
+    # momento del import).
+    #
+    # TrainingContext cierra esa brecha estructuralmente para las 5 constantes
+    # cubiertas: se snapshotea DESPUÉS de aplicar overrides y se inyecta
+    # explícitamente en los colaboradores. Los sitios que aún lean
+    # `from constants import X` de otras constantes siguen siendo
+    # responsabilidad de AI.Logging.constants_diff.compute_diff().
     original_values = {}
     for key, value in run_spec.constants_overrides.items():
         original_values[key] = getattr(constants, key)
         setattr(constants, key, value)
 
     try:
+        # Snapshot de constants DESPUÉS de aplicar los overrides de este
+        # run concreto -- captura los valores EFECTIVOS de esta comparación.
+        context = TrainingContext.from_constants()
+
         run_config = RunConfig(
             version=f"{config.version}_{run_spec.run_name}",
             train_episodes=run_spec.train_batches,
@@ -73,6 +91,7 @@ def run_single(
             N=run_spec.N,
             player_class=run_spec.player_class,
             log_dir=shared_log_dir,
+            context=context,
         )
         main.run()
         return main.log_dir, f"v{run_config.version}"

@@ -21,6 +21,7 @@ from AI.Agent.observationV import ObservationV
 from AI.Agent.eloRating import EloRating
 from AI.Agent.opponent_assignment import OpponentAssignmentService
 from AI.Agent.opponent_profile_tracker import OpponentProfileTracker
+from AI.Agent.training.training_context import TrainingContext
 from AI.Logging.stats_report_writer import StatsReportWriter
 
 class TrainerV:
@@ -28,7 +29,8 @@ class TrainerV:
         self, player1, player2,playerRusher, environment, opponent_pool,
         train_batches, eval_batches, pathp1_1, pathp1_2, pathp2_1, pathp2_2,
         path_stats, path_stats2, logger=None, snapshot_every=1000, progress_every=1,
-        profile_cprofile=False, profile_torch=False, profile_torch_batches=3
+        profile_cprofile=False, profile_torch=False, profile_torch_batches=3,
+        context: Optional[TrainingContext] = None,
     ) -> None:
         self.player1 = player1
         self.player2 = player2
@@ -39,6 +41,10 @@ class TrainerV:
         self.profile_cprofile= profile_cprofile
         self.profile_torch = profile_torch
         self.profile_torch_batches = profile_torch_batches
+
+        # Categoría C: inmutable tras construcción. Si es None, los sitios que
+        # dependen del contexto caen a constants.py (comportamiento previo).
+        self.context = context
 
         self.train_batches = train_batches
         self.eval_batches = eval_batches
@@ -411,17 +417,25 @@ class TrainerV:
     def _sample_rusher_aggression(self, N: int,min : float = None,max : float = None) -> torch.Tensor:
         """
         Sustituye el muestreo uniforme torch.rand(N) por un muestreo por bandas
-        ponderadas (constants.RUSHER_AGGRESSION_BANDS / RUSHER_AGGRESSION_BAND_WEIGHTS),
+        ponderadas (RUSHER_AGGRESSION_BANDS / RUSHER_AGGRESSION_BAND_WEIGHTS),
         para dar más exposición a las agresividades donde peor rinde la IA (ver
         diagnóstico: ~14.7% winrate en [0.9,1.0], ~24.3% en torno a 0.5).
         Misma técnica de CDF acumulada + búsqueda binaria vectorizada que
         _sample_categorical_shared, para no introducir torch.multinomial.
+
+        Los pesos de banda se leen del TrainingContext si está inyectado; si no,
+        de constants.py (comportamiento previo).
         """
         if min is not None and max is not None:
             u_within = torch.rand(N)
             return min + u_within * (max - min)
         
-        weights = torch.tensor(constants.RUSHER_AGGRESSION_BAND_WEIGHTS, dtype=torch.float)
+        band_weights = (
+            self.context.rusher_aggression_band_weights
+            if self.context is not None
+            else constants.RUSHER_AGGRESSION_BAND_WEIGHTS
+        )
+        weights = torch.tensor(band_weights, dtype=torch.float)
         cumprobs = torch.cumsum(weights, dim=0)
         u_band = torch.rand(N)
         band_idx = torch.searchsorted(cumprobs, u_band).clamp(max=len(constants.RUSHER_AGGRESSION_BANDS) - 1)
@@ -523,8 +537,13 @@ class TrainerV:
         )
 
     def _replay_turn_and_selection(self, player, selection_states, selection_actions, reward_acum, player_name, batch_idx, skip_mask=None) -> None:
+        turn_replays = (
+            self.context.turn_replays_per_batch
+            if self.context is not None
+            else constants.TURN_REPLAYS_PER_BATCH
+        )
         loss_turn = None
-        for _ in range(constants.TURN_REPLAYS_PER_BATCH):
+        for _ in range(turn_replays):
             loss_turn = player.replay_turn()
 
         if self.logger and loss_turn is not None:
@@ -564,7 +583,12 @@ class TrainerV:
                 torch.ones(s3.shape[0], dtype=torch.bool),
             )
 
-        for _ in range(constants.SELECTION_REPLAYS_PER_BATCH):
+        selection_replays = (
+            self.context.selection_replays_per_batch
+            if self.context is not None
+            else constants.SELECTION_REPLAYS_PER_BATCH
+        )
+        for _ in range(selection_replays):
             loss = player.replay_selection()
             if self.logger and loss is not None:
                 self.logger.log_loss(batch_idx, player.replayed_selection, player_name, "selection", loss)

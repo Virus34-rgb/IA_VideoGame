@@ -201,6 +201,10 @@ class OpponentPoolV:
             partida_indices = (checkpoint_idx == cp_id).nonzero(as_tuple=True)[0]
 
             if cp_id not in self._player_cache:
+                # Sin context: son oponentes de inferencia pura (use_replay=False,
+                # nunca llaman a replay_turn/replay_selection), así que no
+                # necesitan BATCH_SIZE/COPY_DQN -- se quedan con los defaults
+                # internos de AgentTrainer (que nunca se ejercitan aquí).
                 jugador = player_class(N, environment,use_replay = False)
                 path_sel = self.path / f"snapshotsSELECTION_{cp_id}.pth"
                 path_turn = self.path / f"snapshotsTURN_{cp_id}.pth"
@@ -219,3 +223,56 @@ class OpponentPoolV:
         
     def get_elo(self, cp_id: int) -> float:
         return self.elos.get(cp_id, constants.ELO_INITIAL)
+
+
+class NullOpponentPool:
+    """
+    Pool de oponentes "vacía". Implementa la misma interfaz que OpponentPoolV
+    pero sin tocar disco ni cargar modelos.
+
+    Uso previsto: TrainerV en contextos donde no se juega contra la pool
+    (tests de regresión, evals contra rusher, demos, smoke tests). Permite
+    construir el TrainerV sin ramas None-conditional por todas partes.
+
+    Invariantes:
+      - `elos` siempre es un dict vacío.
+      - `sample_assignment` devuelve todas las filas como "no-pool".
+      - `build_grouped_opponents` devuelve {} aunque haya checkpoint_idx.
+      - Cualquier `save_version`/`update_elo`/`delete_first` es no-op.
+    """
+
+    def __init__(self) -> None:
+        self.elos: Dict[int, float] = {}
+
+    def save_version(self, player: Any) -> None:
+        pass
+
+    def get_random(self) -> Tuple[Path, Path]:
+        raise RuntimeError(
+            "NullOpponentPool no contiene modelos. "
+            "Usa OpponentPoolV si necesitas cargar snapshots."
+        )
+
+    def list_models(self) -> Tuple[int, int, int]:
+        return 0, 0, 0
+
+    def delete_first(self, first: int) -> None:
+        pass
+
+    def sample_assignment(
+        self, N: int, pool_porcentage: float, agent_elo: float,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        from_pool = torch.zeros(N, dtype=torch.bool)
+        checkpoint_idx = torch.full((N,), -1, dtype=torch.long)
+        return from_pool, checkpoint_idx
+
+    def build_grouped_opponents(
+        self, checkpoint_idx: torch.Tensor, player_class: Any, N: int, environment: Any,
+    ) -> Dict[int, Tuple[Any, torch.Tensor]]:
+        return {}
+
+    def update_elo(self, id: int, new_elo: float) -> None:
+        pass
+
+    def get_elo(self, cp_id: int) -> float:
+        return constants.ELO_INITIAL

@@ -15,6 +15,7 @@ from AI.Agent.opponent_poolV import OpponentPoolV
 from AI.Agent.playerAIV import PlayerAIV
 from AI.Agent.playerNoIAV import PlayerNoAIV
 from AI.Agent.player_rusher import PlayerRusherV
+from AI.Agent.training.training_context import TrainingContext
 from AI.Environment.vectorizedEnvironment import VectorizedEnvironment
 from AI.Agent.trainerV import TrainerV
 from AI.Logging.metrics_logger import MetricsLogger
@@ -52,12 +53,16 @@ class MainV:
         N: int,
         player_class: Optional[Callable] = None,
         log_dir: Optional[str] = None,
+        context: Optional[TrainingContext] = None,
     ) -> None:
         self.config = config
         self.steps = steps
         self.N = N
         self.player_class = player_class or PlayerAIV
         self.log_dir = log_dir or self.config.base_path
+        # Categoría C: inmutable tras construcción. None → constants.py como
+        # fuente de verdad (comportamiento previo, sin overrides de RunSpec).
+        self.context = context
 
         self.player1: Optional[PlayerAIV] = None
         self.playerRusher: Optional[PlayerRusherV] = None
@@ -68,6 +73,14 @@ class MainV:
     # ------------------------------------------------------------
     # Configuración y ejecución principal
     # ------------------------------------------------------------
+
+    def _make_player(self, cls: Callable):
+        """Instancia un jugador propagando el TrainingContext solo si la clase
+        lo acepta (PlayerAIV y subclases). PlayerNoAIV / PlayerRusherV / PlayerGUIV
+        tienen firmas distintas y no aceptan context -- se construyen sin él."""
+        if isinstance(cls, type) and issubclass(cls, PlayerAIV):
+            return cls(self.N, self.environment, context=self.context)
+        return cls(self.N, self.environment)
 
     def setup(self) -> None:
         self.run_timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -80,7 +93,7 @@ class MainV:
         os.makedirs(self.log_dir, exist_ok=True)
 
         self.environment = VectorizedEnvironment(self.N)
-        self.player1 = self.player_class(self.N, self.environment)
+        self.player1 = self._make_player(self.player_class)
         self.playerRusher = PlayerRusherV(self.N, self.environment)
 
         clean_suffix = self.sanitize_filename(self.config.suffix) if self.config.suffix else ""
@@ -155,7 +168,7 @@ class MainV:
             )
 
         if step.player1_checkpoint:
-            active_player1 = self.player_class(self.N, self.environment)
+            active_player1 = self._make_player(self.player_class)
             sel_path, turn_path = step.player1_checkpoint
             if os.path.exists(sel_path) and os.path.exists(turn_path):
                 active_player1.load_model(sel_path, turn_path)
@@ -188,6 +201,7 @@ class MainV:
             profile_cprofile=constants.PROFILE_CPROFILE,
             profile_torch=constants.PROFILE_TORCH,
             profile_torch_batches=constants.PROFILE_TORCH_BATCHES,
+            context=self.context,
         )
 
         start_time = time.time()
@@ -252,7 +266,7 @@ class MainV:
                 return PlayerNoAIV(self.environment)
         if step.opponent_factory is PlayerRusherV:
             return self.playerRusher
-        return self.player_class(self.N, self.environment)
+        return self._make_player(self.player_class)
 
     # ------------------------------------------------------------
     # Impresión de configuración y resumen

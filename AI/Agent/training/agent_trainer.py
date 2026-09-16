@@ -5,17 +5,24 @@ se guardan como referencia (no son una copia).
 Tiene dos atributos propios: replayed_selection y replayed_turn, los cuales
 marcan la cantidad de veces que se ha hecho un replay en una red neuronal
 
+TrainingContext:
+  Si se inyecta un TrainingContext, batch_size y copy_dqn_sel/copy_dqn_turn
+  se leen de ahí (capturando overrides de RunSpec aplicados por run_single()).
+  Si no se inyecta, cae a los valores de constants.py -- compatibilidad hacia
+  atrás para cualquier llamador que construya AgentTrainer sin context.
 """
 from typing import Optional
 import torch
 from torch import nn
 
 import constants
+from AI.Agent.training.training_context import TrainingContext
 
 
 class AgentTrainer:
     def __init__(self, selection_network, target_selection_network, optimizer_sel, replay_memory_sel,
-                 turn_network, target_turn_network, optimizer_turn, replay_memory_turn):
+                 turn_network, target_turn_network, optimizer_turn, replay_memory_turn,
+                 context: Optional[TrainingContext] = None):
         self.selection_network = selection_network
         self.target_selection_network = target_selection_network
         self.optimizer_sel = optimizer_sel
@@ -26,9 +33,23 @@ class AgentTrainer:
         self.optimizer_turn = optimizer_turn
         self.replay_memory_turn = replay_memory_turn
 
+        # Categoría C: inmutable tras construcción. Si no se pasa, cae a los
+        # valores de constants.py (compatibilidad hacia atrás -- ningún
+        # llamador existente que no pase context se rompe).
+        self.context = context
+
         self.replayed_selection: int = 0
         self.replayed_turn: int = 0
         self._turn_offsets = torch.tensor([0, 6, 12]) # Offset creado al principio para evitar creación en cada bucle
+
+    def _batch_size(self) -> int:
+        return self.context.batch_size if self.context is not None else constants.BATCH_SIZE
+
+    def _copy_dqn_sel(self) -> int:
+        return self.context.copy_dqn_sel if self.context is not None else constants.COPY_DQN_SEL
+
+    def _copy_dqn_turn(self) -> int:
+        return self.context.copy_dqn_turn if self.context is not None else constants.COPY_DQN_TURN
 
     def replay_selection(self) -> Optional[float]:
         """
@@ -38,7 +59,8 @@ class AgentTrainer:
         Returns:
             Optional[float]: el valor de la perdida
         """
-        if len(self.replay_memory_sel) < constants.BATCH_SIZE:
+        batch_size = self._batch_size()
+        if len(self.replay_memory_sel) < batch_size:
             return None
         
         #Reset del ruido de la noisy network para que no afecte a la replay
@@ -46,7 +68,7 @@ class AgentTrainer:
         self.target_selection_network.reset_noise()
 
         self.replayed_selection += 1
-        batch, tree_indices, weights = self.replay_memory_sel.sample(constants.BATCH_SIZE)
+        batch, tree_indices, weights = self.replay_memory_sel.sample(batch_size)
         weights = torch.from_numpy(weights).float()
 
         states = batch.states.float()
@@ -66,19 +88,23 @@ class AgentTrainer:
             td_errors = torch.nan_to_num(td_errors, nan=1.0, posinf=10.0, neginf=10.0)
 
         loss = self._loss_function(q_selected, target, weights)
-        self._optimize_step(loss, self.optimizer_sel, self.selection_network, self.target_selection_network, "replayed_selection",constants.COPY_DQN_SEL)
+        self._optimize_step(
+            loss, self.optimizer_sel, self.selection_network, self.target_selection_network,
+            "replayed_selection", self._copy_dqn_sel(),
+        )
         self.replay_memory_sel.update_priorities(tree_indices, td_errors.detach().cpu().numpy())
         return loss.item()
 
     def replay_turn(self) -> Optional[float]:
-        if len(self.replay_memory_turn) < constants.BATCH_SIZE:
+        batch_size = self._batch_size()
+        if len(self.replay_memory_turn) < batch_size:
             return None
 
         self.turn_network.reset_noise()
         self.target_turn_network.reset_noise()
 
         self.replayed_turn += 1
-        batch, tree_indices, weights = self.replay_memory_turn.sample(constants.BATCH_SIZE)
+        batch, tree_indices, weights = self.replay_memory_turn.sample(batch_size)
         weights = torch.from_numpy(weights).float()
 
         states = batch.states.float()
@@ -108,7 +134,10 @@ class AgentTrainer:
             td_errors = torch.nan_to_num(td_errors, nan=1.0, posinf=10.0, neginf=10.0)
 
         loss = self._loss_function(q_selected, target, weights)
-        self._optimize_step(loss, self.optimizer_turn, self.turn_network, self.target_turn_network, "replayed_turn",constants.COPY_DQN_TURN)
+        self._optimize_step(
+            loss, self.optimizer_turn, self.turn_network, self.target_turn_network,
+            "replayed_turn", self._copy_dqn_turn(),
+        )
         self.replay_memory_turn.update_priorities(tree_indices, td_errors.detach().cpu().numpy())
         return loss.item()
 

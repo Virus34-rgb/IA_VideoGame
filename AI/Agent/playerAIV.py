@@ -15,10 +15,12 @@ from AI.Agent.replayMemoryPM import ReplayMemoryPM
 from AI.Agent.training.agent_trainer import AgentTrainer
 from AI.Agent.training.checkpoint_manager import CheckpointManager
 from AI.Agent.training.ai_policy import AIPolicy
+from AI.Agent.training.training_context import TrainingContext
 
 
 class PlayerAIV:
-    def __init__(self, N: int, environment: Any, use_replay: bool = True) -> None:
+    def __init__(self, N: int, environment: Any, use_replay: bool = True,
+                 context: Optional[TrainingContext] = None) -> None:
         self.N: int = N
         self.environment: Any = environment
         self.name: str = "DqnPlayerV"
@@ -53,6 +55,7 @@ class PlayerAIV:
         self._trainer = AgentTrainer(
             self.selection_network, self.target_selection_network, self.optimizer_sel, self.replay_memory_sel,
             self.turn_network, self.target_turn_network, self.optimizer_turn, self.replay_memory_turn,
+            context=context,
         )
         self._checkpoint = CheckpointManager(
             self.selection_network, self.target_selection_network, self.optimizer_sel, self.replay_memory_sel,
@@ -130,12 +133,12 @@ class PlayerAIV:
 
     def load_model_inference_only(self, path1: str, path2: str) -> None:
         result = self._checkpoint.load_model_inference_only(path1, path2)
-        self.epsilon_sel, self.epsilon_turn = result["epsilons"]
+        self.epsilon_sel, self.epsilon_sel = result["epsilons"]
         self.elo = result["elo"]
 
     def save_model_inference_only(self, path1: str, path2: str) -> None:
         self._checkpoint.save_model_inference_only(
-            path1, path2, epsilons=(self.epsilon_sel, self.epsilon_turn), elo=self.elo,
+            path1, path2, epsilons=(self.epsilon_sel, self.epsilon_sel), elo=self.elo,
         )
         
     def priority_stats(self) -> dict:

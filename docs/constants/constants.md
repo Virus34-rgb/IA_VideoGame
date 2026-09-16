@@ -159,10 +159,10 @@ Este documento cataloga las constantes de `constants.py` que **merecen explicaci
 - Estado: sin validar
 
 ### COPY_DQN_SEL
-- Valor actual: `120`
+- Valor actual: `50`
 - Hipótesis: cada cuántos replays se sincroniza la target network de `SelectionNetwork`
 - Efecto esperado: mayor → target más estable; menor → target sigue la online más rápido
-- Resultado empírico: pendiente — con `SELECTION_REPLAYS_PER_BATCH=72`, 120 significa ~0.6 syncs/lote
+- Resultado empírico: -
 - Estado: **Adoptado recientemente**, pendiente confirmación con más seeds
 
 ### COPY_DQN_TURN
@@ -480,8 +480,8 @@ Este documento cataloga las constantes de `constants.py` que **merecen explicaci
 - Valor actual: `0.3` (pero `MULTI_SEED_BASELINE` y config actual lo ponen a `0.0`)
 - Hipótesis: fracción de partidas contra rusher durante self-play
 - Efecto esperado: > 0 → exposición al rusher en entrenamiento
-- Resultado empírico: **0.15 y 0.30 degradan el winrate global**. Confirmado.
-- Estado: **Cerrado, mantener 0.0**
+- Resultado empírico: Con los cambios realizados al NoisyNet la IA ya mejora con esto
+- Estado: **Abierto, probar diferentes**
 
 ### RUSHER_TEST_EPISODES
 - Valor actual: `20`
@@ -545,12 +545,6 @@ Estas no tienen entrada propia porque o no se leen en el pipeline actual, o su s
 
 ## Sin uso en el pipeline actual (fantasma)
 
-Se mantienen por compatibilidad o como restos de iteraciones previas. **Candidatas a eliminar** en la próxima limpieza de `constants.py`.
-
-- `EPSILON_TURN` — `AIPolicy.turn()` no la lee. La exploración de Turn corre a cargo exclusivamente de NoisyNet.
-- `EPSILON_TURN_MIN` — idem.
-- `EPSILON_TURN_DECAY` — idem.
-- `COPY_DQN` — reemplazado por `COPY_DQN_SEL` y `COPY_DQN_TURN`. Ya no se usa en `AgentTrainer`.
 
 ## Triviales (sin hipótesis que documentar)
 

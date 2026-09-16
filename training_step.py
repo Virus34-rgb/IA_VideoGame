@@ -9,8 +9,7 @@ class TrainingStep:
     episodes: int
     opponent_factory: Callable
     load_opponent_checkpoint: Optional[tuple] = None
-    player1_checkpoint: Optional[tuple] = None  
-    epsilon_turn: Optional[float] = None         
+    player1_checkpoint: Optional[tuple] = None         
     epsilon_sel: Optional[float] = None           
     learn_p1: Optional[bool] = None           
     learn_p2: Optional[bool] = None           

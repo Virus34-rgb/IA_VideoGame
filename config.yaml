@@ -3,9 +3,9 @@
 # ============================================================
 
 VERSION: 3
-RUN_NAME_SUFFIX: "100_RUSHER_FINETUNE_40_LOTES"
-TRAIN_EPISODES: 100
-EVAL_EPISODES: 20
+RUN_NAME_SUFFIX: "BASE_50_5S"
+TRAIN_EPISODES: 50
+EVAL_EPISODES: 10
 SEED: 42
 PROFILE_CPROFILE : false       # Activa cProfile (global)
 PROFILE_TORCH : false            # Activa torch.profiler (solo primWeros batches)
@@ -16,27 +16,27 @@ PROFILE_CPROFILE_OUTPUT : "optimizedAll2.prof"
 # Multi-seed (solo activo si MULTI_SEED_ENABLED: true)
 # ============================================================
 MULTI_SEED_ENABLED: true
-MULTI_SEED_LIST: [42,43,44]
-MULTI_SEED_BASELINE: models\IAV3_50_RUSHER_PORCENTAGE
+MULTI_SEED_LIST: [1,7,40,41,42]
+MULTI_SEED_BASELINE: models\IAV3_100_RUSHER_PORCENTAGE
 
 EXPERIMENT_LOG_ENABLED : True   # Flag maestro: False = no se escribe CSV ni informe .md
 EXPERIMENT_LOG_PATH : "docs/experiment_log.csv"
 EXPERIMENT_REPORTS_DIR : "docs/experiments"   # carpeta con un .md por EXP_ID
 EXPERIMENT_ID : ""             # ej. "EXP-0012"; vacío → autoincrementa
-EXPERIMENT_OBJETIVO : "Observar si ahora el finetune con rusher ayuda al aprendizaje"       # ej. "buffer 200k con RESET=True"
-EXPERIMENT_HIPOTESIS : "El cacheo de las redes noisy es lo que perjudicó el aprendizaje con rusher finetune "      # ej. "COPY_DQN_TURN=150 explica la caida de winrate"
+EXPERIMENT_OBJETIVO : "Base con 5 seeds"       # ej. "buffer 200k con RESET=True"
+EXPERIMENT_HIPOTESIS : " "      # ej. "COPY_DQN_TURN=150 explica la caida de winrate"
 EXPERIMENT_CONFUSORES : ""     # ej. "save_every distinto entre BASE_50/100/200"
 EXPERIMENT_CONCLUSION : ""     # rellenar a mano tras revisar el resultado
-EXPERIMENT_SIGUIENTE_PASO : "Evaluar con RUSHER_FINETUNE -> 200 Lotes + 60 fine tune" # ej. "confirmar con seeds 7 y 91"
+EXPERIMENT_SIGUIENTE_PASO : "" # ej. "confirmar con seeds 7 y 91"
 EXPERIMENT_NOTA : ""           # ej. "seed 43 excluida, outlier"
-EXPERIMENT_OVERRIDES : {RUN_RUSHER_FINETUNE: true,RUSHER_FINETUNE_EPISODES: 40}     # dict con los overrides aplicados sobre el baseline,
+EXPERIMENT_OVERRIDES : {}     # dict con los overrides aplicados sobre el baseline,
                                 # ej. {"TURN_REPLAY_DATA": 200_000}
 
-RUN_RUSHER_FINETUNE: true
-RUSHER_FINETUNE_EPISODES: 40
+RUN_RUSHER_FINETUNE: false
+RUSHER_FINETUNE_EPISODES: 60
 RUSHER_OPPONENT_PERCENTAGE: 0.3
 RUN_RUSHER_TESTS: true
-RUSHER_TEST_EPISODES: 20
+RUSHER_TEST_EPISODES: 10
 RUSHER_TEST_EPSILON: 0.00
 
 USE_WANDB: false
